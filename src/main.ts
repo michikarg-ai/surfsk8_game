@@ -197,9 +197,11 @@ class SurfskateMunichGame {
         this.keys.has('ShiftLeft') ||
         this.keys.has('ShiftRight'),
       jumpOllie: this.keys.has('Space'),
-      grindSlash: this.keys.has('KeyE'),
+      grindSlash: false, // coping grinds are not part of the trick set
       snapSlide: this.keys.has('KeyC'),
       snapTrick: this.keys.has('KeyQ'),
+      laybackTrick: this.keys.has('KeyF'),
+      reverseTrick: this.keys.has('KeyE'),
     };
   }
 
@@ -218,8 +220,9 @@ class SurfskateMunichGame {
     while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
     while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
-    const sPumpWave = Math.sin(timeSec * 5.2) * 0.35;
-    const combinedSteer = angleDiff + sPumpWave;
+    // Auto-shred pumps like a human: alternate ← → roughly every 0.48 s (perfect rhythm)
+    const pumpDir = Math.sin((timeSec * Math.PI) / 0.48) > 0 ? 1 : -1;
+    const combinedSteer = angleDiff * 0.8 + pumpDir * 0.5;
 
     const inDeepTransition = this.controller.currentSurface.height > 0.85;
     const compressWave = Math.sin(timeSec * 5.2 + Math.PI * 0.5) > 0.35;
@@ -227,12 +230,14 @@ class SurfskateMunichGame {
     return {
       steerLeft: combinedSteer > 0.08,
       steerRight: combinedSteer < -0.08,
-      forwardPush: this.controller.speed < 6.0,
+      forwardPush: this.controller.speed < 0.3,
       compressCrouch: compressWave && !inDeepTransition,
       jumpOllie: false,
-      grindSlash: this.controller.currentSurface.isNearCoping && this.controller.position.y > 1.65,
+      grindSlash: false,
       snapSlide: false,
       snapTrick: this.controller.snapWindow === 'READY',
+      laybackTrick: false,
+      reverseTrick: false,
     };
   }
 
@@ -253,13 +258,13 @@ class SurfskateMunichGame {
     const input = this.buildInputState(timeSec);
     this.controller.update(dt, input, (ev) => {
       this.hud.onManeuver(ev);
-      if (ev.isSnap) {
-        this.audio.playSnapSwoosh(ev.quality === 'PERFECT');
+      if (ev.trick) {
+        // Every scoring trick: big swoosh, slow motion, zoom-in and its name on screen
+        const perfect = ev.quality === 'PERFECT';
+        this.audio.playTrickSwoosh(ev.trick, perfect);
         this.slowMoTimer = this.slowMoDuration;
         this.surfCamera.triggerSnapZoom(this.slowMoDuration + 0.2);
-        this.hud.showSnapBanner(ev.quality === 'PERFECT');
-      } else {
-        this.audio.playManeuverChime();
+        this.hud.showTrickBanner(ev.name, perfect);
       }
     });
     this.worldScene.update(timeSec);

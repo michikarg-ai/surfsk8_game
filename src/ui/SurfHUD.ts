@@ -47,6 +47,7 @@ export class SurfHUD {
   // SNAP trick overlays
   private snapBannerEl: HTMLDivElement;
   private snapHintEl: HTMLDivElement;
+  private coachHintEl: HTMLDivElement;
   private snapBannerTimeout: number | null = null;
 
   constructor(private callbacks: HUDCallbacks) {
@@ -58,6 +59,9 @@ export class SurfHUD {
     this.snapHintEl = document.createElement('div');
     this.snapHintEl.id = 'hud-snap-hint';
     frame.appendChild(this.snapHintEl);
+    this.coachHintEl = document.createElement('div');
+    this.coachHintEl.id = 'hud-coach-hint';
+    frame.appendChild(this.coachHintEl);
     this.scoreEl = document.getElementById('hud-score')!;
     this.bestComboEl = document.getElementById('hud-best-combo')!;
     this.timerEl = document.getElementById('hud-timer')!;
@@ -164,7 +168,7 @@ export class SurfHUD {
         ? 'COPING SLASH GRIND!'
         : Math.abs(ctrl.leanAngle) > 0.25
         ? 'DEEP RAIL CARVE'
-        : 'RHYTHM PUMP READY';
+        : 'PUMP: ← → IN RHYTHM';
       this.pumpBadgeEl.className = 'pump-badge neutral';
     }
 
@@ -190,20 +194,37 @@ export class SurfHUD {
     } else {
       this.snapHintEl.className = '';
     }
+
+    // 5. Coaching hints: push-off from standstill, then how to pump
+    if (ctrl.coachHint) {
+      this.coachHintEl.textContent = ctrl.coachHint;
+      this.coachHintEl.className = 'visible';
+    } else if (ctrl.isGrounded && ctrl.speed < 0.4) {
+      this.coachHintEl.textContent = 'Press ↑ / W once to push off';
+      this.coachHintEl.className = 'visible idle';
+    } else {
+      this.coachHintEl.className = '';
+    }
   }
 
-  /** Big animated "SNAP!" text for a successful snap. */
-  public showSnapBanner(perfect: boolean): void {
-    this.snapBannerEl.textContent = perfect ? 'PERFECT SNAP!' : 'SNAP!';
+  /** Big animated trick name (SNAP!, LAYBACK!, BERTSLIDE!, FS REVERSE 360!). */
+  public showTrickBanner(text: string, perfect: boolean): void {
+    this.snapBannerEl.textContent = text;
     this.snapBannerEl.className = '';
-    // Force reflow so the animation restarts on consecutive snaps
+    // Force reflow so the animation restarts on consecutive tricks
     void this.snapBannerEl.offsetWidth;
-    this.snapBannerEl.className = perfect ? 'show perfect' : 'show';
+    const long = text.length > 10 ? ' long' : '';
+    this.snapBannerEl.className = (perfect ? 'show perfect' : 'show') + long;
     if (this.snapBannerTimeout !== null) window.clearTimeout(this.snapBannerTimeout);
     this.snapBannerTimeout = window.setTimeout(() => {
       this.snapBannerEl.className = '';
       this.snapBannerTimeout = null;
     }, 1500);
+  }
+
+  /** Backwards-compatible wrapper for the SNAP banner. */
+  public showSnapBanner(perfect: boolean): void {
+    this.showTrickBanner(perfect ? 'PERFECT SNAP!' : 'SNAP!', perfect);
   }
 
   private injectSnapStyles(): void {
@@ -225,6 +246,18 @@ export class SurfHUD {
         text-shadow: 0 0 22px rgba(255, 240, 80, 0.95), 0 0 60px rgba(255, 170, 0, 0.7), 6px 8px 0 #ff2d75;
       }
       #hud-snap-banner.show { animation: snapPop 1.45s cubic-bezier(0.2, 1.4, 0.4, 1) forwards; }
+      #hud-snap-banner.long { font-size: clamp(44px, 8.5vw, 130px); }
+      #hud-coach-hint {
+        position: absolute; left: 50%; top: 16%; transform: translateX(-50%);
+        max-width: 80%; text-align: center;
+        padding: 10px 22px; border-radius: 14px; font: 700 17px system-ui, sans-serif;
+        letter-spacing: 0.03em; pointer-events: none; z-index: 56;
+        background: rgba(255, 196, 0, 0.94); color: #1d1400;
+        box-shadow: 0 0 22px rgba(255, 196, 0, 0.55);
+        opacity: 0; transition: opacity 0.2s ease;
+      }
+      #hud-coach-hint.visible { opacity: 1; }
+      #hud-coach-hint.idle { background: rgba(10, 20, 35, 0.78); color: #e6f4ff; box-shadow: none; }
       @keyframes snapPop {
         0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(-14deg); }
         14%  { opacity: 1; transform: translate(-50%, -50%) scale(1.18) rotate(-4deg); }

@@ -263,6 +263,7 @@ export class SkaterVisuals {
     const crouch = this.smoothCompression;
     const lean = this.smoothLean;
     const lead = ctrl.upperBodyLeadYaw;
+    const lay = ctrl.laybackAmount; // 0..1 layback body pose
 
     // 1. Reset to rest pose
     for (const bone of Object.values(b)) {
@@ -276,37 +277,47 @@ export class SkaterVisuals {
     const bodyLean = lean * 0.85; // whole body leans into the rail with the deck
 
     // 2. Pelvis: lowered by knee bend, centred between the feet, rolled into the carve
-    const hipsLocal = new THREE.Vector3(0.05 + crouch * 0.06, HIPS_REST_HEIGHT - 0.1 - crouch * 0.3, -0.02);
+    const hipsLocal = new THREE.Vector3(
+      0.05 + crouch * 0.06 + lay * 0.12,
+      HIPS_REST_HEIGHT - 0.1 - crouch * 0.3 - lay * 0.12,
+      -0.02
+    );
     hipsLocal.y -= DECK_TOP;
     hipsLocal.applyAxisAngle(AXIS_Z, bodyLean);
     hipsLocal.y += DECK_TOP;
     const hipsWorld = board.localToWorld(hipsLocal.clone());
     b.Hips.position.copy(b.Hips.parent!.worldToLocal(hipsWorld));
     b.Hips.updateMatrixWorld(true);
-    this.rotateBoneAxis(b.Hips, boardZ, bodyLean + crouch * 0.18);
+    this.rotateBoneAxis(b.Hips, boardZ, bodyLean + crouch * 0.18 - lay * 0.3);
     this.rotateBoneAxis(b.Hips, boardY, 0.18 + lead * 0.2); // pelvis slightly open toward the nose
 
-    // 3. Spine: forward bend over the toes when crouching, shoulders lead the turn
-    this.rotateBoneAxis(b.Spine, boardZ, crouch * 0.22 + 0.06);
-    this.rotateBoneAxis(b.Spine1, boardZ, crouch * 0.14);
+    // 3. Spine: forward bend over the toes when crouching, shoulders lead the turn.
+    //    In a layback the whole upper body lays back over the heel-side rail.
+    this.rotateBoneAxis(b.Spine, boardZ, crouch * 0.22 + 0.06 - lay * 0.45);
+    this.rotateBoneAxis(b.Spine1, boardZ, crouch * 0.14 - lay * 0.35);
     this.rotateBoneAxis(b.Spine1, boardY, lead * 0.3);
-    this.rotateBoneAxis(b.Spine2, boardY, 0.22 + lead * 0.35);
+    this.rotateBoneAxis(b.Spine2, boardY, 0.22 + lead * 0.35 + lay * 0.3);
     if (ctrl.bertSlideActive) this.rotateBoneAxis(b.Spine2, boardZ, -0.35);
 
     // 4. Head: keep it level and look down the line toward the nose
-    const forwardBend = bodyLean + crouch * 0.54 + 0.06;
+    const forwardBend = bodyLean + crouch * 0.54 + 0.06 - lay * 1.1;
     this.rotateBoneAxis(b.Neck, boardZ, -forwardBend * 0.45);
     this.rotateBoneAxis(b.Head, boardZ, -forwardBend * 0.4);
     this.rotateBoneAxis(b.Head, boardY, 0.62 + lead * 0.35);
 
     // 5. Arms: front arm reaches toward the nose, back arm trails for balance
     const armLift = crouch * 0.3;
-    this.aimBone(b.LeftArm, b.LeftForeArm, this.boardDir(-0.3, -0.62 + armLift - lean * 0.35, 0.72));
-    this.aimBone(b.LeftForeArm, b.LeftHand, this.boardDir(-0.45, -0.25 + armLift, 0.85));
+    this.aimBone(b.LeftArm, b.LeftForeArm, this.boardDir(-0.3, -0.62 + armLift - lean * 0.35 + lay * 0.6, 0.72));
+    this.aimBone(b.LeftForeArm, b.LeftHand, this.boardDir(-0.45, -0.25 + armLift + lay * 0.5, 0.85));
     if (ctrl.bertSlideActive) {
-      // Hand plant on the heel side for the Bert slide
-      this.aimBone(b.RightArm, b.RightForeArm, this.boardDir(0.55, -0.82, -0.1));
-      this.aimBone(b.RightForeArm, b.RightHand, this.boardDir(0.45, -0.9, 0.0));
+      // Hand plant on the inside of the turn for the Bert slide
+      const side = -ctrl.bertSlideHandSide; // + lean (toe-side turn) -> hand on the toe side (-X)
+      this.aimBone(b.RightArm, b.RightForeArm, this.boardDir(0.55 * side, -0.82, -0.1));
+      this.aimBone(b.RightForeArm, b.RightHand, this.boardDir(0.45 * side, -0.9, 0.0));
+    } else if (lay > 0.35) {
+      // Layback: back hand drags on the concrete behind the heel-side rail
+      this.aimBone(b.RightArm, b.RightForeArm, this.boardDir(0.6, -0.75, -0.35));
+      this.aimBone(b.RightForeArm, b.RightHand, this.boardDir(0.4, -0.9, -0.2));
     } else {
       this.aimBone(b.RightArm, b.RightForeArm, this.boardDir(-0.2, -0.82 + armLift + lean * 0.3, -0.5));
       this.aimBone(b.RightForeArm, b.RightHand, this.boardDir(-0.5, -0.55 + armLift, -0.45));
@@ -329,7 +340,9 @@ export class SkaterVisuals {
     this.root.position.copy(ctrl.position);
     this.contactShadowMesh.visible = ctrl.isGrounded;
 
-    const forward = new THREE.Vector3(-Math.sin(ctrl.heading), 0, -Math.cos(ctrl.heading)).normalize();
+    // Board yaw relative to travel: tail slid out (Bert slide) or the full FS Reverse 360 spin
+    const visHeading = ctrl.heading + ctrl.boardYawOffset;
+    const forward = new THREE.Vector3(-Math.sin(visHeading), 0, -Math.cos(visHeading)).normalize();
     const up = ctrl.isGrounded
       ? ctrl.currentSurface.normal.clone().lerp(new THREE.Vector3(0, 1, 0), 0.32).normalize()
       : new THREE.Vector3(0, 1, 0);

@@ -32,13 +32,18 @@ A realistic 3D WebGL surfskate simulator set in the real-world **Skatepark "Im G
 
 | Action | Keyboard |
 | :--- | :--- |
-| **Steer / Carve** | <kbd>←</kbd> <kbd>→</kbd> or <kbd>A</kbd> <kbd>D</kbd> |
-| **Pump / Accelerate** | Rhythmically alternate carves while transitioning on walls |
-| **Crouch / Compress** | <kbd>↓</kbd> or <kbd>S</kbd> |
-| **Snap Maneuver** | <kbd>Space</kbd> or <kbd>Enter</kbd> (when approaching the top of a wall at speed) |
-| **Reset Skater** | <kbd>R</kbd> |
-| **Toggle Camera View** | <kbd>C</kbd> (Third-person follow / Free orbit) |
-| **Toggle Wireframe / Collision** | <kbd>V</kbd> |
+| **Push off** | <kbd>W</kbd> / <kbd>↑</kbd> — a single kick, **only from a standstill** |
+| **Carve / Pump** | <kbd>A</kbd> <kbd>D</kbd> or <kbd>←</kbd> <kbd>→</kbd> — alternate left/right in rhythm (≈ 1 left-right cycle per second) to pump speed |
+| **Wall pump** | Automatic stretch on the way up, compression on the way down; hold <kbd>S</kbd> / <kbd>Shift</kbd> while dropping down a wall to pump harder |
+| **SNAP** | <kbd>Q</kbd> at the top of a wall within the right speed window |
+| **LAYBACK** | Hold <kbd>F</kbd> during a fast, deep turn |
+| **BERTSLIDE** | Hold <kbd>C</kbd> while leaning into a turn |
+| **FS REVERSE 360** | <kbd>E</kbd> while carving frontside (<kbd>→</kbd>) with speed |
+| **Ollie** | <kbd>Space</kbd> |
+| **Camera / Truck feel / Auto-shred** | <kbd>V</kbd> / <kbd>T</kbd> / <kbd>P</kbd> |
+| **Reset session** | <kbd>X</kbd> / <kbd>Backspace</kbd> |
+
+Only the four tricks score points. Each landed trick triggers a zoom-in, slow motion, its name on screen and a cinematic swoosh.
 
 ---
 

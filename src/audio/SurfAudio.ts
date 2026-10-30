@@ -188,4 +188,150 @@ export class SurfAudio {
     hiss.start(now, 1.0);
     hiss.stop(t0 + 0.35);
   }
+
+  /**
+   * Big cinematic trick "SWOOSH" for every scoring trick (SNAP, LAYBACK, BERTSLIDE, FS REVERSE 360).
+   * Built purely from filtered noise (no beeps):
+   *  1. a rising suck-in whoosh (like air being pulled in before the move),
+   *  2. the main release sweep flying across the stereo field,
+   *  3. a deep sub "boom" of displaced air,
+   *  4. a long airy shimmer tail through a feedback delay (cheap reverb).
+   * Each trick gets its own pitch/length/pan character.
+   */
+  public playTrickSwoosh(trick: 'SNAP' | 'LAYBACK' | 'BERTSLIDE' | 'REVERSE360', perfect = false): void {
+    if (!this.ctx || !this.whiteNoise || this.isMuted) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    const profile = {
+      SNAP: { pre: 0.18, main: 0.75, top: 2600, low: 420, pan: 1, boom: 70 },
+      LAYBACK: { pre: 0.28, main: 1.05, top: 1900, low: 300, pan: -1, boom: 55 },
+      BERTSLIDE: { pre: 0.22, main: 0.95, top: 3200, low: 520, pan: 1, boom: 60 },
+      REVERSE360: { pre: 0.3, main: 1.2, top: 2800, low: 350, pan: -1, boom: 50 },
+    }[trick];
+    const vol = perfect ? 1.0 : 0.85;
+    const tHit = now + profile.pre;
+
+    // Shared "room": feedback delay with low-pass damping for the airy tail
+    const wet = ctx.createGain();
+    wet.gain.value = 0.35;
+    const delay = ctx.createDelay(1.0);
+    delay.delayTime.value = 0.11;
+    const fb = ctx.createGain();
+    fb.gain.value = 0.42;
+    const damp = ctx.createBiquadFilter();
+    damp.type = 'lowpass';
+    damp.frequency.value = 2600;
+    wet.connect(delay);
+    delay.connect(damp);
+    damp.connect(fb);
+    fb.connect(delay);
+    damp.connect(ctx.destination);
+
+    const panNode = (from: number, to: number, t0: number, t1: number): AudioNode | null => {
+      if (typeof ctx.createStereoPanner !== 'function') return null;
+      const p = ctx.createStereoPanner();
+      p.pan.setValueAtTime(from, t0);
+      p.pan.linearRampToValueAtTime(to, t1);
+      return p;
+    };
+
+    const noiseVoice = (
+      filterType: BiquadFilterType,
+      q: number,
+      freqs: [number, number][],
+      gains: [number, number][],
+      start: number,
+      stop: number,
+      pan: AudioNode | null,
+      sendWet = true
+    ): void => {
+      const src = ctx.createBufferSource();
+      src.buffer = this.whiteNoise;
+      src.loop = true;
+      const f = ctx.createBiquadFilter();
+      f.type = filterType;
+      f.Q.value = q;
+      f.frequency.setValueAtTime(freqs[0][0], start);
+      for (let i = 1; i < freqs.length; i++) f.frequency.exponentialRampToValueAtTime(freqs[i][0], freqs[i][1]);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, start);
+      for (const [v, t] of gains) g.gain.exponentialRampToValueAtTime(Math.max(0.0001, v * vol), t);
+      src.connect(f);
+      f.connect(g);
+      const out: AudioNode = pan ? (g.connect(pan), pan) : g;
+      out.connect(ctx.destination);
+      if (sendWet) out.connect(wet);
+      src.start(start, Math.random() * 1.0);
+      src.stop(stop + 0.05);
+    };
+
+    // 1. Suck-in: rising band-pass noise into the hit
+    noiseVoice(
+      'bandpass',
+      1.4,
+      [[180, now], [profile.top * 0.8, tHit]],
+      [[0.22, tHit - 0.02], [0.0001, tHit + 0.06]],
+      now,
+      tHit + 0.08,
+      panNode(-0.8 * profile.pan, 0, now, tHit)
+    );
+
+    // 2. Main release sweep: loud, wide, flying across the stereo field
+    const mainEnd = tHit + profile.main;
+    noiseVoice(
+      'bandpass',
+      0.9,
+      [[profile.top, tHit], [profile.low, mainEnd]],
+      [[0.5, tHit + 0.04], [0.18, tHit + profile.main * 0.45], [0.0001, mainEnd]],
+      tHit,
+      mainEnd,
+      panNode(0, 0.9 * profile.pan, tHit, mainEnd)
+    );
+    // Layered low body of the swoosh
+    noiseVoice(
+      'lowpass',
+      0.7,
+      [[900, tHit], [160, mainEnd]],
+      [[0.38, tHit + 0.05], [0.0001, tHit + profile.main * 0.8]],
+      tHit,
+      mainEnd,
+      null
+    );
+
+    // 3. Deep sub boom of displaced air (very low sine, felt more than heard)
+    const boom = ctx.createOscillator();
+    boom.type = 'sine';
+    boom.frequency.setValueAtTime(profile.boom * 2, tHit);
+    boom.frequency.exponentialRampToValueAtTime(profile.boom * 0.6, tHit + 0.45);
+    const bg = ctx.createGain();
+    bg.gain.setValueAtTime(0.0001, tHit);
+    bg.gain.exponentialRampToValueAtTime(0.55 * vol, tHit + 0.02);
+    bg.gain.exponentialRampToValueAtTime(0.0001, tHit + 0.55);
+    boom.connect(bg);
+    bg.connect(ctx.destination);
+    boom.start(tHit);
+    boom.stop(tHit + 0.6);
+
+    // 4. Airy shimmer / urethane spray tail
+    noiseVoice(
+      'highpass',
+      0.5,
+      [[4200, tHit], [6500, mainEnd + 0.3]],
+      [[perfect ? 0.11 : 0.08, tHit + 0.08], [0.0001, mainEnd + 0.3]],
+      tHit,
+      mainEnd + 0.3,
+      panNode(0.5 * profile.pan, -0.5 * profile.pan, tHit, mainEnd + 0.3)
+    );
+
+    // Tear down the delay network once everything has rung out
+    window.setTimeout(() => {
+      try {
+        fb.disconnect();
+        damp.disconnect();
+      } catch {
+        /* already gone */
+      }
+    }, (profile.pre + profile.main + 2.5) * 1000);
+  }
 }
