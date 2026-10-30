@@ -5,6 +5,7 @@ import { SkaterVisuals } from './entities/SkaterVisuals';
 import { ImGefildeScene } from './world/ImGefildeScene';
 import { SurfCamera } from './camera/SurfCamera';
 import { SurfHUD } from './ui/SurfHUD';
+import { LandingPage } from './ui/LandingPage';
 import { SurfAudio } from './audio/SurfAudio';
 
 class SurfskateMunichGame {
@@ -17,6 +18,7 @@ class SurfskateMunichGame {
   private worldScene: ImGefildeScene;
   private surfCamera: SurfCamera;
   private hud: SurfHUD;
+  private landingPage: LandingPage;
   private audio = new SurfAudio();
 
   private keys = new Set<string>();
@@ -70,6 +72,7 @@ class SurfskateMunichGame {
       onToggleAutoFlow: () => this.toggleAutoFlow(),
       onResetSession: () => this.resetSession(),
     });
+    this.landingPage = new LandingPage(this.parkSurface, () => this.resetSession());
 
     this.bindEvents();
     this.handleResize();
@@ -84,6 +87,7 @@ class SurfskateMunichGame {
         this.parkSurface.loadLidarGrid(),
         this.worldScene.load(),
         this.skaterVisuals.load(),
+        this.landingPage.load(),
       ]);
     } catch (err) {
       console.error('Error loading GLB/LiDAR assets:', err);
@@ -104,6 +108,22 @@ class SurfskateMunichGame {
     window.addEventListener('keydown', (e) => {
       this.audio.initOnFirstGesture();
       const code = e.code;
+
+      if (this.landingPage.isVisible) {
+        if (code === 'Enter' || code === 'NumpadEnter') {
+          e.preventDefault();
+          this.landingPage.startGame();
+        } else if (code === 'KeyR') {
+          this.toggleAspectMode();
+        }
+        return;
+      }
+
+      if (code === 'Escape') {
+        this.landingPage.show();
+        return;
+      }
+
       this.keys.add(code);
 
       if (['KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight', 'KeyW', 'ArrowUp'].includes(code)) {
@@ -181,6 +201,9 @@ class SurfskateMunichGame {
     const h = Math.max(320, rect.height);
     this.renderer.setSize(w, h, false);
     this.surfCamera.setAspectRatio(w, h);
+    if (this.landingPage) {
+      this.landingPage.handleResize();
+    }
   }
 
   private buildInputState(timeSec: number): InputState {
@@ -245,6 +268,13 @@ class SurfskateMunichGame {
   private animate(now: number): void {
     const realDt = Math.min((now - this.lastTime) * 0.001, 0.05);
     this.lastTime = now;
+    const timeSec = now * 0.001;
+
+    if (this.landingPage.isVisible) {
+      this.landingPage.update(timeSec, realDt);
+      requestAnimationFrame((t) => this.animate(t));
+      return;
+    }
 
     // SNAP slow motion: hold at slowMoScale, then ease back to real time over the last 0.4 s
     let timeScale = 1;
@@ -255,7 +285,6 @@ class SurfskateMunichGame {
     }
     const dt = realDt * timeScale;
 
-    const timeSec = now * 0.001;
     const input = this.buildInputState(timeSec);
     this.controller.update(dt, input, (ev) => {
       this.hud.onManeuver(ev);
