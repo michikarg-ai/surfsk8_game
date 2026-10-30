@@ -31,6 +31,8 @@ export class SurfHUD {
   private dockEl: HTMLElement;
   private static readonly SPEEDO_MAX_KMH = 40;
   private flowFillEl: HTMLElement;
+  private flowTrackEl: HTMLElement;
+  private flowSegEls: HTMLElement[];
   private flowPctEl: HTMLElement;
   private pumpBadgeEl: HTMLElement;
   private comboContainerEl: HTMLElement;
@@ -78,6 +80,8 @@ export class SurfHUD {
       if (e.code === 'KeyH') this.toggleDock();
     });
     this.flowFillEl = document.getElementById('hud-flow-fill')!;
+    this.flowTrackEl = document.getElementById('hud-flow-track')!;
+    this.flowSegEls = Array.from(this.flowTrackEl.querySelectorAll<HTMLElement>('.flow-seg'));
     this.flowPctEl = document.getElementById('hud-flow-pct')!;
     this.pumpBadgeEl = document.getElementById('hud-pump-badge')!;
     this.comboContainerEl = document.getElementById('hud-combo-box')!;
@@ -160,23 +164,17 @@ export class SurfHUD {
     this.flowFillEl.style.width = `${flowPct}%`;
     this.flowPctEl.textContent = `${flowPct}%`;
     this.flowFillEl.classList.toggle('special-ready', flowPct >= 99);
+    this.flowTrackEl.classList.toggle('special-ready', flowPct >= 99);
+    const activeSegs = Math.round((flowPct / 100) * this.flowSegEls.length);
+    for (let i = 0; i < this.flowSegEls.length; i++) {
+      this.flowSegEls[i].classList.toggle('filled', i < activeSegs);
+    }
 
-    // Pump rhythm feedback badge
-    if (ctrl.pumpSyncQuality !== 'IDLE') {
-      this.pumpBadgeEl.textContent = ctrl.pumpSyncQuality;
-      this.pumpBadgeEl.className =
-        'pump-badge ' +
-        (ctrl.pumpSyncQuality === 'PERFECT PUMP!'
-          ? 'perfect'
-          : ctrl.pumpSyncQuality === 'FLOW PUMP'
-          ? 'good'
-          : 'scrub');
+    // Pump rhythm feedback ribbon (right edge): only show on PERFECT PUMP, otherwise hidden
+    if (ctrl.pumpSyncQuality === 'PERFECT PUMP!') {
+      this.pumpBadgeEl.textContent = 'PERFECT PUMP';
+      this.pumpBadgeEl.className = 'pump-badge perfect';
     } else {
-      this.pumpBadgeEl.textContent = ctrl.isGrinding
-        ? 'COPING SLASH GRIND!'
-        : Math.abs(ctrl.leanAngle) > 0.25
-        ? 'DEEP RAIL CARVE'
-        : 'PUMP: ← → IN RHYTHM';
       this.pumpBadgeEl.className = 'pump-badge neutral';
     }
 
@@ -184,7 +182,7 @@ export class SurfHUD {
     const yawDeg = Math.round((ctrl.frontTruckYaw * 180) / Math.PI);
     const leanDeg = Math.round((ctrl.leanAngle * 180) / Math.PI);
     this.truckDialFrontEl.style.transform = `rotate(${yawDeg}deg)`;
-    this.leanReadoutEl.textContent = `${leanDeg > 0 ? '+' : ''}${leanDeg}°`;
+    this.leanReadoutEl.textContent = `${Math.abs(leanDeg)}°`;
 
     // 4. SNAP hint / failure feedback
     if (ctrl.snapFeedback) {
@@ -241,48 +239,48 @@ export class SurfHUD {
     style.id = 'hud-snap-styles';
     style.textContent = `
       #hud-snap-banner {
-        position: absolute; left: 50%; top: 36%;
+        position: absolute; left: 50%; top: 34%;
         transform: translate(-50%, -50%) scale(0.4) skewX(-12deg);
-        font-family: 'Sedgwick Ave Display', 'Permanent Marker', cursive; font-style: normal;
-        font-size: clamp(64px, 13vw, 180px); font-weight: 900; letter-spacing: 0.03em;
-        color: #f4fbff; opacity: 0; pointer-events: none; z-index: 60; white-space: nowrap;
-        -webkit-text-stroke: 5px #050a12; paint-order: stroke fill;
-        text-shadow: 8px 8px 0 #ff7a1a, 14px 14px 0 #050a12, 0 0 40px rgba(0, 214, 195, 0.7);
+        font-family: 'Barlow Condensed', 'Impact', sans-serif; font-style: italic;
+        font-size: clamp(64px, 12vw, 150px); font-weight: 900; letter-spacing: 0.04em;
+        color: #f5f5f5; opacity: 0; pointer-events: none; z-index: 60; white-space: nowrap;
+        text-transform: uppercase;
+        text-shadow: 0 10px 30px rgba(0, 0, 0, 0.75);
       }
       #hud-snap-banner.perfect {
-        color: #ffd23f;
-        text-shadow: 8px 8px 0 #ff3d5a, 14px 14px 0 #050a12, 0 0 50px rgba(255, 210, 63, 0.85);
+        color: #f2cc26;
+        text-shadow: 0 10px 36px rgba(242, 204, 38, 0.55), 0 6px 20px rgba(0, 0, 0, 0.8);
       }
       #hud-snap-banner.show { animation: snapPop 1.45s cubic-bezier(0.2, 1.4, 0.4, 1) forwards; }
-      #hud-snap-banner.long { font-size: clamp(44px, 8.5vw, 130px); }
+      #hud-snap-banner.long { font-size: clamp(44px, 8.5vw, 116px); }
       @keyframes snapPop {
-        0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.3) skewX(-24deg) rotate(-8deg); }
-        14%  { opacity: 1; transform: translate(-50%, -50%) scale(1.18) skewX(-10deg) rotate(-3deg); }
-        26%  { transform: translate(-50%, -50%) scale(0.96) skewX(-12deg) rotate(-4deg); }
-        70%  { opacity: 1; transform: translate(-50%, -50%) scale(1.02) skewX(-12deg) rotate(-4deg); }
-        100% { opacity: 0; transform: translate(-50%, -64%) scale(1.25) skewX(-12deg) rotate(-4deg); }
+        0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.3) skewX(-20deg); }
+        14%  { opacity: 1; transform: translate(-50%, -50%) scale(1.12) skewX(-12deg); }
+        26%  { transform: translate(-50%, -50%) scale(0.98) skewX(-12deg); }
+        70%  { opacity: 1; transform: translate(-50%, -50%) scale(1.0) skewX(-12deg); }
+        100% { opacity: 0; transform: translate(-50%, -62%) scale(1.18) skewX(-12deg); }
       }
       #hud-coach-hint {
-        position: absolute; left: 50%; top: 21%; transform: translateX(-50%) rotate(-2deg);
+        position: absolute; left: 50%; top: 18%; transform: translateX(-50%) skewX(-11deg);
         max-width: 72%; text-align: center;
-        font: 16px 'Permanent Marker', cursive; letter-spacing: 0.04em; text-transform: uppercase;
-        pointer-events: none; z-index: 56; color: #ffd23f;
-        text-shadow: 3px 3px 0 #050a12, -1px -1px 0 #050a12, 1px -1px 0 #050a12, -1px 1px 0 #050a12, 0 0 14px rgba(0, 0, 0, 0.85);
+        font: 800 16px 'Barlow Condensed', sans-serif; letter-spacing: 0.08em; text-transform: uppercase;
+        pointer-events: none; z-index: 56; color: #f2cc26;
+        background: rgba(20, 18, 16, 0.78); padding: 6px 18px;
         opacity: 0; transition: opacity 0.2s ease;
       }
       #hud-coach-hint.visible { opacity: 1; }
-      #hud-coach-hint.idle { color: #f4fbff; }
+      #hud-coach-hint.idle { color: #f5f5f5; }
       #hud-snap-hint {
-        position: absolute; left: 50%; bottom: 24%; transform: translateX(-50%) rotate(-2deg);
-        font: 16px 'Permanent Marker', cursive; letter-spacing: 0.06em; text-transform: uppercase;
+        position: absolute; left: 50%; bottom: 20%; transform: translateX(-50%) skewX(-11deg);
+        font: 800 16px 'Barlow Condensed', sans-serif; letter-spacing: 0.08em; text-transform: uppercase;
         pointer-events: none; z-index: 55;
-        text-shadow: 3px 3px 0 #050a12, -1px -1px 0 #050a12, 1px -1px 0 #050a12, -1px 1px 0 #050a12, 0 0 14px rgba(0, 0, 0, 0.85);
+        background: rgba(20, 18, 16, 0.82); padding: 5px 16px;
         opacity: 0; transition: opacity 0.15s ease;
       }
       #hud-snap-hint.visible { opacity: 1; }
-      #hud-snap-hint.ready { color: #00d6c3; text-shadow: 3px 3px 0 #050a12, -1px -1px 0 #050a12, 1px -1px 0 #050a12, -1px 1px 0 #050a12, 0 0 18px rgba(0, 214, 195, 0.9); }
-      #hud-snap-hint.dim { color: #9fc3d6; }
-      #hud-snap-hint.fail { color: #ff3d5a; }
+      #hud-snap-hint.ready { color: #f2cc26; border-left: 3px solid #f2cc26; }
+      #hud-snap-hint.dim { color: #9e9b95; }
+      #hud-snap-hint.fail { color: #ff3d5a; border-left: 3px solid #ff3d5a; }
     `;
     document.head.appendChild(style);
   }

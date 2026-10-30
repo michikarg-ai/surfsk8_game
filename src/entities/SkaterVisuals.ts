@@ -6,17 +6,42 @@ type Side = 'Left' | 'Right';
 
 // Board-local frame (glTF / three.js): +Z = nose, -X = the skater's facing (toe-side) edge, +Y = up.
 const DECK_TOP = 0.162;
-/** Height of the ankle joint above the sole of the shoe. */
-const ANKLE_HEIGHT = 0.126;
-/** Regular stance: left (front) foot toward the nose, right (back) foot over the tail. */
-const ANKLE_TARGETS: Record<Side, THREE.Vector3> = {
-  Left: new THREE.Vector3(0.07, DECK_TOP + ANKLE_HEIGHT, 0.17),
-  Right: new THREE.Vector3(0.07, DECK_TOP + ANKLE_HEIGHT, -0.21),
+/** Default height of the ankle joint above the sole (re-measured from the model on load). */
+const DEFAULT_ANKLE_HEIGHT = 0.126;
+/** Regular stance foot positions on the deck (x across, z along the board; y set on load). */
+const ANKLE_XZ: Record<Side, [number, number]> = {
+  Left: [0.07, 0.17], // front foot toward the nose
+  Right: [0.07, -0.21], // back foot over the tail
 };
 /** Toe angle of each foot (radians about the deck's up axis, + = toes toward the nose). */
 const TOE_YAW: Record<Side, number> = { Left: 0.32, Right: 0.06 };
-/** Pelvis height above the board origin in the rest (standing) pose. */
-const HIPS_REST_HEIGHT = 1.183;
+/** Default pelvis height above the board origin in the rest pose (re-measured on load). */
+const DEFAULT_HIPS_REST_HEIGHT = 1.183;
+
+/**
+ * Logical bone names used by the posing code -> accepted names in the GLB.
+ * Supports the MakeHuman/MPFB "game_engine" rig (CC0 skater) and Mixamo-style rigs.
+ */
+const BONE_ALIASES: Record<string, string[]> = {
+  Hips: ['pelvis', 'Hips'],
+  Spine: ['spine_01', 'Spine'],
+  Spine1: ['spine_02', 'Spine1'],
+  Spine2: ['spine_03', 'Spine2'],
+  Neck: ['neck_01', 'Neck'],
+  Head: ['head', 'Head'],
+  LeftUpLeg: ['thigh_l', 'LeftUpLeg'],
+  LeftLeg: ['calf_l', 'LeftLeg'],
+  LeftFoot: ['foot_l', 'LeftFoot'],
+  RightUpLeg: ['thigh_r', 'RightUpLeg'],
+  RightLeg: ['calf_r', 'RightLeg'],
+  RightFoot: ['foot_r', 'RightFoot'],
+  LeftArm: ['upperarm_l', 'LeftArm'],
+  LeftForeArm: ['lowerarm_l', 'LeftForeArm'],
+  LeftHand: ['hand_l', 'LeftHand'],
+  RightArm: ['upperarm_r', 'RightArm'],
+  RightForeArm: ['lowerarm_r', 'RightForeArm'],
+  RightHand: ['hand_r', 'RightHand'],
+};
 
 const AXIS_Y = new THREE.Vector3(0, 1, 0);
 const AXIS_Z = new THREE.Vector3(0, 0, 1);
@@ -45,6 +70,11 @@ export class SkaterVisuals {
     Right: new THREE.Quaternion(),
   };
   private hasSkeleton = false;
+  private hipsRestHeight = DEFAULT_HIPS_REST_HEIGHT;
+  private ankleTargets: Record<Side, THREE.Vector3> = {
+    Left: new THREE.Vector3(ANKLE_XZ.Left[0], DECK_TOP + DEFAULT_ANKLE_HEIGHT, ANKLE_XZ.Left[1]),
+    Right: new THREE.Vector3(ANKLE_XZ.Right[0], DECK_TOP + DEFAULT_ANKLE_HEIGHT, ANKLE_XZ.Right[1]),
+  };
   private smoothCompression = 0.15;
   private smoothLean = 0;
 
@@ -213,6 +243,13 @@ export class SkaterVisuals {
     this.modelRoot.rotation.y = Math.PI;
     this.root.add(this.modelRoot);
 
+    // Map the rig's bone names onto the logical names used by the posing code
+    const allBones = { ...this.bones };
+    for (const [logical, candidates] of Object.entries(BONE_ALIASES)) {
+      const found = candidates.map((n) => allBones[n]).find((bone) => !!bone);
+      if (found) this.bones[logical] = found;
+    }
+
     // Measure the rig in its rest pose
     const required = ['Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'Head',
       'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'RightUpLeg', 'RightLeg', 'RightFoot',
@@ -221,6 +258,15 @@ export class SkaterVisuals {
     if (this.hasSkeleton) {
       this.root.updateMatrixWorld(true);
       const deckQ = this.deckMesh!.getWorldQuaternion(new THREE.Quaternion());
+      // Rest-pose heights above the board (the model stands on the deck in its rest pose)
+      const boardInv = this.boardGroup!.matrixWorld.clone().invert();
+      const hipsLocal = this.worldPos(this.bones.Hips).applyMatrix4(boardInv);
+      this.hipsRestHeight = hipsLocal.y;
+      for (const side of ['Left', 'Right'] as Side[]) {
+        const ankleLocal = this.worldPos(this.bones[`${side}Foot`]).applyMatrix4(boardInv);
+        const ankleHeight = THREE.MathUtils.clamp(ankleLocal.y - DECK_TOP, 0.04, 0.2);
+        this.ankleTargets[side].set(ANKLE_XZ[side][0], DECK_TOP + ankleHeight, ANKLE_XZ[side][1]);
+      }
       for (const side of ['Left', 'Right'] as Side[]) {
         const hip = this.worldPos(this.bones[`${side}UpLeg`]);
         const knee = this.worldPos(this.bones[`${side}Leg`]);
@@ -321,7 +367,7 @@ export class SkaterVisuals {
     // 2. Pelvis: lowered by knee bend, centred between the feet, rolled into the carve
     const hipsLocal = new THREE.Vector3(
       0.05 + crouch * 0.06 + lay * 0.12,
-      HIPS_REST_HEIGHT - 0.1 - crouch * 0.3 - lay * 0.12,
+      this.hipsRestHeight - 0.1 - crouch * 0.3 - lay * 0.12,
       -0.02
     );
     hipsLocal.y -= DECK_TOP;
@@ -344,8 +390,9 @@ export class SkaterVisuals {
     // 4. Head: keep it level and look down the line toward the nose
     const forwardBend = bodyLean + crouch * 0.54 + 0.06 - lay * 1.1;
     this.rotateBoneAxis(b.Neck, boardZ, -forwardBend * 0.45);
+    this.rotateBoneAxis(b.Neck, boardY, 0.28 + lead * 0.18);
     this.rotateBoneAxis(b.Head, boardZ, -forwardBend * 0.4);
-    this.rotateBoneAxis(b.Head, boardY, 0.62 + lead * 0.35);
+    this.rotateBoneAxis(b.Head, boardY, 0.28 + lead * 0.18);
 
     // 5. Arms: front arm reaches toward the nose, back arm trails for balance
     const armLift = crouch * 0.3;
@@ -368,7 +415,7 @@ export class SkaterVisuals {
     // 6. Legs: two-bone IK onto the (rolling) deck, knees driving toward the toe-side rail
     const deckQ = deck.getWorldQuaternion(new THREE.Quaternion());
     for (const side of ['Left', 'Right'] as Side[]) {
-      const target = deck.localToWorld(ANKLE_TARGETS[side].clone());
+      const target = deck.localToWorld(this.ankleTargets[side].clone());
       const pole = this.boardDir(-1, -0.15, side === 'Left' ? 0.25 : -0.1);
       this.solveLeg(side, target, pole);
       // Feet stay flat on the griptape

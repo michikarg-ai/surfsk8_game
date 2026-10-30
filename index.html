@@ -6,33 +6,64 @@
     <title>SURFSKATE MUNICH — Level 1: Skatepark "Im Gefilde"</title>
     <style>
       /* =====================================================================
-         SURFSKATE MUNICH HUD — Tony Hawk's Pro Skater meets surf game
-         Chunky skewed italic panels, hard drop shadows, ocean teal + sunset
-         orange + surf-wax yellow.
+         SURFSKATE MUNICH HUD — Sleek Condensed Parallelogram Broadcast UI
          ===================================================================== */
-      @font-face { font-family: 'Rubik Dirt'; src: url('/fonts/RubikDirt.woff2') format('woff2'); font-display: swap; }
-      @font-face { font-family: 'Permanent Marker'; src: url('/fonts/PermanentMarker.woff2') format('woff2'); font-display: swap; }
-      @font-face { font-family: 'Sedgwick Ave Display'; src: url('/fonts/SedgwickAveDisplay.woff2') format('woff2'); font-display: swap; }
+      @font-face {
+        font-family: 'Barlow Condensed';
+        src: url('/fonts/BarlowCondensed-600n.woff2') format('woff2');
+        font-weight: 600;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Barlow Condensed';
+        src: url('/fonts/BarlowCondensed-700n.woff2') format('woff2');
+        font-weight: 700;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Barlow Condensed';
+        src: url('/fonts/BarlowCondensed-800n.woff2') format('woff2');
+        font-weight: 800;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Barlow Condensed';
+        src: url('/fonts/BarlowCondensed-900n.woff2') format('woff2');
+        font-weight: 900;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Barlow Condensed';
+        src: url('/fonts/BarlowCondensed-800i.woff2') format('woff2');
+        font-weight: 800;
+        font-style: italic;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Barlow Condensed';
+        src: url('/fonts/BarlowCondensed-900i.woff2') format('woff2');
+        font-weight: 900;
+        font-style: italic;
+        font-display: swap;
+      }
 
       :root {
-        --teal: #00d6c3;
-        --teal-deep: #007f86;
-        --ocean: #0a2a43;
-        --navy: #071526;
-        --sunset: #ff7a1a;
+        --orange: #f2741f;
+        --orange-bar: #f06a1b;
+        --yellow: #f2cc26;
         --coral: #ff3d5a;
-        --wax: #ffd23f;
-        --foam: #f4fbff;
-        --ink: #050a12;
-        --panel: linear-gradient(135deg, rgba(10, 42, 67, 0.92) 0%, rgba(7, 21, 38, 0.94) 100%);
-        --display: 'Rubik Dirt', 'Impact', 'Arial Black', sans-serif;
-        --graffiti: 'Sedgwick Ave Display', 'Permanent Marker', cursive;
-        --ui: 'Permanent Marker', 'Comic Sans MS', cursive;
-        --skew: -8deg;
-        --sticker: #ece4cf;
-        /* Griptape grain + scuff speckles (pure SVG noise, no image files) */
-        --grip: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1.6 -0.55'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-        --scuff: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='s'><feTurbulence type='fractalNoise' baseFrequency='0.035' numOctaves='3' seed='7'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 2.2 -1.35'/></filter><rect width='100%' height='100%' filter='url(%23s)'/></svg>");
+        --teal: #00d6c3;
+        --white: #f5f5f5;
+        --muted: #9e9b95;
+        --ink: #111111;
+        --dark-1: rgba(24, 22, 20, 0.86);
+        --dark-2: rgba(40, 37, 33, 0.86);
+        --font-hud: 'Barlow Condensed', 'Impact', 'Arial Narrow', sans-serif;
+        --skew: -11deg;
       }
 
       * {
@@ -46,13 +77,14 @@
         width: 100vw;
         height: 100vh;
         overflow: hidden;
-        background: radial-gradient(circle at center, #0f2a40 0%, #040a12 100%);
-        font-family: var(--ui);
+        background: #080a0e;
+        font-family: var(--font-hud);
         font-synthesis: none;
-        color: var(--foam);
+        color: var(--white);
         display: flex;
         align-items: center;
         justify-content: center;
+        -webkit-font-smoothing: antialiased;
       }
 
       /* Viewport Wrapper: 16:9 full desktop by default, 9:16 vertical frame when body.reel-mode is active */
@@ -72,7 +104,7 @@
         width: calc(95vh * 9 / 16);
         max-width: 96vw;
         border-radius: 28px;
-        border: 3px solid var(--teal);
+        border: 3px solid var(--orange);
       }
 
       #viewport-frame canvas {
@@ -81,7 +113,7 @@
         height: 100%;
       }
 
-      /* HUD Overlay inside #viewport-frame so 9:16 Instagram Reel recordings capture the clean HUD */
+      /* HUD Overlay inside #viewport-frame */
       .hud-layer {
         position: absolute;
         inset: 0;
@@ -89,7 +121,7 @@
         display: flex;
         flex-direction: column;
         justify-content: space-between;
-        padding: 18px 24px;
+        padding: 26px 32px;
       }
 
       .hud-top,
@@ -101,329 +133,366 @@
       .hud-top { align-items: start; }
       .hud-bottom { align-items: end; }
 
-      /* ---------- Shared skewed THPS panel ---------- */
-      .slant {
-        position: relative;
-        background: var(--scuff), var(--grip), var(--panel);
-        background-size: 260px 260px, 180px 180px, auto;
-        border: 3px solid var(--sticker);
-        border-radius: 3px 9px 4px 11px / 10px 3px 8px 4px;
-        transform: skewX(var(--skew)) rotate(-1.2deg);
-        box-shadow: 6px 7px 0 var(--ink), inset 0 0 0 2px rgba(0, 0, 0, 0.55);
-      }
-      /* Strip of worn masking tape holding the sticker on */
-      .slant::after,
-      .dock-body::after {
-        content: '';
-        position: absolute;
-        top: -11px;
-        left: 22px;
-        width: 64px;
-        height: 18px;
-        background: var(--grip), rgba(236, 222, 180, 0.82);
-        background-size: 90px 90px, auto;
-        transform: rotate(-6deg);
-        clip-path: polygon(3% 8%, 97% 0, 100% 45%, 96% 100%, 4% 92%, 0 50%);
-        pointer-events: none;
-      }
-      .score-card::after { left: auto; right: 26px; transform: rotate(5deg); }
-      .slant > .unslant {
-        transform: skewX(calc(var(--skew) * -1));
-      }
-
-      /* ---------- Speedometer (top-left): just a big number ---------- */
-      .speedo {
-        justify-self: start;
-        display: flex;
-        align-items: baseline;
-        gap: 8px;
-        transform: rotate(-4deg);
-        padding-left: 6px;
-      }
-      #hud-speed {
-        font: 84px var(--display);
-        line-height: 0.9;
-        color: var(--wax);
-        font-variant-numeric: tabular-nums;
-        min-width: 1.3em;
-        text-align: right;
-        text-shadow: 4px 4px 0 var(--sunset), 8px 8px 0 var(--ink);
-      }
-      .speedo-unit {
-        font: 20px var(--ui);
-        color: var(--ink);
-        background: var(--grip), var(--sticker);
-        background-size: 90px 90px, auto;
-        padding: 1px 9px;
-        transform: rotate(7deg) translateY(-6px);
-        box-shadow: 3px 3px 0 var(--ink);
-        clip-path: polygon(2% 6%, 98% 0, 100% 90%, 3% 100%);
-      }
-      .speedo.redline #hud-speed { color: var(--coral); text-shadow: 5px 5px 0 var(--wax), 9px 9px 0 var(--ink); }
-
-      /* ---------- Score / timer (top-center) ---------- */
+      /* ---------- Top-Left: SESSION | SCORE | BEST LINE ---------- */
       .score-card {
-        justify-self: center;
-        display: flex;
+        justify-self: start;
+        display: inline-flex;
         align-items: stretch;
-        padding: 0;
-      }
-      .score-card .unslant {
-        display: flex;
-        align-items: center;
+        transform: skewX(var(--skew));
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
       }
       .stat-block {
         display: flex;
         flex-direction: column;
-        align-items: center;
-        padding: 6px 22px 8px;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 7px 22px 8px;
+        min-width: 104px;
       }
-      .stat-block + .stat-block {
-        border-left: 3px solid rgba(255, 255, 255, 0.18);
+      .stat-block > * {
+        transform: skewX(calc(var(--skew) * -1));
+      }
+      .stat-block.session-block {
+        background: var(--orange);
+      }
+      .stat-block.score-block {
+        background: var(--dark-1);
+      }
+      .stat-block.best-block {
+        background: var(--dark-2);
       }
       .stat-label {
-        font: 12px var(--ui);
-        letter-spacing: 0.08em;
+        font-family: var(--font-hud);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.09em;
         text-transform: uppercase;
-        color: var(--teal);
+        color: var(--muted);
+        line-height: 1.1;
+        margin-bottom: 1px;
+      }
+      .stat-block.session-block .stat-label {
+        color: #141210;
+        font-weight: 800;
       }
       .stat-value {
-        font: 30px var(--display);
+        font-family: var(--font-hud);
+        font-size: 30px;
+        font-weight: 900;
         font-variant-numeric: tabular-nums;
-        color: var(--foam);
-        letter-spacing: 0.02em;
-        text-shadow: 3px 3px 0 var(--ink), 0 0 1px var(--ink);
-        line-height: 1.05;
+        color: var(--white);
+        letter-spacing: 0.01em;
+        line-height: 1.0;
       }
-      #hud-score { color: var(--wax); font-size: 38px; }
-      #hud-timer { color: var(--foam); }
+      .stat-block.session-block .stat-value {
+        color: #100e0c;
+      }
       #hud-timer.urgent {
-        color: var(--coral);
+        color: #ffffff;
         animation: pulseUrgent 0.55s infinite alternate;
       }
       @keyframes pulseUrgent {
-        from { transform: scale(1); }
-        to { transform: scale(1.1); }
+        from { opacity: 1; }
+        to { opacity: 0.6; }
       }
 
-      /* Score / session / best line float freely over the scene (no panel) */
-      .score-card.slant {
-        background: none;
-        border: none;
-        box-shadow: none;
+      /* ---------- Right-Edge Ribbon: PERFECT PUMP ---------- */
+      #hud-pump-badge {
+        position: absolute;
+        right: 4px;
+        top: 35%;
+        background: var(--yellow);
+        color: #121212;
+        padding: 9px 36px 9px 26px;
+        transform: skewX(-12deg) translateX(0);
+        font-family: var(--font-hud);
+        font-style: italic;
+        font-size: 25px;
+        font-weight: 900;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+        transition: opacity 0.18s ease, transform 0.2s cubic-bezier(0.2, 0.9, 0.2, 1), background 0.15s ease;
+        z-index: 40;
       }
-      .score-card.slant::after { display: none; }
-      .score-card .stat-block + .stat-block { border-left: 2px dashed rgba(236, 228, 207, 0.35); }
-      .score-card .stat-label { text-shadow: 2px 2px 0 var(--ink), 0 0 6px rgba(0, 0, 0, 0.8); }
-      .score-card .stat-value { text-shadow: 3px 3px 0 var(--ink), 0 0 10px rgba(0, 0, 0, 0.75); }
-
-      /* Flow meter floats freely too (no panel) */
-      .flow-card.slant {
-        background: none;
-        border: none;
-        box-shadow: none;
+      #hud-pump-badge.good {
+        background: var(--yellow);
+        color: #121212;
       }
-      .flow-card.slant::after { display: none; }
-      .flow-card .flow-header { text-shadow: 2px 2px 0 var(--ink), 0 0 8px rgba(0, 0, 0, 0.85); }
-      .flow-card .flow-bar-track { box-shadow: 3px 3px 0 var(--ink); }
-      .flow-card .pump-badge { background: rgba(5, 10, 18, 0.35); text-shadow: 1px 1px 0 var(--ink); }
-      .flow-card .truck-widget span { text-shadow: 1px 1px 0 var(--ink), 0 0 6px rgba(0, 0, 0, 0.8); }
+      #hud-pump-badge.perfect {
+        background: var(--yellow);
+        color: #121212;
+      }
+      #hud-pump-badge.scrub {
+        background: var(--orange);
+        color: #121212;
+      }
+      #hud-pump-badge.neutral {
+        opacity: 0;
+        transform: skewX(-12deg) translateX(36px);
+      }
 
-      /* ---------- Flow / pump meter (bottom-left) ---------- */
-      .flow-card {
+      /* ---------- Bottom-Left: Speedometer + Segmented Flow + Lean ---------- */
+      .bottom-left-cluster {
         justify-self: start;
-        min-width: 270px;
-        padding: 10px 16px 12px;
+        display: flex;
+        align-items: flex-end;
+        gap: 22px;
       }
-      .flow-card .unslant {
+
+      .speedo {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        align-items: flex-start;
+        line-height: 1;
+      }
+      #hud-speed {
+        font-family: var(--font-hud);
+        font-style: italic;
+        font-weight: 900;
+        font-size: 92px;
+        line-height: 0.82;
+        color: #f0f0f0;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.02em;
+        text-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+      }
+      .speedo-unit {
+        font-family: var(--font-hud);
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--orange);
+        margin-top: 8px;
+        padding-left: 2px;
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+      }
+      .speedo.redline #hud-speed {
+        color: var(--yellow);
+      }
+
+      .flow-card {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        width: 264px;
+        padding-bottom: 1px;
       }
       .flow-header {
         display: flex;
         justify-content: space-between;
         align-items: baseline;
-        font: 15px var(--display);
-        letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: var(--foam);
-        text-shadow: 2px 2px 0 var(--ink);
       }
-      #hud-flow-pct { color: var(--wax); font-size: 18px; }
+      .flow-title {
+        font-family: var(--font-hud);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        color: #ffffff;
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.75);
+      }
+      #hud-flow-pct {
+        font-family: var(--font-hud);
+        font-style: italic;
+        font-weight: 900;
+        font-size: 21px;
+        line-height: 1;
+        color: var(--yellow);
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.75);
+      }
+
       .flow-bar-track {
         position: relative;
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 4px;
         width: 100%;
-        height: 16px;
-        background: rgba(0, 0, 0, 0.45);
-        border: 2px solid var(--foam);
-        overflow: hidden;
+        height: 14px;
+      }
+      .flow-seg {
+        height: 100%;
+        background: rgba(45, 45, 50, 0.78);
+        transform: skewX(-16deg);
+        transition: background 0.1s ease;
+      }
+      .flow-seg.filled {
+        background: var(--orange-bar);
+      }
+      .flow-bar-track.special-ready .flow-seg.filled {
+        background: var(--yellow);
+        box-shadow: 0 0 10px rgba(242, 204, 38, 0.65);
       }
       #hud-flow-fill {
-        position: relative;
-        height: 100%;
-        width: 25%;
-        background: linear-gradient(90deg, var(--teal-deep), var(--teal) 60%, #7dfff1);
-        transition: width 0.12s ease-out;
+        display: none;
       }
-      /* Rolling wave crest on the meter */
-      #hud-flow-fill::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: repeating-linear-gradient(
-          -60deg,
-          rgba(255, 255, 255, 0.0) 0 8px,
-          rgba(255, 255, 255, 0.22) 8px 12px
-        );
-        animation: waveRoll 0.9s linear infinite;
-      }
-      @keyframes waveRoll {
-        from { background-position: 0 0; }
-        to { background-position: 28px 0; }
-      }
-      #hud-flow-fill.special-ready {
-        background: linear-gradient(90deg, var(--coral), var(--sunset), var(--wax));
-        box-shadow: 0 0 14px var(--sunset);
-      }
+
       .telemetry-row {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 10px;
+        gap: 8px;
+        margin-top: 2px;
       }
-      .pump-badge {
-        font: 12px var(--display);
-        padding: 3px 10px;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        border: 2px solid currentColor;
-      }
-      .pump-badge.perfect { background: rgba(255, 210, 63, 0.18); color: var(--wax); box-shadow: 0 0 12px rgba(255, 210, 63, 0.5); }
-      .pump-badge.good { background: rgba(0, 214, 195, 0.18); color: var(--teal); }
-      .pump-badge.scrub { background: rgba(255, 61, 90, 0.2); color: var(--coral); }
-      .pump-badge.neutral { background: rgba(255, 255, 255, 0.06); color: rgba(244, 251, 255, 0.75); }
-
-      /* Mini front surf-adapter truck dial */
       .truck-widget {
         display: flex;
         align-items: center;
         gap: 8px;
-        font: 10px var(--ui);
-        letter-spacing: 0.04em;
-        color: rgba(244, 251, 255, 0.7);
+      }
+      .lean-label {
+        font-family: var(--font-hud);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: #b4b4b4;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
       }
       .truck-dial {
-        width: 24px;
-        height: 24px;
+        width: 18px;
+        height: 18px;
         border-radius: 50%;
-        border: 2px solid var(--teal);
+        border: 1.5px solid rgba(255, 255, 255, 0.72);
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(0, 0, 0, 0.4);
+        background: rgba(18, 18, 20, 0.72);
       }
       #hud-truck-front {
-        width: 15px;
-        height: 4px;
-        background: var(--sunset);
+        width: 11px;
+        height: 2px;
+        background: var(--orange);
+        border-radius: 1px;
         transition: transform 0.06s linear;
+      }
+      #hud-lean-deg {
+        font-family: var(--font-hud);
+        font-size: 13px;
+        font-weight: 800;
+        color: #ffffff;
+        letter-spacing: 0.03em;
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
       }
 
       /* ---------- THPS combo (bottom-center) ---------- */
       #hud-combo-box {
         justify-self: center;
-        min-width: 280px;
-        max-width: 560px;
+        min-width: 260px;
+        max-width: 520px;
         text-align: center;
-        padding: 6px 18px 10px;
+        padding: 6px 18px 8px;
         opacity: 0;
-        transform: translateY(16px) skewX(var(--skew)) scale(0.94);
+        transform: translateY(14px) skewX(var(--skew)) scale(0.95);
         transition: opacity 0.18s ease, transform 0.18s ease;
-        background: transparent;
+        background: var(--dark-1);
+        border-left: 4px solid var(--orange);
       }
       #hud-combo-box.active {
         opacity: 1;
         transform: translateY(0) skewX(var(--skew)) scale(1);
       }
       #hud-combo-box.special-flash #hud-combo-points {
-        color: #fff;
-        text-shadow: 3px 3px 0 var(--ink), 0 0 24px var(--wax);
+        color: #ffffff;
+        text-shadow: 0 0 18px var(--yellow);
       }
       #hud-combo-string {
-        font: 22px var(--ui);
-        letter-spacing: 0.04em;
+        font-family: var(--font-hud);
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: var(--foam);
-        text-shadow: 3px 3px 0 var(--ink);
-        line-height: 1.25;
+        color: var(--muted);
+        line-height: 1.2;
         margin-bottom: 2px;
       }
       #hud-combo-points {
-        font: 34px var(--display);
-        color: var(--wax);
-        text-shadow: 4px 4px 0 var(--ink);
-        margin-bottom: 6px;
+        font-family: var(--font-hud);
+        font-size: 28px;
+        font-weight: 900;
+        color: var(--yellow);
+        margin-bottom: 5px;
       }
       .combo-bar-bg {
         width: 100%;
-        height: 7px;
-        background: rgba(0, 0, 0, 0.5);
-        border: 2px solid var(--foam);
+        height: 4px;
+        background: rgba(255, 255, 255, 0.15);
         overflow: hidden;
       }
       #hud-combo-bar {
         width: 100%;
         height: 100%;
-        background: linear-gradient(90deg, var(--coral), var(--sunset), var(--wax));
+        background: var(--orange);
       }
 
       /* ---------- Foldable tricks & options dock (bottom-right) ---------- */
       .dock {
         justify-self: end;
         pointer-events: auto;
-        width: 400px;
+        width: 380px;
         max-width: 44vw;
         display: flex;
-        flex-direction: column;
-        align-items: stretch;
+        flex-direction: column-reverse;
+        align-items: flex-end;
       }
       .dock-toggle {
         pointer-events: auto;
         cursor: pointer;
-        align-self: flex-end;
+        display: inline-flex;
+        align-items: stretch;
+        padding: 0;
+        border: none;
+        background: transparent;
+        transform: skewX(var(--skew));
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+        transition: transform 0.15s ease;
+      }
+      .dock-toggle:hover {
+        transform: skewX(var(--skew)) translateY(-2px);
+      }
+      .dock-toggle .key-cap {
         display: flex;
         align-items: center;
-        gap: 10px;
-        padding: 7px 16px;
-        background: var(--grip), var(--sunset);
-        background-size: 120px 120px, auto;
-        color: var(--ink);
-        border: 3px solid var(--sticker);
-        transform: skewX(var(--skew));
-        box-shadow: 5px 5px 0 var(--ink);
-        font: 15px var(--display);
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        transition: background 0.15s ease, transform 0.15s ease;
+        justify-content: center;
+        background: #efefef;
+        color: #121212;
+        padding: 8px 13px;
+        font-family: var(--font-hud);
+        font-size: 14px;
+        font-weight: 900;
       }
-      .dock-toggle:hover { background: var(--grip), var(--wax); background-size: 120px 120px, auto; transform: skewX(var(--skew)) translateY(-2px); }
-      .dock-toggle > span { display: inline-block; transform: skewX(calc(var(--skew) * -1)); }
-      .dock-toggle .chev { transition: transform 0.2s ease; }
-      .dock.collapsed .dock-toggle .chev { transform: skewX(calc(var(--skew) * -1)) rotate(180deg); }
+      .dock-toggle .toggle-label {
+        display: flex;
+        align-items: center;
+        background: var(--dark-1);
+        color: var(--white);
+        padding: 8px 22px;
+        font-family: var(--font-hud);
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }
+      .dock-toggle .key-cap > span,
+      .dock-toggle .toggle-label > span {
+        display: inline-block;
+        transform: skewX(calc(var(--skew) * -1));
+      }
+      .dock-toggle:hover .key-cap {
+        background: var(--yellow);
+      }
+
       .dock-body {
         position: relative;
-        background: var(--scuff), var(--grip), var(--panel);
-        background-size: 260px 260px, 180px 180px, auto;
-        border: 3px solid var(--sticker);
-        border-left: 7px solid var(--sunset);
-        box-shadow: 6px 6px 0 var(--ink), 0 0 24px rgba(0, 214, 195, 0.25);
-                margin-top: 8px;
-        padding: 12px 16px 14px;
+        width: 100%;
+        background: rgba(20, 18, 16, 0.92);
+        border-left: 4px solid var(--orange);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+        margin-bottom: 10px;
+        padding: 14px 18px;
         max-height: 60vh;
         overflow: hidden auto;
         transform-origin: bottom right;
-        transition: opacity 0.2s ease, transform 0.22s cubic-bezier(0.2, 0.9, 0.2, 1), max-height 0.22s ease,
+        transition: opacity 0.2s ease, max-height 0.22s ease,
           padding 0.22s ease, margin 0.22s ease, border-width 0.22s ease;
       }
       .dock.collapsed .dock-body {
@@ -431,18 +500,20 @@
         max-height: 0;
         padding-top: 0;
         padding-bottom: 0;
-        margin-top: 0;
+        margin-bottom: 0;
         border-width: 0;
         pointer-events: none;
       }
       .dock-section-title {
-        font: 13px var(--display);
-        letter-spacing: 0.16em;
+        font-family: var(--font-hud);
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
         text-transform: uppercase;
-        color: var(--teal);
-        margin: 8px 0 6px;
-        border-bottom: 2px solid rgba(0, 214, 195, 0.4);
-        padding-bottom: 2px;
+        color: var(--orange);
+        margin: 10px 0 6px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        padding-bottom: 3px;
       }
       .dock-section-title:first-child { margin-top: 0; }
       .trick-row,
@@ -450,31 +521,38 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        font: 11px var(--ui);
-        color: rgba(244, 251, 255, 0.85);
-        line-height: 1.5;
+        font-family: var(--font-hud);
+        font-size: 13px;
+        font-weight: 600;
+        color: rgba(245, 245, 245, 0.85);
+        line-height: 1.45;
         padding: 2px 0;
       }
       .trick-row .trick-name {
-        font: 15px var(--display);
-        letter-spacing: 0.06em;
-        color: var(--wax);
-        text-shadow: 2px 2px 0 var(--ink);
+        font-family: var(--font-hud);
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--yellow);
         min-width: 112px;
       }
-      .trick-row .trick-how { color: rgba(244, 251, 255, 0.7); font-size: 10px; }
+      .trick-row .trick-how {
+        color: var(--muted);
+        font-size: 12px;
+      }
       .key {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 22px;
-        height: 20px;
+        min-width: 20px;
+        height: 19px;
         padding: 0 5px;
-        background: var(--sticker);
-        color: var(--ink);
-        border: 2px solid var(--ink);
-        box-shadow: 2px 2px 0 var(--teal-deep);
-        font: 12px var(--ui);
+        background: #efefef;
+        color: #121212;
+        font-family: var(--font-hud);
+        font-size: 12px;
+        font-weight: 900;
         transform: skewX(var(--skew));
       }
       .options-grid {
@@ -484,26 +562,27 @@
       }
       .hud-btn {
         background: rgba(255, 255, 255, 0.06);
-        color: var(--foam);
-        border: 2px solid rgba(244, 251, 255, 0.55);
-        padding: 6px 8px;
-        font: 12px var(--ui);
-        letter-spacing: 0.03em;
+        color: var(--white);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 6px 10px;
+        font-family: var(--font-hud);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
         text-align: left;
         cursor: pointer;
         transform: skewX(var(--skew));
         transition: all 0.14s ease;
       }
       .hud-btn:hover {
-        border-color: var(--wax);
-        background: rgba(255, 210, 63, 0.16);
-        box-shadow: 3px 3px 0 var(--ink);
+        border-color: var(--yellow);
+        background: rgba(242, 204, 38, 0.16);
       }
       .hud-btn.active-reel,
       .hud-btn.active-auto {
-        border-color: var(--teal);
-        background: rgba(0, 214, 195, 0.25);
-        box-shadow: 0 0 12px rgba(0, 214, 195, 0.5);
+        border-color: var(--orange);
+        background: rgba(242, 116, 31, 0.25);
       }
       body.reel-mode .dock { width: auto; max-width: 70vw; }
 
@@ -511,7 +590,7 @@
       #loading-overlay {
         position: absolute;
         inset: 0;
-        background: linear-gradient(160deg, var(--ocean), var(--navy));
+        background: #0c0d10;
         z-index: 50;
         display: flex;
         flex-direction: column;
@@ -525,18 +604,19 @@
         pointer-events: none;
       }
       .loader-ring {
-        width: 46px;
-        height: 46px;
-        border: 5px solid rgba(0, 214, 195, 0.2);
-        border-top-color: var(--wax);
+        width: 44px;
+        height: 44px;
+        border: 4px solid rgba(255, 255, 255, 0.15);
+        border-top-color: var(--orange);
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
       }
       .loader-text {
-        font: 22px var(--display);
+        font-family: var(--font-hud);
+        font-size: 22px;
+        font-weight: 800;
         letter-spacing: 0.12em;
-        color: var(--wax);
-        text-shadow: 3px 3px 0 var(--ink);
+        color: var(--white);
       }
       @keyframes spin {
         to { transform: rotate(360deg); }
@@ -553,47 +633,61 @@
       </div>
 
       <div class="hud-layer">
-        <!-- Top Row: speedometer | score & session | (empty) -->
+        <!-- Top Row: SESSION | SCORE | BEST LINE on top-left -->
         <div class="hud-top">
-          <div class="speedo" id="hud-speedo">
-            <span id="hud-speed">0</span>
-            <span class="speedo-unit">km/h</span>
-          </div>
-
-          <div class="score-card slant">
-            <div class="unslant">
-              <div class="stat-block">
-                <span class="stat-label">Score</span>
-                <span class="stat-value" id="hud-score">0</span>
-              </div>
-              <div class="stat-block">
-                <span class="stat-label">Session</span>
-                <span class="stat-value" id="hud-timer">2:00.0</span>
-              </div>
-              <div class="stat-block">
-                <span class="stat-label">Best Line</span>
-                <span class="stat-value" id="hud-best-combo">0</span>
-              </div>
+          <div class="score-card">
+            <div class="stat-block session-block">
+              <span class="stat-label">Session</span>
+              <span class="stat-value" id="hud-timer">2:00.0</span>
+            </div>
+            <div class="stat-block score-block">
+              <span class="stat-label">Score</span>
+              <span class="stat-value" id="hud-score">0</span>
+            </div>
+            <div class="stat-block best-block">
+              <span class="stat-label">Best Line</span>
+              <span class="stat-value" id="hud-best-combo">0</span>
             </div>
           </div>
 
           <div></div>
+          <div></div>
         </div>
 
-        <!-- Bottom Row: flow meter | combo | foldable tricks & options dock -->
+        <!-- Right-edge status / pump ribbon -->
+        <div id="hud-pump-badge" class="pump-badge neutral">PERFECT PUMP</div>
+
+        <!-- Bottom Row: speedo + flow + lean | combo | tricks & options dock -->
         <div class="hud-bottom">
-          <div class="flow-card slant">
-            <div class="unslant">
+          <div class="bottom-left-cluster">
+            <div class="speedo" id="hud-speedo">
+              <span id="hud-speed">0</span>
+              <span class="speedo-unit">KM/H</span>
+            </div>
+
+            <div class="flow-card">
               <div class="flow-header">
-                <span>Flow Meter</span>
+                <span class="flow-title">Flow</span>
                 <span id="hud-flow-pct">25%</span>
               </div>
-              <div class="flow-bar-track">
+              <div class="flow-bar-track" id="hud-flow-track">
                 <div id="hud-flow-fill"></div>
+                <span class="flow-seg"></span>
+                <span class="flow-seg"></span>
+                <span class="flow-seg"></span>
+                <span class="flow-seg"></span>
+                <span class="flow-seg"></span>
+                <span class="flow-seg"></span>
+                <span class="flow-seg"></span>
+                <span class="flow-seg"></span>
+                <span class="flow-seg"></span>
+                <span class="flow-seg"></span>
+                <span class="flow-seg"></span>
+                <span class="flow-seg"></span>
               </div>
               <div class="telemetry-row">
-                <span id="hud-pump-badge" class="pump-badge neutral">PUMP: ← → IN RHYTHM</span>
                 <div class="truck-widget">
+                  <span class="lean-label">Lean</span>
                   <div class="truck-dial" title="Dual-Axis Surf Adapter Front Truck Angle">
                     <div id="hud-truck-front"></div>
                   </div>
@@ -613,7 +707,8 @@
 
           <div class="dock collapsed" id="hud-dock">
             <button class="dock-toggle" id="dock-toggle" title="Show / hide tricks &amp; options [H]">
-              <span>Tricks &amp; Options</span><span class="key">H</span><span class="chev">▼</span>
+              <span class="key-cap"><span>H</span></span>
+              <span class="toggle-label"><span>Tricks &amp; Options</span></span>
             </button>
             <div class="dock-body">
               <div>

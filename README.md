@@ -88,7 +88,7 @@ surfskate_game/
 │   └── textures/                # Color maps and night sky dome
 ├── scripts/                     # Python & Swift asset processing tools
 │   ├── build_park.py            # LiDAR & mesh processing
-│   ├── build_skater_realistic.py# Rigging & IK setup
+│   ├── build_skater_makehuman.py# CC0 MakeHuman/MPFB character & gear builder
 │   └── photogrammetry_cli.swift # Apple Object Capture photogrammetry tool
 ├── src/
 │   ├── audio/SurfAudio.ts       # Web Audio API procedural sound synthesizer
@@ -119,8 +119,8 @@ When publishing or distributing this game, keep the following license terms and 
 - No third-party copyright applies to the board geometry.
 
 ### 3. Skater Character Model
-- The character body mesh is based on `readyplayer.me.glb` (distributed with Three.js examples).
-- *Publishing note*: Ready Player Me avatars can be used freely for non-commercial and commercial projects under their free developer tier (see [Ready Player Me Terms of Use](https://readyplayer.me/terms)). For commercial distribution, consider registering a free Ready Player Me partner account or substituting the mesh with a CC0 / custom human model.
+- **100% CC0 (Public Domain)**: Generated with the official MakeHuman / MPFB 2 Blender extension (`scripts/build_skater_makehuman.py`) using only official CC0 MakeHuman system and skin asset packs (`makehuman_system_assets`, `skins02`) plus procedurally generated skate gear (turquoise knit skater beanie, hoodie collar/hood, and knee pads).
+- Free for unrestricted commercial and non-commercial publishing with no attribution or third-party terms required.
 
 ### 4. Skatepark Photogrammetry & Geodata
 - **Photogrammetry 3D Mesh**: Reconstructed from drone and camera video footage recorded at the public skatepark "Im Gefilde" in Neubiberg/Munich (*Panoramafreiheit* / Freedom of Panorama applies under § 59 German UrhG).
