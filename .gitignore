@@ -1,0 +1,50 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Production build outputs
+dist
+dist-ssr
+
+# Environment / local configs
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Editor & OS files
+.DS_Store
+Thumbs.db
+.idea
+.vscode
+*.sublime-project
+*.sublime-workspace
+
+# Large raw video footage (>100MB, rejected by GitHub)
+video/
+
+# Apple Reality USDZ files (intermediate scan files)
+*.usdz
+
+# Intermediate photogrammetry frame extraction dumps and raw temp textures
+data/frames_drone/
+data/frames_gopro/
+data/photogrammetry_input/
+data/baked_mesh_*.png
+geodata/multi_scan_ortho_4k.png
+
+# Superseded intermediate 3D models (game uses skatepark_multi.glb & skater.glb)
+public/models/skatepark_photogrammetry.glb
+public/models/skatepark_multi_raw.glb
+public/models/skatepark_v1_single.glb
+public/models/im_gefilde.glb
+public/models/im_gefilde_park.glb
+public/textures/skatepark_multi_tex0.png
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SURFSKATE MUNICH — Level 1: Skatepark "Im Gefilde"</title>
+    <style>
+      :root {
+        --cyan: #00e5ff;
+        --gold: #ffbe2e;
+        --coral: #ff4e50;
+        --dark-glass: rgba(10, 15, 26, 0.78);
+        --border-glow: rgba(0, 229, 255, 0.38);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        user-select: none;
+      }
+
+      body {
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        background: radial-gradient(circle at center, #141e30 0%, #070b12 100%);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        color: #f4f8ff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* Viewport Wrapper: 16:9 full desktop by default, 9:16 vertical frame when body.reel-mode is active */
+      #viewport-frame {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        transition: width 0.32s cubic-bezier(0.2, 0.9, 0.2, 1),
+          height 0.32s cubic-bezier(0.2, 0.9, 0.2, 1),
+          border-radius 0.32s ease;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.85);
+      }
+
+      body.reel-mode #viewport-frame {
+        height: 95vh;
+        width: calc(95vh * 9 / 16);
+        max-width: 96vw;
+        border-radius: 28px;
+        border: 3px solid rgba(0, 229, 255, 0.55);
+      }
+
+      #viewport-frame canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      /* HUD Overlay inside #viewport-frame so 9:16 Instagram Reel recordings capture the clean HUD */
+      .hud-layer {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 16px 20px;
+      }
+
+      .hud-top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .brand-card {
+        background: var(--dark-glass);
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--border-glow);
+        border-radius: 14px;
+        padding: 10px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .brand-title {
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--cyan);
+      }
+
+      .brand-sub {
+        font-size: 11px;
+        color: rgba(244, 248, 255, 0.78);
+      }
+
+      #hud-zone {
+        color: var(--gold);
+        font-weight: 700;
+      }
+
+      .score-timer-card {
+        background: var(--dark-glass);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 190, 46, 0.45);
+        border-radius: 14px;
+        padding: 8px 18px;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+      }
+
+      .stat-block {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .stat-label {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.65);
+      }
+
+      .stat-value {
+        font-size: 22px;
+        font-weight: 900;
+        font-variant-numeric: tabular-nums;
+        color: #ffffff;
+        text-shadow: 0 2px 10px rgba(0, 229, 255, 0.35);
+      }
+
+      #hud-timer {
+        color: var(--gold);
+      }
+
+      #hud-timer.urgent {
+        color: var(--coral);
+        animation: pulseUrgent 0.55s infinite alternate;
+      }
+
+      @keyframes pulseUrgent {
+        from { transform: scale(1); }
+        to { transform: scale(1.08); }
+      }
+
+      /* Interactive Top Control Buttons */
+      .toolbar-buttons {
+        pointer-events: auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .hud-btn {
+        background: rgba(14, 22, 38, 0.85);
+        color: #eaf4ff;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 10px;
+        padding: 7px 11px;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.16s ease;
+        backdrop-filter: blur(8px);
+      }
+
+      .hud-btn:hover {
+        border-color: var(--cyan);
+        background: rgba(0, 229, 255, 0.18);
+        transform: translateY(-1px);
+      }
+
+      .hud-btn.active-reel,
+      .hud-btn.active-auto {
+        border-color: var(--cyan);
+        background: rgba(0, 229, 255, 0.25);
+        color: #ffffff;
+        box-shadow: 0 0 14px rgba(0, 229, 255, 0.35);
+      }
+
+      /* Bottom Row: Flow/Pump Telemetry + THPS Combo Box + Controls Hint */
+      .hud-bottom {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .flow-telemetry-card {
+        background: var(--dark-glass);
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--border-glow);
+        border-radius: 14px;
+        padding: 12px 14px;
+        min-width: 255px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .flow-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .flow-bar-track {
+        width: 100%;
+        height: 11px;
+        background: rgba(255, 255, 255, 0.12);
+        border-radius: 99px;
+        overflow: hidden;
+      }
+
+      #hud-flow-fill {
+        height: 100%;
+        width: 25%;
+        background: linear-gradient(90deg, #00e5ff, #00ff95);
+        border-radius: 99px;
+        transition: width 0.12s ease-out;
+      }
+
+      #hud-flow-fill.special-ready {
+        background: linear-gradient(90deg, #ff4e50, #ffbe2e, #00e5ff);
+        box-shadow: 0 0 12px #ffbe2e;
+      }
+
+      .telemetry-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .pump-badge {
+        font-size: 10px;
+        font-weight: 800;
+        padding: 3px 8px;
+        border-radius: 6px;
+        letter-spacing: 0.06em;
+      }
+
+      .pump-badge.perfect {
+        background: rgba(0, 255, 149, 0.22);
+        color: #4dffb5;
+        border: 1px solid #00ff95;
+      }
+
+      .pump-badge.good {
+        background: rgba(0, 229, 255, 0.22);
+        color: #66f0ff;
+        border: 1px solid #00e5ff;
+      }
+
+      .pump-badge.scrub {
+        background: rgba(255, 78, 80, 0.25);
+        color: #ff8587;
+        border: 1px solid #ff4e50;
+      }
+
+      .pump-badge.neutral {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.78);
+      }
+
+      /* Mini Front Surf-Adapter Truck Visual Dial */
+      .truck-widget {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.8);
+      }
+
+      .truck-dial {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 1px solid rgba(0, 229, 255, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.4);
+      }
+
+      #hud-truck-front {
+        width: 18px;
+        height: 4px;
+        background: var(--gold);
+        border-radius: 2px;
+        transition: transform 0.06s linear;
+      }
+
+      /* Center THPS Surf Combo Box */
+      #hud-combo-box {
+        flex: 1;
+        min-width: 240px;
+        max-width: 520px;
+        background: rgba(10, 15, 28, 0.86);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 190, 46, 0.65);
+        border-radius: 16px;
+        padding: 12px 18px;
+        text-align: center;
+        opacity: 0;
+        transform: translateY(14px) scale(0.96);
+        transition: opacity 0.18s ease, transform 0.18s ease;
+      }
+
+      #hud-combo-box.active {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+
+      #hud-combo-box.special-flash {
+        border-color: #00e5ff;
+        box-shadow: 0 0 32px rgba(0, 229, 255, 0.75);
+      }
+
+      #hud-combo-points {
+        font-size: 20px;
+        font-weight: 900;
+        color: var(--gold);
+        text-shadow: 0 2px 12px rgba(255, 190, 46, 0.45);
+        margin-bottom: 4px;
+      }
+
+      #hud-combo-string {
+        font-size: 13px;
+        font-weight: 700;
+        color: #ffffff;
+        line-height: 1.35;
+        margin-bottom: 8px;
+      }
+
+      .combo-bar-bg {
+        width: 100%;
+        height: 5px;
+        background: rgba(255, 255, 255, 0.14);
+        border-radius: 99px;
+        overflow: hidden;
+      }
+
+      #hud-combo-bar {
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, var(--coral), var(--gold), var(--cyan));
+      }
+
+      /* Right Controls Legend */
+      .controls-card {
+        background: var(--dark-glass);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 14px;
+        padding: 10px 14px;
+        font-size: 11px;
+        line-height: 1.55;
+        color: rgba(240, 246, 255, 0.85);
+      }
+
+      body.reel-mode .controls-card {
+        display: none;
+      }
+
+      .key {
+        display: inline-block;
+        background: rgba(255, 255, 255, 0.14);
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        border-radius: 5px;
+        padding: 0px 5px;
+        font-weight: 700;
+        font-size: 10px;
+        color: var(--cyan);
+      }
+
+      /* Loading Screen */
+      #loading-overlay {
+        position: absolute;
+        inset: 0;
+        background: #080d18;
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        transition: opacity 0.4s ease;
+      }
+
+      #loading-overlay.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .loader-ring {
+        width: 44px;
+        height: 44px;
+        border: 4px solid rgba(0, 229, 255, 0.2);
+        border-top-color: var(--cyan);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="viewport-frame">
+      <div id="loading-overlay">
+        <div class="loader-ring"></div>
+        <div style="font-weight: 800; letter-spacing: 0.08em; color: #00e5ff">
+          LOADING "IM GEFILDE" FLOW PARK &amp; SURFSKATE RIG...
+        </div>
+      </div>
+
+      <div class="hud-layer">
+        <!-- Top Row -->
+        <div class="hud-top">
+          <div class="brand-card">
+            <div class="brand-title">@surfskate_munich • Im Gefilde</div>
+            <div class="brand-sub">
+              Zone: <span id="hud-zone">Sunset Palm Mural Wall</span> • Speed:
+              <strong id="hud-speed">0 km/h</strong>
+            </div>
+          </div>
+
+          <div class="score-timer-card">
+            <div class="stat-block">
+              <span class="stat-label">Flow Score</span>
+              <span class="stat-value" id="hud-score">0</span>
+            </div>
+            <div class="stat-block">
+              <span class="stat-label">Session</span>
+              <span class="stat-value" id="hud-timer">2:00.0</span>
+            </div>
+            <div class="stat-block">
+              <span class="stat-label">Best Line</span>
+              <span class="stat-value" id="hud-best-combo">0</span>
+            </div>
+          </div>
+
+          <div class="toolbar-buttons">
+            <button class="hud-btn" id="btn-aspect">🖥️ 16:9 Desktop [R]</button>
+            <button class="hud-btn" id="btn-atmosphere">☀️ Sunny Autumn Day [L]</button>
+            <button class="hud-btn" id="btn-camera">🎥 Follow Cam [V]</button>
+            <button class="hud-btn" id="btn-truckfeel">🛹 Truck: Smooth [T]</button>
+            <button class="hud-btn" id="btn-autoflow">🎮 Manual Control [P]</button>
+            <button class="hud-btn" id="btn-reset">↺ Respawn [X]</button>
+          </div>
+        </div>
+
+
+        <!-- Bottom Row -->
+        <div class="hud-bottom">
+          <div class="flow-telemetry-card">
+            <div class="flow-header">
+              <span>Flow / Pump Meter</span>
+              <span id="hud-flow-pct">25%</span>
+            </div>
+            <div class="flow-bar-track">
+              <div id="hud-flow-fill"></div>
+            </div>
+            <div class="telemetry-row">
+              <span id="hud-pump-badge" class="pump-badge neutral">RHYTHM PUMP READY</span>
+            </div>
+            <div class="truck-widget">
+              <div class="truck-dial" title="Dual-Axis Surf Adapter Front Truck Angle">
+                <div id="hud-truck-front"></div>
+              </div>
+              <span id="hud-lean-deg">Lean 0° | Surf Truck 0°</span>
+            </div>
+          </div>
+
+          <div id="hud-combo-box">
+            <div id="hud-combo-points">0 × 1</div>
+            <div id="hud-combo-string">Deep Rail Bottom Turn</div>
+            <div class="combo-bar-bg">
+              <div id="hud-combo-bar"></div>
+            </div>
+          </div>
+
+          <div class="controls-card">
+            <div><span class="key">A</span> / <span class="key">D</span> or <span class="key">←</span> / <span class="key">→</span> Carve &amp; S-Turn Pump</div>
+            <div><span class="key">S</span> / <span class="key">Shift</span> Compress (Release on Wall to Pump Boost)</div>
+            <div><span class="key">W</span> / <span class="key">↑</span> Start Push / Forward Drive</div>
+            <div><span class="key">Q</span> SNAP at the top of a wall (right speed!) • <span class="key">C</span> Bert Slide • <span class="key">E</span> Coping Carve Grind</div>
+            <div><span class="key">Space</span> Alley-Oop Air</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

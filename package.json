@@ -1,0 +1,23 @@
+{
+  "name": "surfskate-munich",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "build:park": "/Applications/Blender.app/Contents/MacOS/Blender -b -P scripts/build_park.py",
+    "build:skater": "/Applications/Blender.app/Contents/MacOS/Blender -b -P scripts/build_skater.py",
+    "build:assets": "npm run build:park && npm run build:skater"
+  },
+  "dependencies": {
+    "cannon-es": "^0.20.0",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.170.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}

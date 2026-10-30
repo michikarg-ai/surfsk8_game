@@ -1,0 +1,77 @@
+{
+  "discovered_videos": [
+    {
+      "path": "video/dji_fly_20221031_212930_353_1667249576657_video.mp4",
+      "abs_path": "/Users/kargm/Documents/projects/surfskate_game/video/dji_fly_20221031_212930_353_1667249576657_video.mp4",
+      "filename": "dji_fly_20221031_212930_353_1667249576657_video.mp4",
+      "category": "drone",
+      "width": 3840,
+      "height": 2160,
+      "duration_sec": 13.0,
+      "fps": 23.976,
+      "creation_time": "2022-10-31T20:29:30.000000Z",
+      "gps_location": "+48.0913+11.6587",
+      "comment": "DE=None,SN=1SFLJ930AL05EU, Type=Normal, HQ=Normal, Mode=P"
+    },
+    {
+      "path": "video/dji_fly_20221031_213350_361_1667249541989_video.mp4",
+      "abs_path": "/Users/kargm/Documents/projects/surfskate_game/video/dji_fly_20221031_213350_361_1667249541989_video.mp4",
+      "filename": "dji_fly_20221031_213350_361_1667249541989_video.mp4",
+      "category": "drone",
+      "width": 3840,
+      "height": 2160,
+      "duration_sec": 8.0,
+      "fps": 23.976,
+      "creation_time": "2022-10-31T20:33:51.000000Z",
+      "gps_location": "+48.0913+11.6586",
+      "comment": "DE=None,SN=1SFLJ930AL05EU, Type=Normal, HQ=Normal, Mode=P"
+    },
+    {
+      "path": "video/dji_fly_20221031_213738_363_1667249536363_video.mp4",
+      "abs_path": "/Users/kargm/Documents/projects/surfskate_game/video/dji_fly_20221031_213738_363_1667249536363_video.mp4",
+      "filename": "dji_fly_20221031_213738_363_1667249536363_video.mp4",
+      "category": "drone",
+      "width": 3840,
+      "height": 2160,
+      "duration_sec": 46.0,
+      "fps": 23.976,
+      "creation_time": "2022-10-31T20:37:39.000000Z",
+      "gps_location": "+48.0913+11.6584",
+      "comment": "DE=None,SN=1SFLJ930AL05EU, Type=Normal, HQ=Normal, Mode=P"
+    },
+    {
+      "path": "video/dji_fly_20221031_213928_365_1667249510309_video.mp4",
+      "abs_path": "/Users/kargm/Documents/projects/surfskate_game/video/dji_fly_20221031_213928_365_1667249510309_video.mp4",
+      "filename": "dji_fly_20221031_213928_365_1667249510309_video.mp4",
+      "category": "drone",
+      "width": 3840,
+      "height": 2160,
+      "duration_sec": 33.0,
+      "fps": 23.976,
+      "creation_time": "2022-10-31T20:39:28.000000Z",
+      "gps_location": "+48.0913+11.6584",
+      "comment": "DE=None,SN=1SFLJ930AL05EU, Type=Normal, HQ=Normal, Mode=P"
+    },
+    {
+      "path": "video/gopro_video.mp4",
+      "abs_path": "/Users/kargm/Documents/projects/surfskate_game/video/gopro_video.mp4",
+      "filename": "gopro_video.mp4",
+      "category": "gopro",
+      "width": 2160,
+      "height": 3840,
+      "duration_sec": 42.12,
+      "fps": 23.976,
+      "creation_time": "2022-10-23T18:45:15.000000Z",
+      "gps_location": "",
+      "comment": ""
+    }
+  ],
+  "drone_keyframes_count": 110,
+  "gopro_keyframes_count": 48,
+  "photogrammetry_input_count": 137,
+  "gopro_telemetry_summary": {
+    "meanSpeedKmh": 17.3,
+    "peakSpeedKmh": 33.0,
+    "dominantPumpFrequencyHz": 1.47
+  }
+}

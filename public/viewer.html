@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Skatepark „Im Gefilde“ – RealityKit 3D Photogrammetrie Viewer</title>
+  <style>
+    :root {
+      --bg: #0b0e14;
+      --panel: rgba(16, 21, 30, 0.88);
+      --border: rgba(255, 255, 255, 0.12);
+      --accent: #38bdf8;
+      --accent-2: #22c55e;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      user-select: none;
+    }
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      inset: 0;
+    }
+    .sidebar {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      width: 350px;
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+      z-index: 10;
+    }
+    .header h1 {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.16);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+    .header p {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+    .section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+    }
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+    select, button {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    select:hover, button:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+    button.active {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .btn-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+    }
+    .slider-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 12px;
+    }
+    .slider-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+    }
+    .stats-box {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 12px;
+    }
+    .stat-item span {
+      display: block;
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+    .stat-item strong {
+      font-size: 13px;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .downloads {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .download-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      background: rgba(34, 197, 94, 0.15);
+      color: #86efac;
+      border: 1px solid rgba(34, 197, 94, 0.35);
+      border-radius: 10px;
+      padding: 9px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.15s ease;
+    }
+    .download-link:hover {
+      background: rgba(34, 197, 94, 0.28);
+    }
+    #loading-banner {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 16px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 20;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(56, 189, 248, 0.3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .controls-hint {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 14px;
+      font-size: 12px;
+      color: var(--muted);
+      z-index: 10;
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div id="loading-banner">
+    <div class="spinner" id="loading-spinner"></div>
+    <span id="loading-text">Lade 3D-Photogrammetrie-Modell...</span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="header">
+      <h1>
+        Skatepark 3D Scan
+        <span class="badge">RealityKit</span>
+      </h1>
+      <p>Fotorealistische 3D-Rekonstruktion aus 4K DJI-Drohnenaufnahmen („Im Gefilde“, München)</p>
+    </div>
+
+    <div class="section">
+      <div class="section-title">3D-Modell Auswahl</div>
+      <select id="model-select">
+        <option value="/models/skatepark_multi.glb" id="opt-multi" selected>v2: Multi-Video Scan (Alle Videos – 95.978 Faces)</option>
+        <option value="/models/skatepark_v1_single.glb">v1: Single-Video Scan (DJI 363 – 48.829 Faces)</option>
+        <option value="/models/im_gefilde.glb">Vergleich: Game-Park (LiDAR + Procedural)</option>
+      </select>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Darstellungs-Modus (Shading)</div>
+      <div class="btn-grid">
+        <button id="mode-unlit" class="active">Foto-Textur (Unlit)</button>
+        <button id="mode-pbr">3D PBR + Normal</button>
+        <button id="mode-clay">3D Relief / Clay</button>
+        <button id="toggle-wireframe">Wireframe: Aus</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Kamera-Perspektiven</div>
+      <div class="btn-grid">
+        <button id="cam-overview">Gesamt-Orbit</button>
+        <button id="cam-top">Top-Down (Ortho)</button>
+        <button id="cam-bowl">Nord-Bowl & Mural</button>
+        <button id="cam-flow">Flow-Zone / Roller</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Licht & Ansicht</div>
+      <div class="slider-row">
+        <span>Helligkeit</span>
+        <input type="range" id="exposure-slider" min="0.4" max="2.6" step="0.05" value="1.25" />
+        <span id="exposure-val">1.25</span>
+      </div>
+      <div class="slider-row">
+        <span>Sonnenwinkel</span>
+        <input type="range" id="sun-slider" min="0" max="360" step="1" value="45" />
+        <span id="sun-val">45°</span>
+      </div>
+      <div class="btn-grid">
+        <button id="toggle-autorotate">Auto-Orbit: Aus</button>
+        <button id="toggle-grid">Boden-Raster: An</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Mesh-Informationen</div>
+      <div class="stats-box">
+        <div class="stat-item">
+          <span>Vertices</span>
+          <strong id="stat-verts">–</strong>
+        </div>
+        <div class="stat-item">
+          <span>Dreiecke (Faces)</span>
+          <strong id="stat-faces">–</strong>
+        </div>
+        <div class="stat-item">
+          <span>Ausdehnung (B×T×H)</span>
+          <strong id="stat-dims">–</strong>
+        </div>
+        <div class="stat-item">
+          <span>Maps</span>
+          <strong id="stat-maps">Diffuse + Normal + AO</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Download & Apple QuickLook</div>
+      <div class="downloads">
+        <a class="download-link" id="dl-glb" href="/models/skatepark_multi.glb" download>⬇ GLB (29 MB)</a>
+        <a class="download-link" id="dl-usdz" href="/models/skatepark_multi.usdz" rel="ar" download>⬇ USDZ (32 MB)</a>
+      </div>
+    </div>
+  </aside>
+
+  <div class="controls-hint">
+    🖱 Links ziehen: Drehen &nbsp;|&nbsp; Rechts ziehen: Verschieben &nbsp;|&nbsp; Mausrad: Zoomen &nbsp;|&nbsp; Datei per Drag & Drop ablegen
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    const container = document.getElementById('canvas-container');
+    const loadingBanner = document.getElementById('loading-banner');
+    const loadingText = document.getElementById('loading-text');
+    const loadingSpinner = document.getElementById('loading-spinner');
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b0e14);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.05, 500);
+    camera.position.set(0, 14, 24);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.maxDistance = 180;
+    controls.minDistance = 0.5;
+
+    const grid = new THREE.GridHelper(60, 60, 0x334155, 0x1e293b);
+    grid.position.y = -0.02;
+    scene.add(grid);
+
+    const hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x334155, 1.6);
+    scene.add(hemiLight);
+
+    const sunLight = new THREE.DirectionalLight(0xfffbeb, 2.8);
+    sunLight.position.set(18, 28, 18);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.set(2048, 2048);
+    scene.add(sunLight);
+
+    const fillLight = new THREE.DirectionalLight(0x93c5fd, 1.0);
+    fillLight.position.set(-18, 14, -16);
+    scene.add(fillLight);
+
+    let currentModel = null;
+    let currentShading = 'unlit'; // 'unlit' | 'pbr' | 'clay'
+    let wireframeEnabled = false;
+    const originalMaterials = new Map();
+    const loader = new GLTFLoader();
+
+    // Check if multi-video scan is already available
+    fetch('/models/skatepark_multi.glb', { method: 'HEAD' }).then((res) => {
+      const opt = document.getElementById('opt-multi');
+      if (!res.ok) {
+        opt.textContent = 'v2: Multi-Video Scan (Wird im Hintergrund berechnet...)';
+      } else {
+        opt.textContent = 'v2: Multi-Video Scan (Alle DJI-Videos – Bereit!)';
+      }
+    }).catch(() => {});
+
+    function applyShadingMode() {
+      if (!currentModel) return;
+      currentModel.traverse((child) => {
+        if (!child.isMesh) return;
+        const orig = originalMaterials.get(child.uuid);
+        if (!orig) return;
+
+        if (currentShading === 'unlit') {
+          const basic = new THREE.MeshBasicMaterial({
+            map: orig.map || null,
+            color: orig.map ? 0xffffff : orig.color,
+            wireframe: wireframeEnabled,
+            side: THREE.DoubleSide,
+          });
+          child.material = basic;
+        } else if (currentShading === 'pbr') {
+          const std = orig.clone();
+          std.wireframe = wireframeEnabled;
+          std.roughness = 0.78;
+          std.metalness = 0.05;
+          std.side = THREE.DoubleSide;
+          child.material = std;
+        } else if (currentShading === 'clay') {
+          const clay = new THREE.MeshStandardMaterial({
+            color: 0xd8dee9,
+            normalMap: orig.normalMap || null,
+            aoMap: orig.aoMap || null,
+            roughness: 0.55,
+            metalness: 0.08,
+            wireframe: wireframeEnabled,
+            side: THREE.DoubleSide,
+          });
+          child.material = clay;
+        }
+      });
+    }
+
+    function setCameraView(preset) {
+      if (preset === 'overview') {
+        camera.position.set(0, 14, 24);
+        controls.target.set(0, 0.8, 0);
+      } else if (preset === 'top') {
+        camera.position.set(0, 32, 0.01);
+        controls.target.set(0, 0, 0);
+      } else if (preset === 'bowl') {
+        camera.position.set(2.5, 5.5, 9.5);
+        controls.target.set(-2.5, 1.2, -8.5);
+      } else if (preset === 'flow') {
+        camera.position.set(-10, 6.5, 6);
+        controls.target.set(1.5, 0.6, -1.5);
+      }
+      controls.update();
+    }
+
+    async function loadGLB(url) {
+      loadingBanner.style.display = 'flex';
+      loadingSpinner.style.display = 'block';
+      loadingText.textContent = `Lade ${url.split('/').pop()}...`;
+
+      try {
+        const gltf = await loader.loadAsync(url);
+        if (currentModel) {
+          scene.remove(currentModel);
+        }
+        originalMaterials.clear();
+
+        const root = gltf.scene;
+        const box = new THREE.Box3().setFromObject(root);
+        const size = new THREE.Vector3();
+        const center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
+
+        // Normalize photogrammetry scan to ~32m skatepark width so camera presets match real meters
+        const maxDim = Math.max(size.x, size.z);
+        const scaleFactor = maxDim < 10 ? 32.0 / maxDim : 1.0;
+        root.scale.setScalar(scaleFactor);
+
+        const scaledBox = new THREE.Box3().setFromObject(root);
+        const scaledCenter = new THREE.Vector3();
+        const scaledSize = new THREE.Vector3();
+        scaledBox.getCenter(scaledCenter);
+        scaledBox.getSize(scaledSize);
+
+        root.position.x -= scaledCenter.x;
+        root.position.z -= scaledCenter.z;
+        root.position.y -= scaledBox.min.y;
+
+        let totalVerts = 0;
+        let totalFaces = 0;
+        const maxAniso = renderer.capabilities.getMaxAnisotropy();
+
+        root.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            if (child.geometry) {
+              const pos = child.geometry.attributes.position;
+              if (pos) totalVerts += pos.count;
+              if (child.geometry.index) {
+                totalFaces += child.geometry.index.count / 3;
+              } else if (pos) {
+                totalFaces += pos.count / 3;
+              }
+            }
+            const mat = child.material;
+            if (mat) {
+              if (mat.map) mat.map.anisotropy = maxAniso;
+              if (mat.normalMap) mat.normalMap.anisotropy = maxAniso;
+              if (mat.aoMap) mat.aoMap.anisotropy = maxAniso;
+              originalMaterials.set(child.uuid, mat.clone());
+            }
+          }
+        });
+
+        currentModel = root;
+        scene.add(currentModel);
+        applyShadingMode();
+
+        document.getElementById('stat-verts').textContent = totalVerts.toLocaleString('de-DE');
+        document.getElementById('stat-faces').textContent = Math.round(totalFaces).toLocaleString('de-DE');
+        document.getElementById('stat-dims').textContent =
+          `${scaledSize.x.toFixed(1)}m × ${scaledSize.z.toFixed(1)}m × ${scaledSize.y.toFixed(1)}m`;
+
+        setCameraView('overview');
+        loadingBanner.style.display = 'none';
+      } catch (err) {
+        loadingSpinner.style.display = 'none';
+        loadingText.textContent = `Modell noch nicht verfügbar (${err.message || 'wird berechnet'})`;
+      }
+    }
+
+    // UI Bindings
+    document.getElementById('model-select').addEventListener('change', (e) => {
+      const val = e.target.value;
+      loadGLB(val);
+      const dlGlb = document.getElementById('dl-glb');
+      const dlUsdz = document.getElementById('dl-usdz');
+      dlGlb.href = val;
+      if (val.includes('multi')) {
+        dlUsdz.href = '/models/skatepark_multi.usdz';
+      } else {
+        dlUsdz.href = '/models/skatepark_v1_single.usdz';
+      }
+    });
+
+    const modeButtons = ['mode-unlit', 'mode-pbr', 'mode-clay'];
+    function setActiveModeBtn(id, mode) {
+      currentShading = mode;
+      modeButtons.forEach((btnId) => {
+        document.getElementById(btnId).classList.toggle('active', btnId === id);
+      });
+      applyShadingMode();
+    }
+
+    document.getElementById('mode-unlit').addEventListener('click', () => setActiveModeBtn('mode-unlit', 'unlit'));
+    document.getElementById('mode-pbr').addEventListener('click', () => setActiveModeBtn('mode-pbr', 'pbr'));
+    document.getElementById('mode-clay').addEventListener('click', () => setActiveModeBtn('mode-clay', 'clay'));
+
+    document.getElementById('toggle-wireframe').addEventListener('click', (e) => {
+      wireframeEnabled = !wireframeEnabled;
+      e.target.classList.toggle('active', wireframeEnabled);
+      e.target.textContent = `Wireframe: ${wireframeEnabled ? 'An' : 'Aus'}`;
+      applyShadingMode();
+    });
+
+    document.getElementById('cam-overview').addEventListener('click', () => setCameraView('overview'));
+    document.getElementById('cam-top').addEventListener('click', () => setCameraView('top'));
+    document.getElementById('cam-bowl').addEventListener('click', () => setCameraView('bowl'));
+    document.getElementById('cam-flow').addEventListener('click', () => setCameraView('flow'));
+
+    document.getElementById('exposure-slider').addEventListener('input', (e) => {
+      const v = parseFloat(e.target.value);
+      renderer.toneMappingExposure = v;
+      document.getElementById('exposure-val').textContent = v.toFixed(2);
+    });
+
+    document.getElementById('sun-slider').addEventListener('input', (e) => {
+      const deg = parseFloat(e.target.value);
+      const rad = (deg * Math.PI) / 180;
+      sunLight.position.set(Math.cos(rad) * 25, 28, Math.sin(rad) * 25);
+      document.getElementById('sun-val').textContent = `${deg}°`;
+    });
+
+    document.getElementById('toggle-autorotate').addEventListener('click', (e) => {
+      controls.autoRotate = !controls.autoRotate;
+      controls.autoRotateSpeed = 1.2;
+      e.target.classList.toggle('active', controls.autoRotate);
+      e.target.textContent = `Auto-Orbit: ${controls.autoRotate ? 'An' : 'Aus'}`;
+    });
+
+    document.getElementById('toggle-grid').addEventListener('click', (e) => {
+      grid.visible = !grid.visible;
+      e.target.classList.toggle('active', grid.visible);
+      e.target.textContent = `Boden-Raster: ${grid.visible ? 'An' : 'Aus'}`;
+    });
+
+    // Drag & Drop custom GLB support
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const file = e.dataTransfer?.files?.[0];
+      if (file && (file.name.endsWith('.glb') || file.name.endsWith('.gltf'))) {
+        const blobUrl = URL.createObjectURL(file);
+        loadGLB(blobUrl);
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    loadGLB('/models/skatepark_multi.glb');
+    animate();
+  </script>
+</body>
+</html>
