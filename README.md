@@ -132,3 +132,6 @@ When publishing or distributing this game, keep the following license terms and 
 
 ### 6. Environment & Sky
 - HDRI sky background licensed under CC0 (Public Domain via Poly Haven).
+
+### 7. Fonts
+- **Rubik Dirt**, **Permanent Marker** and **Sedgwick Ave Display** (self-hosted in `public/fonts/`, from Google Fonts) are licensed under the [SIL Open Font License 1.1](https://openfontlicense.org/) — free for commercial use and redistribution.

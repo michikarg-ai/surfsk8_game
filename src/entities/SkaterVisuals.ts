@@ -54,8 +54,16 @@ export class SkaterVisuals {
   private particleVelocities: Float32Array;
   private particleColors: Float32Array;
   private particleLife: Float32Array;
+  private particleMaxLife: Float32Array;
+  private particleBaseSize: Float32Array;
+  private particleSize: Float32Array;
+  private particleAlpha: Float32Array;
+  private particleBaseAlpha: Float32Array;
+  /** 0 = spray droplet, 1 = mist puff, 2 = coping spark */
+  private particleKind: Uint8Array;
   private nextParticleIdx = 0;
-  private readonly maxParticles = 240;
+  private readonly maxParticles = 700;
+  private prevSpray = 0;
 
   // Dual urethane wheel carve ribbon trail on the concrete
   public trailMesh: THREE.Mesh;
@@ -95,21 +103,55 @@ export class SkaterVisuals {
     this.contactShadowMesh.position.y = 0.012;
     this.root.add(this.contactShadowMesh);
 
-    // Initialize spray & sparks particle system
-    this.particlePositions = new Float32Array(this.maxParticles * 3);
-    this.particleVelocities = new Float32Array(this.maxParticles * 3);
-    this.particleColors = new Float32Array(this.maxParticles * 3);
-    this.particleLife = new Float32Array(this.maxParticles);
+    // Initialize spray, mist & spark particle system: soft glowing sprites (custom shader)
+    const n = this.maxParticles;
+    this.particlePositions = new Float32Array(n * 3).fill(-999);
+    this.particleVelocities = new Float32Array(n * 3);
+    this.particleColors = new Float32Array(n * 3);
+    this.particleLife = new Float32Array(n);
+    this.particleMaxLife = new Float32Array(n).fill(1);
+    this.particleBaseSize = new Float32Array(n);
+    this.particleSize = new Float32Array(n);
+    this.particleAlpha = new Float32Array(n);
+    this.particleBaseAlpha = new Float32Array(n);
+    this.particleKind = new Uint8Array(n);
 
     const pGeo = new THREE.BufferGeometry();
     pGeo.setAttribute('position', new THREE.BufferAttribute(this.particlePositions, 3));
     pGeo.setAttribute('color', new THREE.BufferAttribute(this.particleColors, 3));
-    const pMat = new THREE.PointsMaterial({
-      size: 0.14,
-      vertexColors: true,
+    pGeo.setAttribute('aSize', new THREE.BufferAttribute(this.particleSize, 1));
+    pGeo.setAttribute('aAlpha', new THREE.BufferAttribute(this.particleAlpha, 1));
+    const pMat = new THREE.ShaderMaterial({
+      uniforms: { uScale: { value: 620 } },
+      vertexShader: `
+        attribute float aSize;
+        attribute float aAlpha;
+        attribute vec3 color;
+        varying vec3 vColor;
+        varying float vAlpha;
+        uniform float uScale;
+        void main() {
+          vColor = color;
+          vAlpha = aAlpha;
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = aSize * uScale / max(0.1, -mv.z);
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: `
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main() {
+          vec2 c = gl_PointCoord - 0.5;
+          float d = length(c) * 2.0;
+          if (d > 1.0 || vAlpha <= 0.001) discard;
+          float soft = 1.0 - smoothstep(0.0, 1.0, d);
+          float core = pow(soft, 5.0);
+          vec3 col = mix(vColor, vec3(1.0, 0.9, 0.7), core * 0.5);
+          gl_FragColor = vec4(col, pow(soft, 1.6) * vAlpha);
+        }`,
       transparent: true,
-      opacity: 0.88,
       depthWrite: false,
+      blending: THREE.AdditiveBlending,
     });
     this.particleMesh = new THREE.Points(pGeo, pMat);
     this.particleMesh.frustumCulled = false;
@@ -374,61 +416,139 @@ export class SkaterVisuals {
     this.updateParticlesAndTrail(dt, ctrl, right, up);
   }
 
+  /** Spawn one particle of the given kind at the board's rail / tail. */
+  private emitParticle(
+    kind: 0 | 1 | 2,
+    ctrl: SurfskateController,
+    fwd: THREE.Vector3,
+    right: THREE.Vector3,
+    up: THREE.Vector3,
+    side: number
+  ): void {
+    const i = this.nextParticleIdx;
+    this.nextParticleIdx = (this.nextParticleIdx + 1) % this.maxParticles;
+    const i3 = i * 3;
+    const r = Math.random;
+
+    // Origin: along the outside rail, biased toward the tail
+    const along = -0.32 + r() * 0.42;
+    const p = ctrl.position
+      .clone()
+      .addScaledVector(fwd, along)
+      .addScaledVector(right, side * (0.12 + r() * 0.05))
+      .addScaledVector(up, 0.05 + r() * 0.04);
+    this.particlePositions[i3] = p.x;
+    this.particlePositions[i3 + 1] = p.y;
+    this.particlePositions[i3 + 2] = p.z;
+
+    // Velocity: a curved fan thrown outward + up, trailing behind the board
+    const speedCarry = Math.min(1.5, ctrl.speed * 0.15);
+    let out: number, lift: number, back: number, jitter: number;
+    if (kind === 2) {
+      out = (r() - 0.5) * 3; lift = 0.8 + r() * 2.2; back = 1.5 + r() * 2.5; jitter = 1.2;
+    } else if (kind === 1) {
+      out = 0.6 + r() * 1.2; lift = 0.3 + r() * 0.8; back = 0.3 + r() * 0.6; jitter = 0.5;
+    } else {
+      out = 2.2 + r() * 4.0; lift = 1.8 + r() * 3.6; back = 0.2 + r() * 1.4 + speedCarry; jitter = 0.9;
+    }
+    const v = new THREE.Vector3()
+      .addScaledVector(right, side * out)
+      .addScaledVector(up, lift)
+      .addScaledVector(fwd, -back)
+      .add(new THREE.Vector3((r() - 0.5) * jitter, (r() - 0.5) * jitter * 0.5, (r() - 0.5) * jitter));
+    this.particleVelocities[i3] = v.x;
+    this.particleVelocities[i3 + 1] = v.y;
+    this.particleVelocities[i3 + 2] = v.z;
+
+    let cr: number, cg: number, cb: number, size: number, life: number, alpha: number;
+    if (kind === 2) {
+      // Hot golden-orange coping sparks
+      cr = 1.0; cg = 0.55 + r() * 0.35; cb = 0.12;
+      size = 0.035 + r() * 0.03; life = 0.25 + r() * 0.25; alpha = 1.0;
+    } else if (kind === 1) {
+      // Warm sunset-orange glow puff
+      cr = 1.0; cg = 0.42 + r() * 0.12; cb = 0.1;
+      size = 0.3 + r() * 0.3; life = 0.8 + r() * 0.6; alpha = 0.26 + r() * 0.14;
+    } else {
+      // Glowing orange spray droplets (deep orange to golden)
+      const w = r();
+      cr = 1.0; cg = 0.38 + w * 0.4; cb = 0.06 + w * 0.12;
+      size = 0.045 + r() * 0.09; life = 0.55 + r() * 0.55; alpha = 0.8 + r() * 0.2;
+    }
+    this.particleColors[i3] = cr;
+    this.particleColors[i3 + 1] = cg;
+    this.particleColors[i3 + 2] = cb;
+    this.particleKind[i] = kind;
+    this.particleLife[i] = life;
+    this.particleMaxLife[i] = life;
+    this.particleBaseSize[i] = size;
+    this.particleSize[i] = size;
+    this.particleBaseAlpha[i] = alpha;
+    this.particleAlpha[i] = alpha;
+  }
+
   private updateParticlesAndTrail(
     dt: number,
     ctrl: SurfskateController,
     right: THREE.Vector3,
     up: THREE.Vector3
   ): void {
-    // Emit particles during lip snaps, Bert slides, or coping grinds
-    if (ctrl.sprayIntensity > 0.15 || ctrl.isGrinding) {
-      const count = ctrl.isGrinding ? 6 : 4;
-      for (let i = 0; i < count; i++) {
-        const idx = this.nextParticleIdx;
-        this.nextParticleIdx = (this.nextParticleIdx + 1) % this.maxParticles;
-
-        const tailOffset = new THREE.Vector3(
-          Math.sin(ctrl.heading) * 0.28 + (Math.random() - 0.5) * 0.2,
-          0.08,
-          Math.cos(ctrl.heading) * 0.28 + (Math.random() - 0.5) * 0.2
-        );
-        this.particlePositions[idx * 3 + 0] = ctrl.position.x + tailOffset.x;
-        this.particlePositions[idx * 3 + 1] = ctrl.position.y + tailOffset.y;
-        this.particlePositions[idx * 3 + 2] = ctrl.position.z + tailOffset.z;
-
-        const sideSpray = -Math.sign(ctrl.leanAngle || 1) * (1.8 + Math.random() * 2.2);
-        this.particleVelocities[idx * 3 + 0] = right.x * sideSpray + (Math.random() - 0.5) * 1.4;
-        this.particleVelocities[idx * 3 + 1] = 1.4 + Math.random() * 2.4;
-        this.particleVelocities[idx * 3 + 2] = right.z * sideSpray + (Math.random() - 0.5) * 1.4;
-
-        if (ctrl.isGrinding) {
-          // Golden-orange coping sparks!
-          this.particleColors[idx * 3 + 0] = 1.0;
-          this.particleColors[idx * 3 + 1] = 0.72 + Math.random() * 0.25;
-          this.particleColors[idx * 3 + 2] = 0.15;
-        } else {
-          // Cyan/white urethane & concrete surf spray!
-          this.particleColors[idx * 3 + 0] = 0.65;
-          this.particleColors[idx * 3 + 1] = 0.95;
-          this.particleColors[idx * 3 + 2] = 1.0;
-        }
-        this.particleLife[idx] = 0.45 + Math.random() * 0.25;
-      }
+    // Emit spray during snaps / slides / reverses, sparks during coping grinds.
+    const spray = ctrl.sprayIntensity;
+    const fwd = new THREE.Vector3(-Math.sin(ctrl.heading), 0, -Math.cos(ctrl.heading));
+    // Spray flies off the OUTSIDE rail of the turn, like water off a surfboard
+    const side = -Math.sign(ctrl.leanAngle || 1);
+    if (ctrl.isGrinding) {
+      for (let i = 0; i < 5; i++) this.emitParticle(2, ctrl, fwd, right, up, side);
+    } else if (spray > 0.15) {
+      // Fresh burst when a trick starts (spray jumps up), then a steady fan while it lasts
+      const burst = spray > 0.9 && this.prevSpray < 0.5 ? 80 : 0;
+      const droplets = burst + Math.round(10 * spray);
+      for (let i = 0; i < droplets; i++) this.emitParticle(0, ctrl, fwd, right, up, side);
+      const mist = (burst ? 16 : 0) + (Math.random() < spray ? 2 : 0);
+      for (let i = 0; i < mist; i++) this.emitParticle(1, ctrl, fwd, right, up, side);
     }
+    this.prevSpray = spray;
 
     for (let i = 0; i < this.maxParticles; i++) {
-      if (this.particleLife[i] > 0) {
-        this.particleLife[i] -= dt;
-        this.particleVelocities[i * 3 + 1] -= 9.8 * dt;
-        this.particlePositions[i * 3 + 0] += this.particleVelocities[i * 3 + 0] * dt;
-        this.particlePositions[i * 3 + 1] += this.particleVelocities[i * 3 + 1] * dt;
-        this.particlePositions[i * 3 + 2] += this.particleVelocities[i * 3 + 2] * dt;
-      } else {
-        this.particlePositions[i * 3 + 1] = -999;
+      if (this.particleLife[i] <= 0) {
+        this.particleAlpha[i] = 0;
+        continue;
       }
+      this.particleLife[i] -= dt;
+      const kind = this.particleKind[i];
+      const t = Math.max(0, this.particleLife[i] / this.particleMaxLife[i]); // 1 -> 0
+      const i3 = i * 3;
+      const gravity = kind === 1 ? 0.6 : kind === 2 ? 6.0 : 7.5;
+      const drag = kind === 1 ? 2.6 : kind === 2 ? 0.6 : 1.1;
+      const dk = Math.exp(-drag * dt);
+      this.particleVelocities[i3] *= dk;
+      this.particleVelocities[i3 + 2] *= dk;
+      this.particleVelocities[i3 + 1] = this.particleVelocities[i3 + 1] * dk - gravity * dt;
+      this.particlePositions[i3] += this.particleVelocities[i3] * dt;
+      this.particlePositions[i3 + 1] += this.particleVelocities[i3 + 1] * dt;
+      this.particlePositions[i3 + 2] += this.particleVelocities[i3 + 2] * dt;
+
+      if (kind === 1) {
+        // Mist puffs swell and fade softly
+        this.particleSize[i] = this.particleBaseSize[i] * (1 + (1 - t) * 2.2);
+        this.particleAlpha[i] = this.particleBaseAlpha[i] * Math.sin(Math.PI * Math.min(1, (1 - t) * 1.4 + 0.15)) * t;
+      } else if (kind === 2) {
+        // Sparks flicker and shrink
+        this.particleSize[i] = this.particleBaseSize[i] * (0.4 + 0.6 * t);
+        this.particleAlpha[i] = this.particleBaseAlpha[i] * t * (0.7 + 0.3 * Math.random());
+      } else {
+        // Droplets shrink a little and fade out
+        this.particleSize[i] = this.particleBaseSize[i] * (0.55 + 0.45 * t);
+        this.particleAlpha[i] = this.particleBaseAlpha[i] * Math.pow(t, 0.8);
+      }
+      if (this.particleLife[i] <= 0) this.particleAlpha[i] = 0;
     }
-    this.particleMesh.geometry.attributes.position.needsUpdate = true;
-    this.particleMesh.geometry.attributes.color.needsUpdate = true;
+    const attrs = this.particleMesh.geometry.attributes;
+    attrs.position.needsUpdate = true;
+    attrs.color.needsUpdate = true;
+    attrs.aSize.needsUpdate = true;
+    attrs.aAlpha.needsUpdate = true;
 
     // Update carve ribbon trail when grounded and moving
     if (ctrl.isGrounded && ctrl.speed > 1.2) {

@@ -26,8 +26,10 @@ export class SurfHUD {
   private scoreEl: HTMLElement;
   private bestComboEl: HTMLElement;
   private timerEl: HTMLElement;
-  private zoneEl: HTMLElement;
   private speedEl: HTMLElement;
+  private speedoEl: HTMLElement;
+  private dockEl: HTMLElement;
+  private static readonly SPEEDO_MAX_KMH = 40;
   private flowFillEl: HTMLElement;
   private flowPctEl: HTMLElement;
   private pumpBadgeEl: HTMLElement;
@@ -65,8 +67,16 @@ export class SurfHUD {
     this.scoreEl = document.getElementById('hud-score')!;
     this.bestComboEl = document.getElementById('hud-best-combo')!;
     this.timerEl = document.getElementById('hud-timer')!;
-    this.zoneEl = document.getElementById('hud-zone')!;
     this.speedEl = document.getElementById('hud-speed')!;
+    this.speedoEl = document.getElementById('hud-speedo')!;
+
+    // Foldable tricks & options dock (bottom-right): folded by default, state remembered across reloads
+    this.dockEl = document.getElementById('hud-dock')!;
+    this.dockEl.classList.toggle('collapsed', localStorage.getItem('surfsk8.dockCollapsed') !== '0');
+    document.getElementById('dock-toggle')!.addEventListener('click', () => this.toggleDock());
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyH') this.toggleDock();
+    });
     this.flowFillEl = document.getElementById('hud-flow-fill')!;
     this.flowPctEl = document.getElementById('hud-flow-pct')!;
     this.pumpBadgeEl = document.getElementById('hud-pump-badge')!;
@@ -144,9 +154,7 @@ export class SurfHUD {
     }
 
     // 3. Speed, Zone, and Surf-Adapter Telemetry
-    const kmh = Math.round(ctrl.speed * 3.6);
-    this.speedEl.textContent = `${kmh} km/h`;
-    this.zoneEl.textContent = ctrl.currentSurface.zoneName;
+    this.updateSpeedo(ctrl.speed * 3.6);
 
     const flowPct = Math.round(ctrl.flowMeter);
     this.flowFillEl.style.width = `${flowPct}%`;
@@ -176,7 +184,7 @@ export class SurfHUD {
     const yawDeg = Math.round((ctrl.frontTruckYaw * 180) / Math.PI);
     const leanDeg = Math.round((ctrl.leanAngle * 180) / Math.PI);
     this.truckDialFrontEl.style.transform = `rotate(${yawDeg}deg)`;
-    this.leanReadoutEl.textContent = `Lean ${leanDeg > 0 ? '+' : ''}${leanDeg}° | Surf Truck ${yawDeg > 0 ? '+' : ''}${yawDeg}°`;
+    this.leanReadoutEl.textContent = `${leanDeg > 0 ? '+' : ''}${leanDeg}°`;
 
     // 4. SNAP hint / failure feedback
     if (ctrl.snapFeedback) {
@@ -233,50 +241,61 @@ export class SurfHUD {
     style.id = 'hud-snap-styles';
     style.textContent = `
       #hud-snap-banner {
-        position: absolute; left: 50%; top: 38%;
-        transform: translate(-50%, -50%) scale(0.4) rotate(-6deg);
-        font-family: 'Impact', 'Arial Black', system-ui, sans-serif;
-        font-size: clamp(64px, 13vw, 180px); font-weight: 900; letter-spacing: 0.04em;
-        color: #fff; opacity: 0; pointer-events: none; z-index: 60; white-space: nowrap;
-        -webkit-text-stroke: 4px #0a1a2e;
-        text-shadow: 0 0 18px rgba(0, 230, 255, 0.9), 0 0 48px rgba(0, 180, 255, 0.6), 6px 8px 0 #ff2d75;
+        position: absolute; left: 50%; top: 36%;
+        transform: translate(-50%, -50%) scale(0.4) skewX(-12deg);
+        font-family: 'Sedgwick Ave Display', 'Permanent Marker', cursive; font-style: normal;
+        font-size: clamp(64px, 13vw, 180px); font-weight: 900; letter-spacing: 0.03em;
+        color: #f4fbff; opacity: 0; pointer-events: none; z-index: 60; white-space: nowrap;
+        -webkit-text-stroke: 5px #050a12; paint-order: stroke fill;
+        text-shadow: 8px 8px 0 #ff7a1a, 14px 14px 0 #050a12, 0 0 40px rgba(0, 214, 195, 0.7);
       }
       #hud-snap-banner.perfect {
-        color: #fff36b;
-        text-shadow: 0 0 22px rgba(255, 240, 80, 0.95), 0 0 60px rgba(255, 170, 0, 0.7), 6px 8px 0 #ff2d75;
+        color: #ffd23f;
+        text-shadow: 8px 8px 0 #ff3d5a, 14px 14px 0 #050a12, 0 0 50px rgba(255, 210, 63, 0.85);
       }
       #hud-snap-banner.show { animation: snapPop 1.45s cubic-bezier(0.2, 1.4, 0.4, 1) forwards; }
       #hud-snap-banner.long { font-size: clamp(44px, 8.5vw, 130px); }
+      @keyframes snapPop {
+        0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.3) skewX(-24deg) rotate(-8deg); }
+        14%  { opacity: 1; transform: translate(-50%, -50%) scale(1.18) skewX(-10deg) rotate(-3deg); }
+        26%  { transform: translate(-50%, -50%) scale(0.96) skewX(-12deg) rotate(-4deg); }
+        70%  { opacity: 1; transform: translate(-50%, -50%) scale(1.02) skewX(-12deg) rotate(-4deg); }
+        100% { opacity: 0; transform: translate(-50%, -64%) scale(1.25) skewX(-12deg) rotate(-4deg); }
+      }
       #hud-coach-hint {
-        position: absolute; left: 50%; top: 16%; transform: translateX(-50%);
-        max-width: 80%; text-align: center;
-        padding: 10px 22px; border-radius: 14px; font: 700 17px system-ui, sans-serif;
-        letter-spacing: 0.03em; pointer-events: none; z-index: 56;
-        background: rgba(255, 196, 0, 0.94); color: #1d1400;
-        box-shadow: 0 0 22px rgba(255, 196, 0, 0.55);
+        position: absolute; left: 50%; top: 21%; transform: translateX(-50%) rotate(-2deg);
+        max-width: 72%; text-align: center;
+        font: 16px 'Permanent Marker', cursive; letter-spacing: 0.04em; text-transform: uppercase;
+        pointer-events: none; z-index: 56; color: #ffd23f;
+        text-shadow: 3px 3px 0 #050a12, -1px -1px 0 #050a12, 1px -1px 0 #050a12, -1px 1px 0 #050a12, 0 0 14px rgba(0, 0, 0, 0.85);
         opacity: 0; transition: opacity 0.2s ease;
       }
       #hud-coach-hint.visible { opacity: 1; }
-      #hud-coach-hint.idle { background: rgba(10, 20, 35, 0.78); color: #e6f4ff; box-shadow: none; }
-      @keyframes snapPop {
-        0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(-14deg); }
-        14%  { opacity: 1; transform: translate(-50%, -50%) scale(1.18) rotate(-4deg); }
-        26%  { transform: translate(-50%, -50%) scale(0.96) rotate(-6deg); }
-        70%  { opacity: 1; transform: translate(-50%, -50%) scale(1.02) rotate(-6deg); }
-        100% { opacity: 0; transform: translate(-50%, -62%) scale(1.25) rotate(-6deg); }
-      }
+      #hud-coach-hint.idle { color: #f4fbff; }
       #hud-snap-hint {
-        position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%);
-        padding: 6px 16px; border-radius: 999px; font: 700 15px system-ui, sans-serif;
-        letter-spacing: 0.06em; text-transform: uppercase; pointer-events: none; z-index: 55;
+        position: absolute; left: 50%; bottom: 24%; transform: translateX(-50%) rotate(-2deg);
+        font: 16px 'Permanent Marker', cursive; letter-spacing: 0.06em; text-transform: uppercase;
+        pointer-events: none; z-index: 55;
+        text-shadow: 3px 3px 0 #050a12, -1px -1px 0 #050a12, 1px -1px 0 #050a12, -1px 1px 0 #050a12, 0 0 14px rgba(0, 0, 0, 0.85);
         opacity: 0; transition: opacity 0.15s ease;
       }
       #hud-snap-hint.visible { opacity: 1; }
-      #hud-snap-hint.ready { background: rgba(0, 220, 255, 0.92); color: #04202c; box-shadow: 0 0 18px rgba(0, 220, 255, 0.8); }
-      #hud-snap-hint.dim { background: rgba(10, 20, 35, 0.7); color: #9fb6cc; }
-      #hud-snap-hint.fail { background: rgba(255, 45, 117, 0.9); color: #fff; }
+      #hud-snap-hint.ready { color: #00d6c3; text-shadow: 3px 3px 0 #050a12, -1px -1px 0 #050a12, 1px -1px 0 #050a12, -1px 1px 0 #050a12, 0 0 18px rgba(0, 214, 195, 0.9); }
+      #hud-snap-hint.dim { color: #9fc3d6; }
+      #hud-snap-hint.fail { color: #ff3d5a; }
     `;
     document.head.appendChild(style);
+  }
+
+  public toggleDock(): void {
+    const collapsed = this.dockEl.classList.toggle('collapsed');
+    localStorage.setItem('surfsk8.dockCollapsed', collapsed ? '1' : '0');
+  }
+
+  private updateSpeedo(kmh: number): void {
+    const frac = Math.min(1, Math.max(0, kmh / SurfHUD.SPEEDO_MAX_KMH));
+    this.speedEl.textContent = String(Math.round(kmh));
+    this.speedoEl.classList.toggle('redline', frac > 0.75);
   }
 
   public resetSession(): void {

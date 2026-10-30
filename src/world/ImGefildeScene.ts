@@ -53,13 +53,18 @@ export class ImGefildeScene {
     this.fillLight.position.set(-20, 15, 16);
     this.scene.add(this.fillLight);
 
-    // 2. Deep Starry Night Sky Dome Mapped with Uploaded Night Sky Texture (`/textures/night_sky_bg.png`)
+    // 2. Starry Night Sky Dome mapped with the alpine night photo (`/textures/night_sky_alps.jpg`):
+    //    clouds + stars on top, glowing horizon with mountain & fir-tree silhouettes at the bottom.
     const texLoader = new THREE.TextureLoader();
-    const nightSkyTex = texLoader.load('/textures/night_sky_bg.png');
+    const nightSkyTex = texLoader.load('/textures/night_sky_alps.jpg?v=2');
     nightSkyTex.colorSpace = THREE.SRGBColorSpace;
     nightSkyTex.wrapS = THREE.MirroredRepeatWrapping;
     nightSkyTex.wrapT = THREE.MirroredRepeatWrapping;
     nightSkyTex.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+    // The sky is always magnified: skip mipmaps (sharper, and no seam line where atan() wraps around)
+    nightSkyTex.generateMipmaps = false;
+    nightSkyTex.minFilter = THREE.LinearFilter;
+    nightSkyTex.magFilter = THREE.LinearFilter;
 
     this.skyUniforms = {
       uMode: { value: 1.0 },
@@ -94,12 +99,13 @@ export class ImGefildeScene {
           vec3 dir = normalize(vWorldPos);
           float elev = max(0.0, dir.y);
 
-          // Sample the uploaded starry night sky image across the dome using spherical azimuth & elevation
+          // Sample the portrait night photo around the dome: 4 mirrored copies (90 deg each) keep its
+          // proportions; the image bottom (mountains & fir trees) sits right on the horizon.
           float az = atan(dir.z, dir.x) / (2.0 * 3.14159265) + 0.5;
-          vec2 skyUv = vec2(az * 2.0, clamp(elev * 1.45 + 0.05, 0.02, 0.98));
-          vec3 texCol = texture2D(uSkyTex, skyUv).rgb * 1.35;
+          vec2 skyUv = vec2(az * 4.0, clamp(elev * 1.15 + 0.02, 0.01, 0.99));
+          vec3 texCol = texture2D(uSkyTex, skyUv).rgb * 1.2;
 
-          vec3 nightGround = vec3(0.008, 0.015, 0.028);
+          vec3 nightGround = vec3(0.004, 0.008, 0.014);
           float horizonBlend = smoothstep(-0.04, 0.06, dir.y);
           vec3 col = mix(nightGround, texCol, horizonBlend);
           gl_FragColor = vec4(col, 1.0);
