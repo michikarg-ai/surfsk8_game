@@ -98,6 +98,7 @@ class SurfskateMunichGame {
 
   private bindEvents(): void {
     window.addEventListener('resize', () => this.handleResize());
+    new ResizeObserver(() => this.handleResize()).observe(this.viewportContainer);
     window.addEventListener('pointerdown', () => this.audio.initOnFirstGesture(), { once: true });
 
     window.addEventListener('keydown', (e) => {

@@ -11,8 +11,6 @@ export class ImGefildeScene {
   private fillLight: THREE.DirectionalLight;
   private hemiLight: THREE.HemisphereLight;
   private floodLights: THREE.SpotLight[] = [];
-  private floodGlowSprites: THREE.Sprite[] = [];
-  private starField: THREE.Points;
   private skyDome: THREE.Mesh;
   private nightCityBackdrop: THREE.Mesh;
   private skyUniforms: {
@@ -53,15 +51,13 @@ export class ImGefildeScene {
     this.fillLight.position.set(-20, 15, 16);
     this.scene.add(this.fillLight);
 
-    // 2. Starry Night Sky Dome mapped with the alpine night photo (`/textures/night_sky_alps.jpg`):
-    //    clouds + stars on top, glowing horizon with mountain & fir-tree silhouettes at the bottom.
+    // 2. Night Sky Dome mapped with the alpine night photo (`/textures/night_sky_alps.jpg`)
     const texLoader = new THREE.TextureLoader();
     const nightSkyTex = texLoader.load('/textures/night_sky_alps.jpg?v=2');
     nightSkyTex.colorSpace = THREE.SRGBColorSpace;
     nightSkyTex.wrapS = THREE.MirroredRepeatWrapping;
     nightSkyTex.wrapT = THREE.MirroredRepeatWrapping;
     nightSkyTex.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
-    // The sky is always magnified: skip mipmaps (sharper, and no seam line where atan() wraps around)
     nightSkyTex.generateMipmaps = false;
     nightSkyTex.minFilter = THREE.LinearFilter;
     nightSkyTex.magFilter = THREE.LinearFilter;
@@ -119,37 +115,7 @@ export class ImGefildeScene {
     this.nightCityBackdrop = new THREE.Mesh();
     this.nightCityBackdrop.visible = false;
 
-    // 4. Starry Night Field above the Munich Cityscape
-    const starCount = 1600;
-    const starPos = new Float32Array(starCount * 3);
-    const starCol = new Float32Array(starCount * 3);
-    for (let i = 0; i < starCount; i++) {
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(0.18 + Math.random() * 0.82);
-      const r = 135;
-      starPos[i * 3 + 0] = r * Math.sin(phi) * Math.cos(theta);
-      starPos[i * 3 + 1] = r * Math.cos(phi);
-      starPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-
-      const brightness = 0.65 + Math.random() * 0.35;
-      starCol[i * 3 + 0] = brightness * 0.92;
-      starCol[i * 3 + 1] = brightness * 0.96;
-      starCol[i * 3 + 2] = brightness;
-    }
-    const starGeo = new THREE.BufferGeometry();
-    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-    starGeo.setAttribute('color', new THREE.BufferAttribute(starCol, 3));
-    const starMat = new THREE.PointsMaterial({
-      size: 0.65,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.95,
-    });
-    this.starField = new THREE.Points(starGeo, starMat);
-    this.starField.visible = true;
-    this.scene.add(this.starField);
-
-    // 5. Tall Pole Floodlights (6 poles around the Im Gefilde park perimeter)
+    // 3. Perimeter Floodlights illuminating the skatepark concrete (no visible sky glow sprites or stars)
     const poleCoords: [number, number, number, number][] = [
       [-12.5, -19.5, -2.0, -12.0],
       [8.5, -20.5, 1.5, -13.0],
@@ -159,7 +125,6 @@ export class ImGefildeScene {
       [-10.5, 18.5, -2.2, 13.8],
     ];
 
-    const glowTex = this.createFloodlightGlowTexture();
     poleCoords.forEach(([px, pz, tx, tz]) => {
       const spot = new THREE.SpotLight(0xf6faff, 15.0, 58, Math.PI * 0.42, 0.65, 1.5);
       spot.position.set(px, 13.5, pz);
@@ -169,20 +134,6 @@ export class ImGefildeScene {
       this.scene.add(spot);
       this.scene.add(spot.target);
       this.floodLights.push(spot);
-
-      const spriteMat = new THREE.SpriteMaterial({
-        map: glowTex,
-        color: 0xeaf6ff,
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      });
-      const sprite = new THREE.Sprite(spriteMat);
-      sprite.position.set(px, 13.4, pz);
-      sprite.scale.set(5.2, 5.2, 1);
-      sprite.visible = true;
-      this.scene.add(sprite);
-      this.floodGlowSprites.push(sprite);
     });
 
     this.nightEnvMap = this.buildNightIBL();
@@ -296,30 +247,11 @@ export class ImGefildeScene {
     this.sunLight.intensity = 1.35;
     this.sunLight.castShadow = true;
     this.fillLight.intensity = 0.38;
-    this.starField.visible = true;
     this.nightCityBackdrop.visible = false;
 
     this.floodLights.forEach((spot) => {
       spot.intensity = 15.0;
       spot.visible = true;
     });
-    this.floodGlowSprites.forEach((sp) => {
-      sp.visible = true;
-    });
-  }
-
-  private createFloodlightGlowTexture(): THREE.CanvasTexture {
-    const canvas = document.createElement('canvas');
-    canvas.width = 128;
-    canvas.height = 128;
-    const ctx = canvas.getContext('2d')!;
-    const grad = ctx.createRadialGradient(64, 64, 2, 64, 64, 62);
-    grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
-    grad.addColorStop(0.25, 'rgba(210, 240, 255, 0.78)');
-    grad.addColorStop(0.6, 'rgba(120, 190, 255, 0.22)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 128, 128);
-    return new THREE.CanvasTexture(canvas);
   }
 }

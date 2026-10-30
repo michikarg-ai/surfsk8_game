@@ -74,10 +74,10 @@ const WALL_PUMP_GAIN_ACTIVE = 0.56;
 const WALL_STRETCH_ASSIST = 0.06;
 
 // ---- Tricks ----
-const LAYBACK_MIN_SPEED = 3.3;
-const LAYBACK_HOLD_TIME = 0.5;
-const BERT_MIN_SPEED = 2.2;
-const BERT_HOLD_TIME = 0.45;
+const LAYBACK_MIN_SPEED = 4.5;
+const LAYBACK_HOLD_TIME = 0.65;
+const BERT_MIN_SPEED = 3.8;
+const BERT_HOLD_TIME = 0.55;
 const REVERSE_MIN_SPEED = 2.4;
 /** Duration (seconds) of the full 360° tail spin of the FS Reverse. */
 const REVERSE_DURATION = 0.8;
@@ -163,6 +163,8 @@ export class SurfskateController {
   private prevLaybackInput = false;
 
   // Bert slide
+  /** Smoothed 0..1 amount of the Bertleman hand-plant slide pose. */
+  public bertSlideAmount = 0;
   private bertHold = 0;
   private bertScored = false;
   private prevBertInput = false;
@@ -222,6 +224,7 @@ export class SurfskateController {
     this.laybackActive = false;
     this.laybackAmount = 0;
     this.bertSlideActive = false;
+    this.bertSlideAmount = 0;
     this.reverseActive = false;
     this.boardYawOffset = 0;
     this.lastPumpDir = 0;
@@ -370,8 +373,11 @@ export class SurfskateController {
       } else {
         const lowSpeedPivotFactor = 1.35 - 0.055 * Math.min(5.5, this.speed);
         const baseTurnRate = 4.5 * presetGain;
-        const trickMultiplier = this.bertSlideActive ? 1.6 : this.laybackActive ? 1.3 : 1.0;
-        const targetYawRate = -this.leanAngle * baseTurnRate * lowSpeedPivotFactor * trickMultiplier;
+        const effectiveLean = this.bertSlideActive
+          ? this.bertSlideHandSide * Math.max(Math.abs(this.leanAngle), 0.65)
+          : this.leanAngle;
+        const trickMultiplier = this.bertSlideActive ? 2.2 : this.laybackActive ? 1.3 : 1.0;
+        const targetYawRate = -effectiveLean * baseTurnRate * lowSpeedPivotFactor * trickMultiplier;
         this.smoothedYawRate +=
           (targetYawRate - this.smoothedYawRate) * Math.min(1, (rawSteer === 0 ? 38.0 : 34.0) * clampedDt);
         this.heading += this.smoothedYawRate * clampedDt;
@@ -396,7 +402,7 @@ export class SurfskateController {
 
       // Non-gravitational tangential acceleration (pump, friction, slides)
       let aExtra = -ROLLING_RESISTANCE - AIR_DRAG * this.speed * this.speed;
-      if (this.bertSlideActive && this.speed > 0.5) aExtra -= 3.0; // Bert slide scrubs speed
+      if (this.bertSlideActive && this.speed > 0.5) aExtra -= 1.4; // Bert slide scrubs a bit of speed while whipping around
       if (this.laybackActive) aExtra -= 0.6; // laying back into the turn bleeds a little speed
       if (this.reverseActive) aExtra -= 1.2; // tail spin scrubs speed
 
@@ -764,7 +770,8 @@ export class SurfskateController {
   /** Layback, Bert slide and FS Reverse 360. */
   private updateTricks(dt: number, input: InputState, onManeuver: (ev: ManeuverEvent) => void): void {
     const absLean = Math.abs(this.leanAngle);
-    const turning = absLean > 0.3;
+    const deepBertCarve = absLean >= 0.34;
+    const deepLaybackCarve = absLean >= 0.42;
 
     // ---------------- FS REVERSE 360 (E) ----------------
     // Carve frontside (toe-side, →), then whip the tail around a full 360° while the
@@ -805,70 +812,81 @@ export class SurfskateController {
     }
 
     // ---------------- BERT SLIDE (C) ----------------
-    // Carve hard, plant the hand and slide the tail out. Hold it to land the trick.
+    // High-speed hand-plant slide: carve deep at high speed, plant the inside hand on the
+    // concrete, throw the outside arm high, and hold through the pivot arc.
     const bertPressed = input.snapSlide && !this.prevBertInput;
     this.prevBertInput = input.snapSlide;
-    if (input.snapSlide) {
-      if (!this.bertSlideActive) {
-        if (bertPressed && this.speed < BERT_MIN_SPEED) {
-          this.trickFail('BERT SLIDE: need more speed — pump!');
-        } else if (bertPressed && absLean < 0.25) {
-          this.trickFail('BERT SLIDE: lean into a turn (← or →)!');
-        } else if (this.speed >= BERT_MIN_SPEED && absLean >= 0.25) {
-          this.bertSlideActive = true;
-          this.bertHold = 0;
-          this.bertScored = false;
-          this.bertSlideHandSide = Math.sign(this.leanAngle) || 1;
-          this.laybackActive = false;
-        }
+    if (input.snapSlide && !this.bertSlideActive) {
+      if (bertPressed && this.speed < BERT_MIN_SPEED) {
+        this.trickFail('BERT SLIDE: need higher speed — pump harder!');
+      } else if (bertPressed && !deepBertCarve) {
+        this.trickFail('BERT SLIDE: carve deeper into a turn (← or →) first!');
+      } else if (this.speed >= BERT_MIN_SPEED && deepBertCarve) {
+        this.bertSlideActive = true;
+        this.bertHold = 0;
+        this.bertScored = false;
+        this.bertSlideHandSide = Math.sign(this.leanAngle) || 1;
+        this.laybackActive = false;
       }
-    } else if (this.bertSlideActive) {
-      this.bertSlideActive = false;
     }
     if (this.bertSlideActive) {
       this.bertHold += dt;
       this.sprayIntensity = 1.0;
-      // Tail swings out against the turn direction
-      const target = -this.bertSlideHandSide * 0.75 * Math.min(1, this.bertHold / 0.25);
-      this.boardYawOffset += (target - this.boardYawOffset) * Math.min(1, dt * 12);
-      if (!this.bertScored && this.bertHold >= BERT_HOLD_TIME) {
+      if (this.speed < BERT_MIN_SPEED * 0.58) {
+        this.bertSlideActive = false;
+        if (!this.bertScored) this.trickFail('BERT SLIDE: stalled — enter with more speed!');
+      } else if (!input.snapSlide && this.bertHold < BERT_HOLD_TIME) {
+        this.bertSlideActive = false;
+        if (!this.bertScored) this.trickFail('BERT SLIDE: hold C through the slide!');
+      } else if ((!input.snapSlide && this.bertHold >= 0.65) || this.bertHold >= 1.2) {
+        this.bertSlideActive = false;
+      }
+      // Tail swings out wide around the planted hand
+      const slideEnv = Math.sin(Math.min(1, this.bertHold / 0.22) * (Math.PI * 0.5));
+      const target = -this.bertSlideHandSide * 0.96 * slideEnv;
+      this.boardYawOffset += (target - this.boardYawOffset) * Math.min(1, dt * 14);
+      if (!this.bertScored && this.bertHold >= BERT_HOLD_TIME && this.bertSlideActive) {
         this.bertScored = true;
         this.emitTrick(onManeuver, 'BERTSLIDE', 'BERTSLIDE!', 900, this.speed > BERT_MIN_SPEED + 0.8);
       }
-      if (this.speed < 1.0) this.bertSlideActive = false;
     } else {
       this.boardYawOffset += (0 - this.boardYawOffset) * Math.min(1, dt * 10);
     }
+    const bertRate = this.bertSlideActive ? 11.0 : 8.5;
+    this.bertSlideAmount += ((this.bertSlideActive ? 1 : 0) - this.bertSlideAmount) * Math.min(1, dt * bertRate);
 
     // ---------------- LAYBACK (F) ----------------
-    // Only in a fast turn: lay the body back into the carve and drag the back hand.
+    // High-speed power carve: lay the body back into a fast, deep carve and drag the back hand.
     const laybackPressed = input.laybackTrick && !this.prevLaybackInput;
     this.prevLaybackInput = input.laybackTrick;
     if (input.laybackTrick && !this.bertSlideActive) {
       if (!this.laybackActive) {
         if (laybackPressed && this.speed < LAYBACK_MIN_SPEED) {
-          this.trickFail('LAYBACK: only at high speed — pump harder!');
-        } else if (laybackPressed && !turning) {
-          this.trickFail('LAYBACK: lean deep into a turn (← or →)!');
-        } else if (this.speed >= LAYBACK_MIN_SPEED && turning) {
+          this.trickFail('LAYBACK: need higher speed — pump harder!');
+        } else if (laybackPressed && !deepLaybackCarve) {
+          this.trickFail('LAYBACK: carve deeper into a turn (← or →)!');
+        } else if (this.speed >= LAYBACK_MIN_SPEED && deepLaybackCarve) {
           this.laybackActive = true;
           this.laybackHold = 0;
           this.laybackScored = false;
         }
       }
     } else {
+      if (this.laybackActive && !this.laybackScored) {
+        this.trickFail('LAYBACK: hold F through the carve!');
+      }
       this.laybackActive = false;
     }
     if (this.laybackActive) {
       this.laybackHold += dt;
       this.sprayIntensity = Math.max(this.sprayIntensity, 0.55);
-      if (!turning || this.speed < LAYBACK_MIN_SPEED * 0.6) {
-        // Stood up out of the turn before landing it
+      if (!deepLaybackCarve || this.speed < LAYBACK_MIN_SPEED * 0.75) {
+        // Stood up out of the turn or bled too much speed before landing it
         this.laybackActive = false;
-        if (!this.laybackScored) this.trickFail('LAYBACK: keep turning while you lay back!');
+        if (!this.laybackScored) this.trickFail('LAYBACK: keep speed & deep carve while laying back!');
       } else if (!this.laybackScored && this.laybackHold >= LAYBACK_HOLD_TIME) {
         this.laybackScored = true;
-        this.emitTrick(onManeuver, 'LAYBACK', 'LAYBACK!', 1200, this.speed > LAYBACK_MIN_SPEED + 1.0);
+        this.emitTrick(onManeuver, 'LAYBACK', 'LAYBACK!', 1200, this.speed > LAYBACK_MIN_SPEED + 0.9);
       }
     }
     this.laybackAmount += ((this.laybackActive ? 1 : 0) - this.laybackAmount) * Math.min(1, dt * 7);

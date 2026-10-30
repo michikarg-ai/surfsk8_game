@@ -352,6 +352,9 @@ export class SkaterVisuals {
     const lean = this.smoothLean;
     const lead = ctrl.upperBodyLeadYaw;
     const lay = ctrl.laybackAmount; // 0..1 layback body pose
+    const bert = ctrl.bertSlideAmount; // 0..1 Bertleman slide body pose
+    const bSide = ctrl.bertSlideHandSide || 1; // +1 = toe-side (-X), -1 = heel-side (+X)
+    const inX = -bSide; // board-local X sign pointing into the turn
 
     // 1. Reset to rest pose
     for (const bone of Object.values(b)) {
@@ -360,11 +363,15 @@ export class SkaterVisuals {
     }
     this.root.updateMatrixWorld(true);
 
-    const boardZ = this.boardDir(0, 0, 1); // nose
+    const boardX = this.boardDir(1, 0, 0); // heel-side (+X), toe-side (-X)
     const boardY = this.boardDir(0, 1, 0); // up
+    const boardZ = this.boardDir(0, 0, 1); // nose
     const bodyLean = lean * 0.85; // whole body leans into the rail with the deck
 
-    // 2. Pelvis: lowered by knee bend, centred between the feet, rolled into the carve
+    // 2. Pelvis: lowered by knee bend, centred between the feet, rolled into the carve.
+    //    During a Bertslide (`bert`), drop the hips low and sling them toward the tail (-Z) and inside rail
+    //    so the skater's torso lays out sideways with chest open (-X), right hand planted on the concrete,
+    //    and knees tucked between the chest and the tilted deck.
     const hipsLocal = new THREE.Vector3(
       0.05 + crouch * 0.06 + lay * 0.12,
       this.hipsRestHeight - 0.1 - crouch * 0.3 - lay * 0.12,
@@ -373,52 +380,77 @@ export class SkaterVisuals {
     hipsLocal.y -= DECK_TOP;
     hipsLocal.applyAxisAngle(AXIS_Z, bodyLean);
     hipsLocal.y += DECK_TOP;
+    if (bert > 0.001) {
+      hipsLocal.x = THREE.MathUtils.lerp(hipsLocal.x, 0.08, bert);
+      hipsLocal.y = THREE.MathUtils.lerp(hipsLocal.y, DECK_TOP + 0.22, bert);
+      hipsLocal.z = THREE.MathUtils.lerp(hipsLocal.z, -0.30, bert);
+    }
     const hipsWorld = board.localToWorld(hipsLocal.clone());
     b.Hips.position.copy(b.Hips.parent!.worldToLocal(hipsWorld));
     b.Hips.updateMatrixWorld(true);
-    this.rotateBoneAxis(b.Hips, boardZ, bodyLean + crouch * 0.18 - lay * 0.3);
-    this.rotateBoneAxis(b.Hips, boardY, 0.18 + lead * 0.2); // pelvis slightly open toward the nose
+    // Apply yaw around boardY BEFORE tilting around boardX so the chest stays open toward -X!
+    this.rotateBoneAxis(b.Hips, boardY, (0.18 + lead * 0.2) * (1 - bert) + 0.16 * bert);
+    this.rotateBoneAxis(
+      b.Hips,
+      boardZ,
+      (bodyLean + crouch * 0.18 - lay * 0.3) * (1 - bert) - 0.22 * bert
+    );
+    this.rotateBoneAxis(b.Hips, boardX, -0.76 * bert); // tilt torso sideways toward the tail (-Z) with chest open
 
     // 3. Spine: forward bend over the toes when crouching, shoulders lead the turn.
-    //    In a layback the whole upper body lays back over the heel-side rail.
-    this.rotateBoneAxis(b.Spine, boardZ, crouch * 0.22 + 0.06 - lay * 0.45);
-    this.rotateBoneAxis(b.Spine1, boardZ, crouch * 0.14 - lay * 0.35);
-    this.rotateBoneAxis(b.Spine1, boardY, lead * 0.3);
-    this.rotateBoneAxis(b.Spine2, boardY, 0.22 + lead * 0.35 + lay * 0.3);
-    if (ctrl.bertSlideActive) this.rotateBoneAxis(b.Spine2, boardZ, -0.35);
+    //    In a Bertslide the torso tilts laterally toward the tail (-Z) while keeping the chest open (-X).
+    this.rotateBoneAxis(b.Spine, boardY, 0.12 * bert);
+    this.rotateBoneAxis(b.Spine, boardZ, (crouch * 0.22 + 0.06 - lay * 0.45) * (1 - bert) - 0.12 * bert);
+    this.rotateBoneAxis(b.Spine, boardX, -0.24 * bert);
+    this.rotateBoneAxis(b.Spine1, boardY, lead * 0.3 * (1 - bert) + 0.14 * bert);
+    this.rotateBoneAxis(b.Spine1, boardZ, (crouch * 0.14 - lay * 0.35) * (1 - bert) - 0.08 * bert);
+    this.rotateBoneAxis(b.Spine1, boardX, -0.20 * bert);
+    this.rotateBoneAxis(b.Spine2, boardY, (0.22 + lead * 0.35 + lay * 0.3) * (1 - bert) + 0.10 * bert);
 
-    // 4. Head: keep it level and look down the line toward the nose
-    const forwardBend = bodyLean + crouch * 0.54 + 0.06 - lay * 1.1;
-    this.rotateBoneAxis(b.Neck, boardZ, -forwardBend * 0.45);
-    this.rotateBoneAxis(b.Neck, boardY, 0.28 + lead * 0.18);
-    this.rotateBoneAxis(b.Head, boardZ, -forwardBend * 0.4);
-    this.rotateBoneAxis(b.Head, boardY, 0.28 + lead * 0.18);
+    // 4. Head: lift the head and turn to look toward the nose (+Z) / camera (-X)
+    const forwardBend = (bodyLean + crouch * 0.54 + 0.06 - lay * 1.1) * (1 - bert);
+    this.rotateBoneAxis(b.Neck, boardZ, -forwardBend * 0.45 - 0.18 * bert);
+    this.rotateBoneAxis(b.Neck, boardX, 0.42 * bert);
+    this.rotateBoneAxis(b.Neck, boardY, (0.28 + lead * 0.18) * (1 - bert) + 0.32 * bert);
+    this.rotateBoneAxis(b.Head, boardZ, -forwardBend * 0.4 - 0.22 * bert);
+    this.rotateBoneAxis(b.Head, boardX, 0.38 * bert);
+    this.rotateBoneAxis(b.Head, boardY, (0.28 + lead * 0.18) * (1 - bert) + 0.36 * bert);
 
-    // 5. Arms: front arm reaches toward the nose, back arm trails for balance
+    // 5. Arms:
+    //    In a Bertslide, the low/trailing arm (RightArm) plants straight vertically down beneath the right shoulder,
+    //    while the high/leading arm (LeftArm) extends up and slightly toward the nose (+Z) in one line with the shoulders!
     const armLift = crouch * 0.3;
-    this.aimBone(b.LeftArm, b.LeftForeArm, this.boardDir(-0.3, -0.62 + armLift - lean * 0.35 + lay * 0.6, 0.72));
-    this.aimBone(b.LeftForeArm, b.LeftHand, this.boardDir(-0.45, -0.25 + armLift + lay * 0.5, 0.85));
-    if (ctrl.bertSlideActive) {
-      // Hand plant on the inside of the turn for the Bert slide
-      const side = -ctrl.bertSlideHandSide; // + lean (toe-side turn) -> hand on the toe side (-X)
-      this.aimBone(b.RightArm, b.RightForeArm, this.boardDir(0.55 * side, -0.82, -0.1));
-      this.aimBone(b.RightForeArm, b.RightHand, this.boardDir(0.45 * side, -0.9, 0.0));
-    } else if (lay > 0.35) {
-      // Layback: back hand drags on the concrete behind the heel-side rail
-      this.aimBone(b.RightArm, b.RightForeArm, this.boardDir(0.6, -0.75, -0.35));
-      this.aimBone(b.RightForeArm, b.RightHand, this.boardDir(0.4, -0.9, -0.2));
-    } else {
-      this.aimBone(b.RightArm, b.RightForeArm, this.boardDir(-0.2, -0.82 + armLift + lean * 0.3, -0.5));
-      this.aimBone(b.RightForeArm, b.RightHand, this.boardDir(-0.5, -0.55 + armLift, -0.45));
-    }
+    const normLArm = this.boardDir(-0.3, -0.62 + armLift - lean * 0.35 + lay * 0.6, 0.72);
+    const normLFore = this.boardDir(-0.45, -0.25 + armLift + lay * 0.5, 0.85);
+    const bertLArm = this.boardDir(-0.16, 0.90, 0.38);
+    const bertLFore = this.boardDir(-0.10, 0.92, 0.36);
+    this.aimBone(b.LeftArm, b.LeftForeArm, normLArm.lerp(bertLArm, bert));
+    this.aimBone(b.LeftForeArm, b.LeftHand, normLFore.lerp(bertLFore, bert));
 
-    // 6. Legs: two-bone IK onto the (rolling) deck, knees driving toward the toe-side rail
+    const normRArm =
+      lay > 0.35
+        ? this.boardDir(0.6, -0.75, -0.35)
+        : this.boardDir(-0.2, -0.82 + armLift + lean * 0.3, -0.5);
+    const normRFore =
+      lay > 0.35
+        ? this.boardDir(0.4, -0.9, -0.2)
+        : this.boardDir(-0.5, -0.55 + armLift, -0.45);
+    const bertRArm = this.boardDir(-0.10, -0.99, -0.04);
+    const bertRFore = this.boardDir(-0.08, -0.99, 0.04);
+    this.aimBone(b.RightArm, b.RightForeArm, normRArm.lerp(bertRArm, bert));
+    this.aimBone(b.RightForeArm, b.RightHand, normRFore.lerp(bertRFore, bert));
+
+    // 6. Legs: two-bone IK onto the (rolling) deck; during Bertslide back knee tucks horizontally & front knee bends up
     const deckQ = deck.getWorldQuaternion(new THREE.Quaternion());
     for (const side of ['Left', 'Right'] as Side[]) {
       const target = deck.localToWorld(this.ankleTargets[side].clone());
-      const pole = this.boardDir(-1, -0.15, side === 'Left' ? 0.25 : -0.1);
-      this.solveLeg(side, target, pole);
-      // Feet stay flat on the griptape
+      const normPole = this.boardDir(-1, -0.15, side === 'Left' ? 0.25 : -0.1);
+      const bertPole =
+        side === 'Left'
+          ? this.boardDir(-0.52, 0.82, 0.18)
+          : this.boardDir(-0.68, 0.16, -0.72);
+      this.solveLeg(side, target, normPole.lerp(bertPole, bert));
+      // Feet stay planted on the griptape
       const yaw = new THREE.Quaternion().setFromAxisAngle(AXIS_Y, TOE_YAW[side]);
       this.setBoneWorldQuat(b[`${side}Foot`], deckQ.clone().multiply(yaw).multiply(this.footRestInDeck[side]));
     }
@@ -443,7 +475,10 @@ export class SkaterVisuals {
 
     // 2. Deck Lean (`DeckMesh`)
     if (this.deckMesh) {
-      this.deckMesh.rotation.set(0, 0, ctrl.leanAngle);
+      const b = ctrl.bertSlideAmount;
+      const deckRoll = ctrl.leanAngle * (1 - b) - 0.34 * b;
+      const deckPitch = -0.18 * b;
+      this.deckMesh.rotation.set(deckPitch, 0, deckRoll);
     }
 
     // 3. Dual-Axis Front Surf-Adapter Truck (`FrontTruckPivot`) & Rear Truck (`RearTruckPivot`)

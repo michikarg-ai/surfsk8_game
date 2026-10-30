@@ -114,7 +114,7 @@ def recolor_outfit(img, hoodie, denim):
     px = px.reshape(h, w, 4)  # row 0 = bottom of the image
     ys = (1.0 - (np.arange(h) + 0.5) / h)[:, None]  # 0 = top of the image
     xs = ((np.arange(w) + 0.5) / w)[None, :]
-    shirt = (ys < 0.465) | (xs > 0.782)
+    shirt = (ys < 0.465) | (xs > 0.782) | (px[..., 0] >= px[..., 2] * 0.98)
     lum = 0.2126 * px[..., 0] + 0.7152 * px[..., 1] + 0.0722 * px[..., 2]
 
     # Hoodie: flat charcoal (logo & orange stripes vanish), subtle fabric grain kept
@@ -263,6 +263,177 @@ def shell_from_sphere(name, mat, scale, location, cut, segments=48, rings=24, th
     return obj
 
 
+def deck_half_width(t):
+    """
+    SmoothStar 34" Filipe Toledo #77 surfskate outline (measured from top-view reference):
+    t = 0.00 at the rounded surfboard nose apex (y = -0.42),
+    t = 0.40 at the wide chest point (half_w = 0.136 m),
+    t = 1.00 at the wide squared-off squash tail (y = +0.42).
+    """
+    if t <= 0.0:
+        return 0.0
+    if t >= 1.0:
+        t = 1.0
+    max_w = 0.136
+    if t <= 0.40:
+        u = t / 0.40
+        # Exact square-root apex at t->0 gives a smooth circular nose cap with zero pinch
+        rel = (1.0 - (1.0 - u) ** 2.65) ** 0.5
+    elif t <= 0.97:
+        u = (t - 0.40) / (0.97 - 0.40)
+        rel = 1.0 - 0.175 * (u ** 1.45)
+    else:
+        c = (t - 0.97) / 0.03
+        rel = 0.755 + 0.070 * math.sqrt(max(0.0, 1.0 - c * c))
+    return max_w * rel
+
+
+def reshape_surfskate_deck(board_group):
+    """
+    Reshape DeckMesh into a rounded surfboard-nose + wide squash-tail surfskate deck,
+    fix its inverted face normals from the source GLB, and paint its 2K top griptape texture.
+    """
+    deck = bpy.data.objects.get("DeckMesh")
+    if deck is None:
+        return
+    verts = deck.data.vertices
+    if len(verts) != 49 * 44:
+        return
+
+    # Reference normalized X profile [-1..+1] from the middle ring (ring 24)
+    ref_x = np.array([verts[24 * 44 + k].co.x for k in range(44)], dtype=np.float32)
+    ref_x /= max(1e-6, float(np.abs(ref_x).max()))
+    ref_z = np.array([verts[24 * 44 + k].co.z for k in range(44)], dtype=np.float32)
+
+    # Cosine-clustered Y rings give sub-millimeter resolution around the rounded nose & tail corners
+    u_lin = np.linspace(0.0, 1.0, 49)
+    t_rings = 0.5 - 0.5 * np.cos(u_lin * math.pi)
+
+    for i in range(49):
+        t = float(t_rings[i])
+        y_base = -0.42 + t * 0.84
+        hw = deck_half_width(t)
+        # Subtle nose rocker (t < 0.18) and tail kick (t > 0.72)
+        rocker_z = 0.0
+        if t < 0.18:
+            rocker_z = 0.010 * (((0.18 - t) / 0.18) ** 1.8)
+        elif t > 0.72:
+            rocker_z = 0.028 * (((t - 0.72) / 0.28) ** 1.7)
+
+        for k in range(44):
+            xn = float(ref_x[k])
+            v = verts[i * 44 + k]
+            v.co.x = xn * hw
+            # Subtle backward arch across the wide squash tail edge
+            tail_arc = 0.005 * (1.0 - xn * xn) * max(0.0, (t - 0.94) / 0.06)
+            v.co.y = y_base + tail_arc
+            v.co.z = float(ref_z[k]) + rocker_z
+
+    # DeckMesh in surfskate_board_source.glb has inside-out face winding (top faces had nz < 0).
+    # Check a top-surface polygon and flip all polygons if inverted.
+    deck.data.update()
+    top_Verts_z = [
+        sum(verts[v].co.z for v in p.vertices) / len(p.vertices)
+        for p in deck.data.polygons
+        if abs(p.normal.z) > 0.8
+    ]
+    z_mid = 0.5 * (min(top_Verts_z) + max(top_Verts_z))
+    inverted_count = sum(
+        1 for p in deck.data.polygons
+        if abs(p.normal.z) > 0.8
+        and ((sum(verts[v].co.z for v in p.vertices) / len(p.vertices) > z_mid) != (p.normal.z > 0))
+    )
+    if inverted_count > len(deck.data.polygons) // 4:
+        for p in deck.data.polygons:
+            p.flip()
+        deck.data.update()
+
+    # Map top-surface UVs to metric deck space so the maple border is uniform all around
+    uv_layer = deck.data.uv_layers.active.data
+    for poly in deck.data.polygons:
+        li = list(poly.loop_indices)
+        vi = [deck.data.loops[idx].vertex_index for idx in li]
+        if poly.normal.z > 0.5:
+            for idx, v_idx in zip(li, vi):
+                co = verts[v_idx].co
+                u = 0.5 + co.x / 0.30
+                v_uv = 0.5 - co.y / 0.88
+                uv_layer[idx].uv = (u, v_uv)
+        else:
+            # Side rails & bottom ply: sample clean blonde maple wood strip at u=0.015
+            for idx, v_idx in zip(li, vi):
+                co = verts[v_idx].co
+                uv_layer[idx].uv = (0.015, 0.5 - co.y / 0.88)
+
+    deck.data.update()
+
+    # Paint the 1024x2048 deck texture to match the SmoothStar surfboard-style griptape
+    mat = deck.data.materials[0] if deck.data.materials else None
+    img = base_color_image(mat) if mat else None
+    if img is not None:
+        w, h = img.size
+        xs = ((np.arange(w, dtype=np.float32) + 0.5) / w - 0.5) * 0.30  # metric X (-0.15..+0.15)
+        vs = (np.arange(h, dtype=np.float32) + 0.5) / h                  # row 0 = bottom (v=0, tail)
+        ys = (0.5 - vs) * 0.88                                           # metric Y (+0.44.. -0.44)
+        abs_x = np.abs(xs)[None, :]
+
+        # Uniform 5.2 mm blonde maple wood border around the entire rounded nose, rails, and squash tail
+        border = 0.0052
+        max_w = 0.136
+        tail_arc_x = 0.005 * np.maximum(0.0, 1.0 - (abs_x / 0.105) ** 2)
+        y_nose_grip = -0.42 + border
+        y_tail_grip = 0.42 + tail_arc_x - border
+        t_grip = (ys[:, None] - y_nose_grip) / (y_tail_grip - y_nose_grip)
+        hw_grip = np.vectorize(deck_half_width)(np.clip(t_grip, 0.0, 1.0)).astype(np.float32) * (
+            (max_w - border) / max_w
+        )
+        in_grip = (t_grip > 0.0) & (t_grip < 1.0) & (abs_x < hw_grip)
+
+        # Blonde maple wood base with subtle longitudinal grain
+        grain = 0.018 * np.sin(xs[None, :] * 420.0 + np.sin(ys[:, None] * 18.0) * 1.5)
+        wood_r = np.clip(0.86 + grain, 0.0, 1.0)
+        wood_g = np.clip(0.76 + grain * 0.85, 0.0, 1.0)
+        wood_b = np.clip(0.56 + grain * 0.65, 0.0, 1.0)
+
+        # Charcoal silicon-carbide griptape with fine mineral sparkle
+        rng = np.random.default_rng(42)
+        grit = rng.normal(0.0, 0.022, size=(h, w)).astype(np.float32)
+        sparkle = (rng.random((h, w)) > 0.984).astype(np.float32) * 0.095
+        grip_base = np.clip(0.14 + grit + sparkle, 0.075, 0.32)
+        grip_r = grip_base * 0.97
+        grip_g = grip_base * 0.99
+        grip_b = grip_base * 1.02
+
+        # Clean griptape across the deck interior with uniform maple wood border
+        dx = xs[None, :]
+        is_grip_pixel = in_grip
+
+        # 4 front truck bolts (y = -0.255..-0.205) and 4 rear truck bolts (y = +0.215..+0.265)
+        bolt_mask = np.zeros((h, w), dtype=bool)
+        bolt_rim = np.zeros((h, w), dtype=bool)
+        for by in (-0.255, -0.205, 0.215, 0.265):
+            for bx in (-0.021, 0.021):
+                br = np.hypot(dx - bx, ys[:, None] - by)
+                bolt_mask |= br < 0.0040
+                bolt_rim |= (br >= 0.0028) & (br < 0.0044)
+
+        out = np.empty((h, w, 4), dtype=np.float32)
+        out[..., 0] = np.where(is_grip_pixel, grip_r, wood_r)
+        out[..., 1] = np.where(is_grip_pixel, grip_g, wood_g)
+        out[..., 2] = np.where(is_grip_pixel, grip_b, wood_b)
+        out[..., 0] = np.where(bolt_mask, 0.10, out[..., 0])
+        out[..., 1] = np.where(bolt_mask, 0.11, out[..., 1])
+        out[..., 2] = np.where(bolt_mask, 0.12, out[..., 2])
+        out[..., 0] = np.where(bolt_rim, 0.26, out[..., 0])
+        out[..., 1] = np.where(bolt_rim, 0.27, out[..., 1])
+        out[..., 2] = np.where(bolt_rim, 0.29, out[..., 2])
+        out[..., 3] = 1.0
+
+        img.pixels.foreach_set(out.ravel())
+        img.update()
+        img.pack()
+
+
 def import_board():
     bpy.ops.import_scene.gltf(filepath=BOARD_GLB)
     board_group = bpy.data.objects["BoardGroup"]
@@ -279,6 +450,7 @@ def import_board():
     for o in list(bpy.data.objects):
         if o not in keep:
             bpy.data.objects.remove(o, do_unlink=True)
+    reshape_surfskate_deck(board_group)
     return board_group
 
 
