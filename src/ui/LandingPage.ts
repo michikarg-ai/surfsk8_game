@@ -5,6 +5,17 @@ import { SurfskateController } from '../physics/SurfskateController';
 
 export type SelectorCategory = 'skater' | 'skatepark' | 'board';
 
+export interface SkaterCharacter {
+  id: string;
+  name: string;
+  modelUrl: string;
+}
+
+export const SKATER_CHARACTERS: SkaterCharacter[] = [
+  { id: 'male', name: 'LUKAS', modelUrl: '/models/skater.glb' },
+  { id: 'female', name: 'LENA', modelUrl: '/models/skater_female.glb' },
+];
+
 const INSTAGRAM_URL = 'https://www.instagram.com/surfskate_munich/';
 
 export class LandingPage {
@@ -15,6 +26,7 @@ export class LandingPage {
   private noteEl: HTMLElement;
   private noteTextEl: HTMLElement;
   private startBtnEl: HTMLElement;
+  private playerNameEl: HTMLElement | null = null;
 
   private renderer: THREE.WebGLRenderer;
   private scene: THREE.Scene;
@@ -22,13 +34,19 @@ export class LandingPage {
   private skaterVisuals: SkaterVisuals;
   private dummyController: SurfskateController;
   private noteTimeout: number | null = null;
+  private currentSkaterIndex = 0;
 
-  constructor(parkSurface: ParkSurface, private onStartGame: () => void) {
+  constructor(
+    parkSurface: ParkSurface,
+    private onStartGame: () => void,
+    private onSelectSkater?: (modelUrl: string) => void
+  ) {
     this.overlayEl = document.getElementById('landing-overlay')!;
     this.canvasEl = document.getElementById('landing-skater-canvas') as HTMLCanvasElement;
     this.noteEl = document.getElementById('landing-ig-note')!;
     this.noteTextEl = document.getElementById('landing-ig-note-text')!;
     this.startBtnEl = document.getElementById('landing-start-btn')!;
+    this.playerNameEl = document.getElementById('landing-player-name') || this.overlayEl.querySelector('.sel-player-name');
 
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvasEl,
@@ -96,7 +114,12 @@ export class LandingPage {
   }
 
   public async load(): Promise<void> {
-    await this.skaterVisuals.load();
+    const currentSkater = SKATER_CHARACTERS[this.currentSkaterIndex];
+    await this.skaterVisuals.load(currentSkater.modelUrl);
+  }
+
+  public getSelectedSkaterModel(): string {
+    return SKATER_CHARACTERS[this.currentSkaterIndex].modelUrl;
   }
 
   private bindUIEvents(): void {
@@ -106,7 +129,24 @@ export class LandingPage {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const kind = (btn.dataset.kind || 'skater') as SelectorCategory;
-        this.showInstagramPrompt(kind, btn);
+        const dir = parseInt(btn.dataset.dir || '1', 10);
+
+        if (kind === 'skater') {
+          this.currentSkaterIndex =
+            (this.currentSkaterIndex + dir + SKATER_CHARACTERS.length) %
+            SKATER_CHARACTERS.length;
+          const skater = SKATER_CHARACTERS[this.currentSkaterIndex];
+          if (this.playerNameEl) {
+            this.playerNameEl.textContent = skater.name;
+          }
+          void this.skaterVisuals.load(skater.modelUrl);
+          if (this.onSelectSkater) {
+            this.onSelectSkater(skater.modelUrl);
+          }
+          this.showInstagramPrompt('skater', btn);
+        } else {
+          this.showInstagramPrompt(kind, btn);
+        }
       });
     });
 
@@ -154,6 +194,9 @@ export class LandingPage {
     if (!this.isVisible) return;
     this.isVisible = false;
     this.overlayEl.classList.add('hidden');
+    if (this.onSelectSkater) {
+      this.onSelectSkater(SKATER_CHARACTERS[this.currentSkaterIndex].modelUrl);
+    }
     this.onStartGame();
   }
 

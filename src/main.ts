@@ -72,7 +72,13 @@ class SurfskateMunichGame {
       onToggleAutoFlow: () => this.toggleAutoFlow(),
       onResetSession: () => this.resetSession(),
     });
-    this.landingPage = new LandingPage(this.parkSurface, () => this.resetSession());
+    this.landingPage = new LandingPage(
+      this.parkSurface,
+      () => this.resetSession(),
+      (modelUrl) => {
+        void this.skaterVisuals.load(modelUrl);
+      }
+    );
 
     this.bindEvents();
     this.handleResize();
@@ -83,10 +89,11 @@ class SurfskateMunichGame {
   private async initAssets(): Promise<void> {
     const loadingEl = document.getElementById('loading-overlay');
     try {
+      const initialModel = this.landingPage.getSelectedSkaterModel();
       await Promise.all([
         this.parkSurface.loadLidarGrid(),
         this.worldScene.load(),
-        this.skaterVisuals.load(),
+        this.skaterVisuals.load(initialModel),
         this.landingPage.load(),
       ]);
     } catch (err) {
@@ -104,6 +111,19 @@ class SurfskateMunichGame {
     window.addEventListener('resize', () => this.handleResize());
     new ResizeObserver(() => this.handleResize()).observe(this.viewportContainer);
     window.addEventListener('pointerdown', () => this.audio.initOnFirstGesture(), { once: true });
+
+    const hudGarageBtn = document.getElementById('btn-hud-garage');
+    if (hudGarageBtn) {
+      hudGarageBtn.addEventListener('click', () => {
+        this.landingPage.show();
+      });
+    }
+    const dockGarageBtn = document.getElementById('btn-garage');
+    if (dockGarageBtn) {
+      dockGarageBtn.addEventListener('click', () => {
+        this.landingPage.show();
+      });
+    }
 
     window.addEventListener('keydown', (e) => {
       this.audio.initOnFirstGesture();

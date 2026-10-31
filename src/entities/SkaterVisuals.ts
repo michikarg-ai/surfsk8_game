@@ -212,17 +212,43 @@ export class SkaterVisuals {
     scene.add(this.trailMesh);
   }
 
-  public async load(): Promise<void> {
+  public async load(modelUrl = '/models/skater.glb'): Promise<void> {
     const loader = new GLTFLoader();
-    const gltf = await loader.loadAsync('/models/skater.glb');
+    const gltf = await loader.loadAsync(modelUrl);
+
+    if (this.modelRoot) {
+      this.root.remove(this.modelRoot);
+    }
     this.modelRoot = gltf.scene;
+    this.bones = {};
+    this.restQuat.clear();
+    this.restPos.clear();
+    this.wheels = [];
+    this.boardGroup = null;
+    this.deckMesh = null;
+    this.frontTruckPivot = null;
+    this.rearTruckPivot = null;
+    this.hasSkeleton = false;
+
+    const prevPos = this.root.position.clone();
+    const prevRot = this.root.rotation.clone();
+    this.root.position.set(0, 0, 0);
+    this.root.rotation.set(0, 0, 0);
 
     this.modelRoot.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
+        const mesh = child as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
         // Skinned meshes deform far from their bind-pose bounds; never cull them
-        if ((child as THREE.SkinnedMesh).isSkinnedMesh) child.frustumCulled = false;
+        if ((mesh as THREE.SkinnedMesh).isSkinnedMesh) mesh.frustumCulled = false;
+        if (mesh.name.includes('long01') && mesh.material) {
+          const mat = mesh.material as THREE.MeshStandardMaterial;
+          mat.alphaTest = 0.18;
+          mat.depthWrite = true;
+          mat.side = THREE.DoubleSide;
+          mat.needsUpdate = true;
+        }
       }
       if ((child as THREE.Bone).isBone) {
         const bone = child as THREE.Bone;
@@ -276,6 +302,9 @@ export class SkaterVisuals {
         this.footRestInDeck[side] = deckQ.clone().invert().multiply(footQ);
       }
     }
+
+    this.root.position.copy(prevPos);
+    this.root.rotation.copy(prevRot);
   }
 
   // ---------------------------------------------------------------------------

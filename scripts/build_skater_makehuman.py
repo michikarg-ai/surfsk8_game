@@ -64,6 +64,33 @@ PRESETS = {
         "hoodie_color": (0.075, 0.08, 0.09),  # charcoal
         "denim_color": (0.28, 0.43, 0.62),  # faded blue jeans
         "helmet_color": (0.0, 0.55, 0.52),  # turquoise
+        "wear_beanie": True,
+        "output": os.path.join(ROOT_DIR, "public", "models", "skater.glb"),
+    },
+    "female": {
+        # Sun-tanned female surfskater with long blonde hair, white logo T-shirt, ripped blue jeans & skate shoes
+        "macro": {
+            "gender": 0.0, "age": 0.45, "muscle": 0.58, "weight": 0.42, "proportions": 0.62,
+            "height": 0.48, "cupsize": 0.48, "firmness": 0.58,
+            "race": {"asian": 0.0, "caucasian": 1.0, "african": 0.0},
+        },
+        "skin": "toigo_light_skin_female_bronze.mhmat",  # sun-tanned
+        "assets": [
+            ("eyes", "low-poly.mhclo", "Eyes"),
+            ("eyebrows", "eyebrow002.mhclo", "Eyebrows"),
+            ("eyelashes", "eyelashes02.mhclo", "Eyelashes"),
+            ("hair", "long01.mhclo", "Hair"),
+            ("clothes", "female_casualsuit01.mhclo", "Clothes"),
+            ("clothes", "shoes06.mhclo", "Clothes"),
+        ],
+        "outfit": "female_casualsuit01",
+        "tshirt_color": (0.94, 0.94, 0.93),  # clean off-white cotton T-shirt
+        "denim_color": (0.28, 0.44, 0.68),  # stonewashed blue denim
+        "hair_color": (0.92, 0.78, 0.46),  # sunlit golden blonde
+        "wear_beanie": False,
+        "wear_hood": False,
+        "wear_knee_pads": False,
+        "output": os.path.join(ROOT_DIR, "public", "models", "skater_female.glb"),
     },
 }
 
@@ -106,7 +133,7 @@ def base_color_image(mat):
     return None
 
 
-def recolor_outfit(img, hoodie, denim):
+def recolor_male_suit(img, hoodie, denim):
     """male_casualsuit02 atlas: shirt = top band + right column, jeans = bottom-left."""
     w, h = img.size
     px = np.empty(w * h * 4, dtype=np.float32)
@@ -114,17 +141,23 @@ def recolor_outfit(img, hoodie, denim):
     px = px.reshape(h, w, 4)  # row 0 = bottom of the image
     ys = (1.0 - (np.arange(h) + 0.5) / h)[:, None]  # 0 = top of the image
     xs = ((np.arange(w) + 0.5) / w)[None, :]
-    shirt = (ys < 0.465) | (xs > 0.782) | (px[..., 0] >= px[..., 2] * 0.98)
+    shirt = (ys < 0.410) | (xs > 0.778) | ((xs > 0.735) & (ys > 0.658))
     lum = 0.2126 * px[..., 0] + 0.7152 * px[..., 1] + 0.0722 * px[..., 2]
 
     # Hoodie: flat charcoal (logo & orange stripes vanish), subtle fabric grain kept
     s_mean = float(lum[shirt].mean())
     s_detail = np.clip((lum - s_mean) * 0.35 + 1.0, 0.7, 1.3)
-    # Jeans: faded stone-washed blue denim with lighter worn thigh/knee highlights & darker seams
     d_mean = float(lum[~shirt].mean())
-    d_detail = np.clip((lum - d_mean) * 1.85 + 1.0, 0.48, 1.65)
-    fade_lift = np.clip((lum - d_mean) * 1.4, 0.0, 0.25)
-    fade_tint = (0.24, 0.26, 0.22)
+    if sum(denim) / 3.0 > 0.7:
+        # Crisp white denim jeans with warm grey-beige seam & fold shading
+        d_detail = np.clip((lum - d_mean) * 0.95 + 1.0, 0.68, 1.08)
+        fade_lift = np.clip((lum - d_mean) * 0.35, 0.0, 0.07)
+        fade_tint = (0.12, 0.12, 0.10)
+    else:
+        # Faded stone-washed blue denim with lighter worn thigh/knee highlights & darker seams
+        d_detail = np.clip((lum - d_mean) * 1.85 + 1.0, 0.48, 1.65)
+        fade_lift = np.clip((lum - d_mean) * 1.4, 0.0, 0.25)
+        fade_tint = (0.24, 0.26, 0.22)
     for c in range(3):
         jeans_c = np.clip(denim[c] * d_detail + fade_lift * fade_tint[c], 0.0, 1.0)
         px[..., c] = np.where(shirt, hoodie[c] * s_detail, jeans_c)
@@ -134,7 +167,182 @@ def recolor_outfit(img, hoodie, denim):
     img.pack()
 
 
-def style_skate_shoes(shoes_obj, mat):
+def recolor_female_suit(img, tshirt_color, denim_color):
+    """
+    female_casualsuit01 atlas:
+      - Short-sleeve T-shirt: top half + right sleeves -> clean white cotton with Surfskate Munich chest logo
+      - Blue jeans: bottom half -> classic stonewashed blue with authentic worn rips/holes and frayed white threads
+    """
+    w, h = img.size
+    px = np.empty(w * h * 4, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    px = px.reshape(h, w, 4)[::-1].copy()  # row 0 = top of image
+
+    ys = (np.arange(h, dtype=np.float32)[:, None]) / h
+    xs = (np.arange(w, dtype=np.float32)[None, :]) / w
+
+    # Exact UV island mask: verified with 0 mismatches
+    is_shirt = (ys < 0.435) | ((xs > 0.724) & (xs + 0.85 * ys > 1.245))
+    lum = 0.2126 * px[..., 0] + 0.7152 * px[..., 1] + 0.0722 * px[..., 2]
+
+    # 1. T-shirt: clean white/off-white cotton
+    t_mean = float(lum[is_shirt].mean())
+    t_detail = np.clip((lum - t_mean) * 0.45 + 1.0, 0.78, 1.08)
+    is_collar_or_stripe = is_shirt & ((lum < t_mean * 0.7) | (px[..., 0] > px[..., 2] * 1.5))
+    t_detail = np.where(is_collar_or_stripe, np.clip(1.0 + (lum - t_mean) * 0.15, 0.88, 1.02), t_detail)
+
+    for c in range(3):
+        px[..., c] = np.where(is_shirt, np.clip(tshirt_color[c] * t_detail, 0.0, 1.0), px[..., c])
+
+    # 2. Add Surfskate Munich circular logo to front chest
+    logo_path = os.path.join(ROOT_DIR, "scripts", "assets", "surfskate_munich_logo.png")
+    if os.path.exists(logo_path):
+        logo_img = bpy.data.images.load(logo_path)
+        lw, lh = logo_img.size
+        lpx = np.empty(lw * lh * 4, dtype=np.float32)
+        logo_img.pixels.foreach_get(lpx)
+        lpx = lpx.reshape(lh, lw, 4)[::-1]
+        bpy.data.images.remove(logo_img)
+
+        # Rotate 90 degrees clockwise to align with front chest UV
+        l_rot = np.rot90(lpx, -1)
+        cx = int(round(0.7856 * w))
+        cy = int(round(0.2327 * h))
+        target_diam = int(round(0.161 * w))  # ~330 px at 2048x2048
+        scaled_logo = np.zeros((target_diam, target_diam, 4), dtype=np.float32)
+        for y in range(target_diam):
+            sy = y * lh / target_diam
+            iy = int(sy)
+            fy = sy - iy
+            iy1 = min(lh - 1, iy + 1)
+            for x in range(target_diam):
+                sx = x * lw / target_diam
+                ix = int(sx)
+                fx = sx - ix
+                ix1 = min(lw - 1, ix + 1)
+                top = l_rot[iy, ix] * (1 - fx) + l_rot[iy, ix1] * fx
+                bot = l_rot[iy1, ix] * (1 - fx) + l_rot[iy1, ix1] * fx
+                scaled_logo[y, x] = top * (1 - fy) + bot * fy
+
+        x0 = cx - target_diam // 2
+        y0 = cy - target_diam // 2
+        for y in range(target_diam):
+            for x in range(target_diam):
+                a = scaled_logo[y, x, 3]
+                if a > 0:
+                    px[y0 + y, x0 + x, :3] = px[y0 + y, x0 + x, :3] * (1 - a) + scaled_logo[y, x, :3] * a
+
+    # 3. Blue jeans: classic stonewashed blue
+    d_mean = float(lum[~is_shirt].mean())
+    j_detail = np.clip((lum - d_mean) * 1.6 + 1.0, 0.52, 1.55)
+    fade_lift = np.clip((lum - d_mean) * 1.4, 0.0, 0.32)
+    fade_tint = np.array([0.34, 0.36, 0.32], dtype=np.float32)
+    for c in range(3):
+        jeans_c = np.clip(denim_color[c] * j_detail + fade_lift * fade_tint[c], 0.0, 1.0)
+        px[..., c] = np.where(~is_shirt, jeans_c, px[..., c])
+
+    # 4. Worn rips/holes with frayed white threads and sun-tanned skin
+    skin_rgb = np.array([0.76, 0.54, 0.42], dtype=np.float32)
+    thread_rgb = np.array([0.95, 0.94, 0.92], dtype=np.float32)
+    fray_dark = np.array([0.14, 0.20, 0.30], dtype=np.float32)
+
+    rips = [
+        {"u": 0.110, "ys": 0.718, "rx": 0.024, "ry": 0.012, "angle": 0.05},  # Left knee
+        {"u": 0.676, "ys": 0.697, "rx": 0.026, "ry": 0.014, "angle": -0.04}, # Right knee
+        {"u": 0.662, "ys": 0.631, "rx": 0.018, "ry": 0.007, "angle": -0.06}, # Right mid-thigh
+        {"u": 0.113, "ys": 0.607, "rx": 0.016, "ry": 0.006, "angle": 0.08},  # Left upper thigh
+    ]
+
+    for rip in rips:
+        ru, rys = rip["u"], rip["ys"]
+        rx, ry = rip["rx"], rip["ry"]
+        ang = rip["angle"]
+        cos_a, sin_a = np.cos(ang), np.sin(ang)
+
+        du = xs - ru
+        dys = ys - rys
+        lx = (du * cos_a + dys * sin_a) / rx
+        ly = (-du * sin_a + dys * cos_a) / ry
+        dist = np.hypot(lx, ly)
+
+        outer_rim = (dist >= 1.0) & (dist < 1.35)
+        rim_w = np.clip((1.35 - dist) / 0.35, 0.0, 1.0)[:, :, None]
+        px[outer_rim, :3] = px[outer_rim, :3] * (1.0 - rim_w[outer_rim] * 0.45) + fray_dark * (rim_w[outer_rim] * 0.45)
+
+        in_hole = dist < 1.0
+        thread_pattern = 0.5 + 0.5 * np.cos(ly * 14.0 * np.pi)
+        thread_mask = (thread_pattern > 0.42) & (np.abs(ly) > 0.25)
+        thread_mask |= (thread_pattern > 0.65) & (np.abs(lx) < 0.75)
+
+        skin_shade = np.clip(0.75 + 0.25 * (1.0 - dist), 0.6, 1.0)[:, :, None]
+        hole_color = skin_rgb * skin_shade
+        hole_color = np.where(thread_mask[:, :, None], thread_rgb * 0.95, hole_color)
+
+        edge_blend = np.clip((1.0 - dist) / 0.12, 0.0, 1.0)[:, :, None]
+        px[in_hole, :3] = px[in_hole, :3] * (1.0 - edge_blend[in_hole]) + hole_color[in_hole] * edge_blend[in_hole]
+
+    px[..., 3] = 1.0
+    img.pixels.foreach_set(px[::-1].ravel())
+    img.update()
+    img.pack()
+
+
+def recolor_outfit(img, preset):
+    if preset["outfit"] == "female_casualsuit01":
+        recolor_female_suit(img, preset["tshirt_color"], preset["denim_color"])
+    else:
+        recolor_male_suit(img, preset["hoodie_color"], preset["denim_color"])
+
+
+def style_blonde_hair(meshes, drape_over_hood=False):
+    """Recolor `long01` hair mesh to sunlit golden honey-blonde and drape strands over the back hood if worn."""
+    for m in meshes:
+        if "long01" not in m.name:
+            continue
+        if drape_over_hood:
+            # Push lower-back strands slightly outward (+X in world space) so they rest cleanly over SkaterHood
+            inv_w = m.matrix_world.inverted()
+            for v in m.data.vertices:
+                wco = m.matrix_world @ v.co
+                if wco.x > 0.0 and wco.z < 1.56:
+                    t_back = max(0.0, min(1.0, (1.56 - wco.z) / 0.22))
+                    wco.x += 0.028 * t_back * min(1.0, wco.x / 0.05)
+                    v.co = inv_w @ wco
+            m.data.update()
+
+        for mat in m.data.materials:
+            if not mat or not mat.node_tree:
+                continue
+            bsdf = next((n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+            if bsdf:
+                bsdf.inputs["Roughness"].default_value = 0.58
+            img = base_color_image(mat)
+            if img is not None:
+                w, h = img.size
+                px = np.empty(w * h * 4, dtype=np.float32)
+                img.pixels.foreach_get(px)
+                px = px.reshape(h, w, 4)
+                lum = 0.2126 * px[..., 0] + 0.7152 * px[..., 1] + 0.0722 * px[..., 2]
+                t_strand = np.clip((lum - 0.02) / 0.25, 0.0, 1.0) ** 0.70
+                px[..., 0] = 0.58 + 0.35 * t_strand
+                px[..., 1] = 0.44 + 0.36 * t_strand
+                px[..., 2] = 0.22 + 0.28 * t_strand
+                img.pixels.foreach_set(px.ravel())
+                img.update()
+                img.pack()
+            # Wire single DiffuseTexture Alpha -> BSDF Alpha and remove duplicate AlphaMapTexture
+            diff_node = next(
+                (n for n in mat.node_tree.nodes if n.type == "TEX_IMAGE" and "Alpha" not in n.name),
+                None,
+            )
+            for n in list(mat.node_tree.nodes):
+                if n.type == "TEX_IMAGE" and "Alpha" in n.name:
+                    mat.node_tree.nodes.remove(n)
+            if bsdf and diff_node:
+                mat.node_tree.links.new(diff_node.outputs["Alpha"], bsdf.inputs["Alpha"])
+
+
+def style_skate_shoes(shoes_obj, mat, is_female=False):
     """
     Transform `shoes06` into classic vulcanized skate shoes (Vans Old Skool / Half Cab style):
       - Matte black suede upper with crisp off-white side stripes & laces
@@ -175,7 +383,7 @@ def style_skate_shoes(shoes_obj, mat):
         img.update()
         img.pack()
 
-    # Reshape into a wider, flat-walled vulcanized skate shoe & puff the padded collar/tongue
+    # Reshape into a wider, flat-walled vulcanized skate shoe
     inv_w = shoes_obj.matrix_world.inverted()
     for v in shoes_obj.data.vertices:
         wco = shoes_obj.matrix_world @ v.co
@@ -190,10 +398,16 @@ def style_skate_shoes(shoes_obj, mat):
             if wco.z < DECK_TOP_Z:
                 wco.z = DECK_TOP_Z
         elif 0.205 <= wco.z < 0.258:
-            # Padded skate-shoe ankle collar & tongue
-            pad_t = math.sin((wco.z - 0.205) / 0.053 * math.pi)
-            wco.x = cx + (wco.x - cx) * (1.0 + 0.05 * pad_t)
-            wco.y = cy + (wco.y - cy) * (1.0 + 0.07 * pad_t)
+            if is_female:
+                # Taper shoe collar & sock inward so it sits cleanly inside the slim jeans hem
+                taper = max(0.0, (wco.z - 0.205) / 0.053)
+                wco.x = cx + (wco.x - cx) * (1.0 - 0.15 * taper)
+                wco.y = cy + (wco.y - cy) * (1.0 - 0.18 * taper)
+            else:
+                # Padded skate-shoe ankle collar & tongue under baggy jeans
+                pad_t = math.sin((wco.z - 0.205) / 0.053 * math.pi)
+                wco.x = cx + (wco.x - cx) * (1.0 + 0.05 * pad_t)
+                wco.y = cy + (wco.y - cy) * (1.0 + 0.07 * pad_t)
         v.co = inv_w @ wco
     shoes_obj.data.update()
 
@@ -459,7 +673,7 @@ def refine_body_delete_masks(body):
     Keep a small cuff overlap at the neck, wrists, and ankles so bending joints never exposes
     hollow gaps, while still deleting covered torso/arm/leg faces under the hoodie and jeans.
     """
-    for gname in ("Delete.male_casualsuit02", "Delete.shoes06"):
+    for gname in ("Delete.male_casualsuit02", "Delete.female_casualsuit01", "Delete.shoes06"):
         vg = body.vertex_groups.get(gname)
         if not vg:
             continue
@@ -489,7 +703,7 @@ def fix_opaque_materials_and_vgroups(rig):
         for mat in m.data.materials:
             if not mat or not mat.node_tree:
                 continue
-            if any(k in mat.name for k in ("body", "low-poly", "male_casualsuit02", "shoes06")):
+            if any(k in mat.name for k in ("body", "low-poly", "male_casualsuit02", "female_casualsuit01", "shoes06")):
                 bsdf = next((n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
                 if bsdf:
                     for link in list(bsdf.inputs["Alpha"].links):
@@ -551,13 +765,13 @@ def main():
     board_group = import_board()
     rig, meshes, body = build_character(preset)
 
-    # ---- Outfit: long-sleeve top -> charcoal hoodie, jeans -> dark indigo ----
+    # ---- Outfit recoloring ----
     for m in meshes:
         for mat in m.data.materials:
             if preset["outfit"] in mat.name:
                 img = base_color_image(mat)
                 if img is not None:
-                    recolor_outfit(img, preset["hoodie_color"], preset["denim_color"])
+                    recolor_outfit(img, preset)
 
     # ---- Stance: left side toward the nose (-Y), facing the toe-side edge (-X) ----
     rig.rotation_mode = "XYZ"
@@ -568,7 +782,10 @@ def main():
     # ---- Skate shoes: matte black suede + white stripes/laces + white vulcanized foxing sole ----
     for m in meshes:
         if "shoes06" in m.name and m.data.materials:
-            style_skate_shoes(m, m.data.materials[0])
+            style_skate_shoes(m, m.data.materials[0], is_female=(variant == "female"))
+
+    # ---- Blonde hair styling (if hair asset is present) ----
+    style_blonde_hair(meshes, drape_over_hood=preset.get("wear_hood", True))
 
     def bone_world(name, tail=False):
         b = rig.data.bones[name]
@@ -583,153 +800,158 @@ def main():
     hc = (hmin + hmax) / 2
     print("HEAD BBOX", hmin.round(3), hmax.round(3))
 
-    # Linear-space charcoal matching the sRGB recolored hoodie texture (0.075 sRGB -> ~0.0068 linear)
-    hood_linear = tuple(((c + 0.055) / 1.055) ** 2.4 for c in preset["hoodie_color"])
-    fabric = new_material("SkaterHood", hood_linear, roughness=0.92)
-    beanie_mat = new_material("SkaterBeanie", (0.0, 0.48, 0.46), roughness=0.90)
-    cuff_mat = new_material("SkaterBeanieCuff", (0.0, 0.40, 0.39), roughness=0.92)
     pad_mat = new_material("SkaterKneePad", (0.02, 0.02, 0.022), roughness=0.5)
     strap_mat = new_material("SkaterPadStrap", (0.0, 0.55, 0.52), roughness=0.7)
 
-    # ---- Turquoise knit skater beanie (snug ribbed dome + closed torus cuff), skinned to head ----
-    cranium_cx = hmax[0] - 0.096  # center of cranium (excluding nose tip)
-    beanie_center = (cranium_cx, hc[1], hmax[2] - 0.075)
-    beanie_scale = (0.106, (hmax[1] - hmin[1]) * 0.545, 0.088)
+    if preset.get("wear_beanie", True):
+        beanie_mat = new_material("SkaterBeanie", (0.0, 0.48, 0.46), roughness=0.90)
+        cuff_mat = new_material("SkaterBeanieCuff", (0.0, 0.40, 0.39), roughness=0.92)
 
-    def beanie_warp(co):
-        theta = math.atan2(co.y, co.x)
-        rib = 1.0 + 0.006 * math.cos(36.0 * theta) * co.z
-        co.x *= rib
-        co.y *= rib
-        # Tilt rim: sits mid-forehead in front (-X) and dips down over upper ears to nape at back (+X)
-        rim_tilt = -0.24 * co.x - 0.06 * (co.x ** 2)
-        slouch = 0.12 * (co.z ** 1.6) * max(0.0, co.x + 0.15)
-        co.x += 0.07 * (co.z ** 1.8)
-        # Keep bottom edge (co.z == 0) tucked inside the cuff band (+0.06)
-        co.z = co.z * 0.94 + 0.06 + (1.0 - 0.55 * co.z) * rim_tilt + slouch
+        # ---- Turquoise knit skater beanie (snug ribbed dome + closed torus cuff), skinned to head ----
+        cranium_cx = hmax[0] - 0.096  # center of cranium (excluding nose tip)
+        beanie_center = (cranium_cx, hc[1], hmax[2] - 0.075)
+        beanie_scale = (0.106, (hmax[1] - hmin[1]) * 0.545, 0.088)
 
-    beanie = shell_from_sphere(
-        "SkaterBeanie", beanie_mat,
-        scale=beanie_scale,
-        location=beanie_center,
-        cut=lambda co: co.z < -0.001,
-        segments=72, rings=32, thickness=0.045,
-        warp=beanie_warp,
-    )
-    skin_to_bone(beanie, rig, "head")
+        def beanie_warp(co):
+            theta = math.atan2(co.y, co.x)
+            rib = 1.0 + 0.006 * math.cos(36.0 * theta) * co.z
+            co.x *= rib
+            co.y *= rib
+            # Tilt rim: sits mid-forehead in front (-X) and dips down over upper ears to nape at back (+X)
+            rim_tilt = -0.24 * co.x - 0.06 * (co.x ** 2)
+            slouch = 0.12 * (co.z ** 1.6) * max(0.0, co.x + 0.15)
+            co.x += 0.07 * (co.z ** 1.8)
+            # Keep bottom edge (co.z == 0) tucked inside the cuff band (+0.06)
+            co.z = co.z * 0.94 + 0.06 + (1.0 - 0.55 * co.z) * rim_tilt + slouch
 
-    # Closed torus cuff around the beanie rim (zero cut edges, smooth rolled knit band)
-    bpy.ops.mesh.primitive_torus_add(
-        major_segments=72, minor_segments=24, major_radius=1.0, minor_radius=0.14
-    )
-    beanie_cuff = bpy.context.active_object
-    beanie_cuff.name = "SkaterBeanieCuff"
-    for v in beanie_cuff.data.vertices:
-        theta = math.atan2(v.co.y, v.co.x)
-        r = math.hypot(v.co.x, v.co.y)
-        # Pill-shaped vertical cuff cross-section with subtle vertical knit ribs
-        dr = (r - 1.0) * 0.42 + 0.008 * math.cos(36.0 * theta) * max(0.0, r - 0.98)
-        nr = 1.0 + dr
-        v.co.x = nr * math.cos(theta) * beanie_scale[0] * 0.995
-        v.co.y = nr * math.sin(theta) * beanie_scale[1] * 1.005
-        nx = math.cos(theta)
-        rim_tilt = -0.24 * nx - 0.06 * (nx ** 2)
-        v.co.z = (v.co.z * 1.75 + rim_tilt + 0.04) * beanie_scale[2]
-    beanie_cuff.location = beanie_center
-    beanie_cuff.data.materials.append(cuff_mat)
-    bpy.ops.object.shade_smooth()
-    skin_to_bone(beanie_cuff, rig, "head")
+        beanie = shell_from_sphere(
+            "SkaterBeanie", beanie_mat,
+            scale=beanie_scale,
+            location=beanie_center,
+            cut=lambda co: co.z < -0.001,
+            segments=72, rings=32, thickness=0.045,
+            warp=beanie_warp,
+        )
+        skin_to_bone(beanie, rig, "head")
+
+        # Closed torus cuff around the beanie rim (zero cut edges, smooth rolled knit band)
+        bpy.ops.mesh.primitive_torus_add(
+            major_segments=72, minor_segments=24, major_radius=1.0, minor_radius=0.14
+        )
+        beanie_cuff = bpy.context.active_object
+        beanie_cuff.name = "SkaterBeanieCuff"
+        for v in beanie_cuff.data.vertices:
+            theta = math.atan2(v.co.y, v.co.x)
+            r = math.hypot(v.co.x, v.co.y)
+            # Pill-shaped vertical cuff cross-section with subtle vertical knit ribs
+            dr = (r - 1.0) * 0.42 + 0.008 * math.cos(36.0 * theta) * max(0.0, r - 0.98)
+            nr = 1.0 + dr
+            v.co.x = nr * math.cos(theta) * beanie_scale[0] * 0.995
+            v.co.y = nr * math.sin(theta) * beanie_scale[1] * 1.005
+            nx = math.cos(theta)
+            rim_tilt = -0.24 * nx - 0.06 * (nx ** 2)
+            v.co.z = (v.co.z * 1.75 + rim_tilt + 0.04) * beanie_scale[2]
+        beanie_cuff.location = beanie_center
+        beanie_cuff.data.materials.append(cuff_mat)
+        bpy.ops.object.shade_smooth()
+        skin_to_bone(beanie_cuff, rig, "head")
 
     # ---- Draped hoodie collar & back hood (closed manifold torus around neck/upper back) ----
-    neck = bone_world("neck_01")
-    bpy.ops.mesh.primitive_torus_add(
-        major_segments=64, minor_segments=28, major_radius=1.0, minor_radius=0.32
-    )
-    hood = bpy.context.active_object
-    hood.name = "SkaterHood"
-    for v in hood.data.vertices:
-        theta = math.atan2(v.co.y, v.co.x)  # 0 = back (+X), +-pi = front (-X)
-        r = math.hypot(v.co.x, v.co.y)
-        dr = r - 1.0  # -0.32 (inner neck side) .. +0.32 (outer edge)
-        dz = v.co.z   # -0.32 (bottom of tube) .. +0.32 (top of tube)
+    if preset.get("wear_hood", True):
+        # Linear-space charcoal matching the sRGB recolored hoodie texture (0.075 sRGB -> ~0.0068 linear)
+        hood_linear = tuple(((c + 0.055) / 1.055) ** 2.4 for c in preset["hoodie_color"])
+        fabric = new_material("SkaterHood", hood_linear, roughness=0.92)
 
-        # Smooth weight: 0 at front throat, 0.5 at shoulders, 1.0 at center back
-        back_w = 0.5 * (1.0 + math.cos(theta))
-        back_pouch = back_w ** 1.6
-
-        # Collar ring framing the neck + flat draped hood resting flush against the upper back
-        rad_x = 0.074 + 0.024 * back_pouch + dr * (0.042 + 0.028 * back_pouch)
-        rad_y = 0.096 + dr * 0.052 * (1.0 - 0.22 * back_pouch)
-
-        x = rad_x * math.cos(theta) + 0.018 * back_pouch
-        y = rad_y * math.sin(theta) * (1.0 - 0.15 * back_pouch * max(0.0, dr))
-
-        # Subtle center-back hood seam/fold
-        crease = -0.007 * back_pouch * math.exp(-((theta * 2.8) ** 2)) * max(0.0, dz)
-
-        # Height: low in front (tucked into neckline), raised collar on sides, draped down upper back
-        z = (
-            dz * (0.038 + 0.048 * (back_w ** 0.8))
-            + 0.024 * math.sin(back_w * math.pi * 0.82)
-            - 0.068 * back_pouch * max(0.0, dr + 0.18)
-            - 0.032 * (1.0 - back_w)
-            + crease
+        neck = bone_world("neck_01")
+        bpy.ops.mesh.primitive_torus_add(
+            major_segments=64, minor_segments=28, major_radius=1.0, minor_radius=0.32
         )
-        # Follow slope of upper back (+X as Z drops) so hood lies flat against the shirt
-        x += max(0.0, -z) * 0.32 * back_pouch
-        v.co.x, v.co.y, v.co.z = x, y, z
+        hood = bpy.context.active_object
+        hood.name = "SkaterHood"
+        for v in hood.data.vertices:
+            theta = math.atan2(v.co.y, v.co.x)  # 0 = back (+X), +-pi = front (-X)
+            r = math.hypot(v.co.x, v.co.y)
+            dr = r - 1.0  # -0.32 (inner neck side) .. +0.32 (outer edge)
+            dz = v.co.z   # -0.32 (bottom of tube) .. +0.32 (top of tube)
 
-    hood.location = (neck.x + 0.008, neck.y, neck.z - 0.022)
-    hood.data.materials.append(fabric)
-    bpy.ops.object.shade_smooth()
-    skin_to_bone(hood, rig, "spine_03")
+            # Smooth weight: 0 at front throat, 0.5 at shoulders, 1.0 at center back
+            back_w = 0.5 * (1.0 + math.cos(theta))
+            back_pouch = back_w ** 1.6
+
+            # Collar ring framing the neck + flat draped hood resting flush against the upper back
+            rad_x = 0.074 + 0.024 * back_pouch + dr * (0.042 + 0.028 * back_pouch)
+            rad_y = 0.096 + dr * 0.052 * (1.0 - 0.22 * back_pouch)
+
+            x = rad_x * math.cos(theta) + 0.018 * back_pouch
+            y = rad_y * math.sin(theta) * (1.0 - 0.15 * back_pouch * max(0.0, dr))
+
+            # Subtle center-back hood seam/fold
+            crease = -0.007 * back_pouch * math.exp(-((theta * 2.8) ** 2)) * max(0.0, dz)
+
+            # Height: low in front (tucked into neckline), raised collar on sides, draped down upper back
+            z = (
+                dz * (0.038 + 0.048 * (back_w ** 0.8))
+                + 0.024 * math.sin(back_w * math.pi * 0.82)
+                - 0.068 * back_pouch * max(0.0, dr + 0.18)
+                - 0.032 * (1.0 - back_w)
+                + crease
+            )
+            # Follow slope of upper back (+X as Z drops) so hood lies flat against the shirt
+            x += max(0.0, -z) * 0.32 * back_pouch
+            v.co.x, v.co.y, v.co.z = x, y, z
+
+        hood.location = (neck.x + 0.008, neck.y, neck.z - 0.022)
+        hood.data.materials.append(fabric)
+        bpy.ops.object.shade_smooth()
+        skin_to_bone(hood, rig, "spine_03")
 
     # ---- Knee pads (hard shells in front of the jeans knee + snug elastic straps), skinned to shins ----
-    suit_mesh = next((m for m in meshes if preset["outfit"] in m.name), body)
-    suit_pts = np.array([suit_mesh.matrix_world @ v.co for v in suit_mesh.data.vertices])
-    for side in ("l", "r"):
-        knee = bone_world(f"calf_{side}")
-        side_mask = (suit_pts[:, 1] < 0) if side == "l" else (suit_pts[:, 1] > 0)
-        pad_z = knee.z + 0.008
-        knee_slice = suit_pts[side_mask & (np.abs(suit_pts[:, 2] - pad_z) < 0.018)]
-        kx_min, kx_max = float(knee_slice[:, 0].min()), float(knee_slice[:, 0].max())
-        ky_min, ky_max = float(knee_slice[:, 1].min()), float(knee_slice[:, 1].max())
-        kx_c = 0.5 * (kx_min + kx_max)
-        ky_c = 0.5 * (ky_min + ky_max)
-        rx = 0.5 * (kx_max - kx_min)
-        ry = 0.5 * (ky_max - ky_min)
+    if preset.get("wear_knee_pads", True):
+        suit_mesh = next((m for m in meshes if preset["outfit"] in m.name), body)
+        suit_pts = np.array([suit_mesh.matrix_world @ v.co for v in suit_mesh.data.vertices])
+        for side in ("l", "r"):
+            knee = bone_world(f"calf_{side}")
+            side_mask = (suit_pts[:, 1] < 0) if side == "l" else (suit_pts[:, 1] > 0)
+            pad_z = knee.z + 0.008
+            knee_slice = suit_pts[side_mask & (np.abs(suit_pts[:, 2] - pad_z) < 0.018)]
+            kx_min, kx_max = float(knee_slice[:, 0].min()), float(knee_slice[:, 0].max())
+            ky_min, ky_max = float(knee_slice[:, 1].min()), float(knee_slice[:, 1].max())
+            kx_c = 0.5 * (kx_min + kx_max)
+            ky_c = 0.5 * (ky_min + ky_max)
+            rx = 0.5 * (kx_max - kx_min)
+            ry = 0.5 * (ky_max - ky_min)
 
-        pad = shell_from_sphere(
-            f"SkaterKneePad_{side}", pad_mat,
-            scale=(rx + 0.022, ry + 0.008, 0.080),
-            location=(kx_c - 0.012, ky_c, pad_z),
-            cut=lambda co: co.x > 0.08, segments=32, rings=18, thickness=0.12,
-        )
-        skin_to_bone(pad, rig, f"calf_{side}")
+            pad = shell_from_sphere(
+                f"SkaterKneePad_{side}", pad_mat,
+                scale=(rx + 0.022, ry + 0.008, 0.080),
+                location=(kx_c - 0.012, ky_c, pad_z),
+                cut=lambda co: co.x > 0.08, segments=32, rings=18, thickness=0.12,
+            )
+            skin_to_bone(pad, rig, f"calf_{side}")
 
-        # Elastic strap hugging the jeans leg cross-section just below the kneecap
-        strap_z = knee.z - 0.028
-        strap_slice = suit_pts[side_mask & (np.abs(suit_pts[:, 2] - strap_z) < 0.015)]
-        sx_min, sx_max = float(strap_slice[:, 0].min()), float(strap_slice[:, 0].max())
-        sy_min, sy_max = float(strap_slice[:, 1].min()), float(strap_slice[:, 1].max())
-        sx_c = 0.5 * (sx_min + sx_max)
-        sy_c = 0.5 * (sy_min + sy_max)
-        srx = 0.5 * (sx_max - sx_min) + 0.003
-        sry = 0.5 * (sy_max - sy_min) + 0.003
+            # Elastic strap hugging the jeans leg cross-section just below the kneecap
+            strap_z = knee.z - 0.028
+            strap_slice = suit_pts[side_mask & (np.abs(suit_pts[:, 2] - strap_z) < 0.015)]
+            sx_min, sx_max = float(strap_slice[:, 0].min()), float(strap_slice[:, 0].max())
+            sy_min, sy_max = float(strap_slice[:, 1].min()), float(strap_slice[:, 1].max())
+            sx_c = 0.5 * (sx_min + sx_max)
+            sy_c = 0.5 * (sy_min + sy_max)
+            srx = 0.5 * (sx_max - sx_min) + 0.003
+            sry = 0.5 * (sy_max - sy_min) + 0.003
 
-        bpy.ops.mesh.primitive_torus_add(
-            major_segments=40, minor_segments=14, major_radius=1.0, minor_radius=0.07
-        )
-        strap = bpy.context.active_object
-        strap.name = f"SkaterKneeStrap_{side}"
-        for v in strap.data.vertices:
-            v.co.z *= 3.2  # flat ribbon profile
-        strap.scale = (srx, sry, 0.055)
-        strap.location = (sx_c, sy_c, strap_z)
-        strap.data.materials.append(strap_mat)
-        bpy.ops.object.shade_smooth()
-        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-        skin_to_bone(strap, rig, f"calf_{side}")
+            bpy.ops.mesh.primitive_torus_add(
+                major_segments=40, minor_segments=14, major_radius=1.0, minor_radius=0.07
+            )
+            strap = bpy.context.active_object
+            strap.name = f"SkaterKneeStrap_{side}"
+            for v in strap.data.vertices:
+                v.co.z *= 3.2  # flat ribbon profile
+            strap.scale = (srx, sry, 0.055)
+            strap.location = (sx_c, sy_c, strap_z)
+            strap.data.materials.append(strap_mat)
+            bpy.ops.object.shade_smooth()
+            bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+            skin_to_bone(strap, rig, f"calf_{side}")
 
     # ---- Web-friendly textures ----
     for img in bpy.data.images:
@@ -748,9 +970,10 @@ def main():
     print("BONES", [b.name for b in rig.data.bones if not any(k in b.name for k in ("index", "middle", "pinky", "ring", "thumb"))])
     print("PELVIS_Z", round(bone_world("pelvis").z, 3), "FOOT_Z", round(bone_world("foot_l").z, 3))
 
+    out_path = preset.get("output", OUTPUT_PATH)
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.export_scene.gltf(
-        filepath=OUTPUT_PATH,
+        filepath=out_path,
         export_format="GLB",
         export_skins=True,
         export_animations=False,
@@ -759,7 +982,7 @@ def main():
         export_yup=True,
         export_image_format="AUTO",
     )
-    print(f"Exported CC0 MakeHuman surfskater ({variant}) to {OUTPUT_PATH} ({os.path.getsize(OUTPUT_PATH) // 1024} KB)")
+    print(f"Exported CC0 MakeHuman surfskater ({variant}) to {out_path} ({os.path.getsize(out_path) // 1024} KB)")
 
 
 if __name__ == "__main__":

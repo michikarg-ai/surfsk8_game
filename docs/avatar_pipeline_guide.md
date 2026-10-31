@@ -41,18 +41,19 @@ Unzip both packs into the MPFB user data directory:
 
 ## 3. Running the Generator
 
-To generate or rebuild the skater model, run:
+To generate or rebuild the skater models, run:
 
 ```bash
+# Male skater (Lukas) -> public/models/skater.glb
 /Applications/Blender.app/Contents/MacOS/Blender -b --python scripts/build_skater_makehuman.py -- male
-```
 
-To create a female variant:
-```bash
+# Female skater (Lena) -> public/models/skater_female.glb
 /Applications/Blender.app/Contents/MacOS/Blender -b --python scripts/build_skater_makehuman.py -- female
 ```
 
-Output file: `public/models/skater.glb` (~8 MB, optimized with 1024x1024 textures).
+Output files:
+- `public/models/skater.glb` (~8.3 MB, optimized with 1024x1024 textures).
+- `public/models/skater_female.glb` (~9.1 MB, optimized with 1024x1024 textures).
 
 ---
 
@@ -136,41 +137,47 @@ The script [`scripts/build_skater_makehuman.py`](../scripts/build_skater_makehum
 
 ---
 
-## 5. How to Add a New Character Preset
+## 5. Built-in Production Presets
 
-To define a new avatar (e.g. female surfskater, alternative clothing, or different skin tone):
+### Male Skater: Lukas (`preset = "male"`)
+- **Base Assets**: `male_casualsuit02.mhclo`, `toigo_light_skin_male_bronze.mhmat`, `shoes06.mhclo`.
+- **Gear**: Custom procedural turquoise ribbed knit beanie, charcoal dropped hoodie collar, dual knee pads with elastic straps.
+- **Outfit Styling**: Stone-washed faded blue jeans with worn thigh/knee fades and charcoal hoodie.
+- **Export Target**: `public/models/skater.glb`.
+
+### Female Skater: Lena (`preset = "female"`)
+- **Base Assets**: `female_casualsuit01.mhclo` (short-sleeve cotton T-shirt + slim jeans), `toigo_light_skin_female_bronze.mhmat` (sun-tanned bronze skin), `long01.mhclo` (honey blonde hair), `shoes06.mhclo` (black vulcanized skate shoes).
+- **No Knee Pads / No Beanie / No Hoodie**: Configured with `wear_hood=False`, `wear_beanie=False`, and `wear_knee_pads=False`.
+- **T-Shirt & Munich Logo**:
+  - The top half of the texture is recolored to clean white cotton `(0.94, 0.94, 0.93)`.
+  - The circular **Surf Skate Munich** emblem (`scripts/assets/surfskate_munich_logo.png`) is stamped onto the chest center at `u = 0.7856, ys = 0.2327` (~330 px diameter).
+  - *UV Notice*: In `female_casualsuit01`, the front chest panel is unwrapped horizontally in UV space (+X points towards the neck, +Y points towards the wearer's left). Stamping the logo rotated 90° clockwise (`np.rot90(logo, -1)`) ensures the Munich Frauenkirche spires point vertically up.
+- **Ripped Stone-Washed Blue Jeans**:
+  - Base denim colored to stonewashed blue `(0.28, 0.44, 0.68)` with worn thigh and knee highlight fades.
+  - Authentic worn holes and distress tears with frayed white threads and warm bronze skin tones showing through at:
+    - Left knee: `u = 0.110, ys = 0.718`
+    - Right knee: `u = 0.676, ys = 0.697`
+    - Right mid-thigh: `u = 0.662, ys = 0.631`
+    - Left upper thigh: `u = 0.113, ys = 0.607`
+- **Shoe Collar Tapering**:
+  - The slim jeans hem ends at local `z = 0.22`, while the puffy tongue of `shoes06` originally reached `z = 0.258`.
+  - When `is_female=True`, `style_skate_shoes()` automatically tapers the shoe ankle collar and upper tongue inward by 15-18% above `z = 0.205m`, eliminating any mesh poke-through while keeping the vulcanized sole flat.
+- **Hair Styling**:
+  - Honey-blonde hair (`long01`) uses `style_blonde_hair(meshes, drape_over_hood=False)` to drop naturally over the shoulders and down the back of the T-shirt.
+- **Export Target**: `public/models/skater_female.glb`.
+
+---
+
+## 6. How to Add a New Character Preset
+
+To define a new avatar (e.g. new skater, alternative clothing, or different skin tone):
 
 1. Open [`scripts/build_skater_makehuman.py`](../scripts/build_skater_makehuman.py).
-2. Add an entry to `PRESETS`:
-   ```python
-   PRESETS["female"] = {
-       "macro": {
-           "gender": 0.0,
-           "age": 0.45,
-           "muscle": 0.58,
-           "weight": 0.38,
-           "proportions": 0.62,
-           "height": 0.48,
-           "cupsize": 0.45,
-           "firmness": 0.5,
-           "race": {"asian": 0.0, "caucasian": 1.0, "african": 0.0},
-       },
-       "skin": "toigo_light_skin_female_bronze.mhmat",
-       "assets": [
-           ("eyes", "low-poly.mhclo", "Eyes"),
-           ("eyebrows", "eyebrow001.mhclo", "Eyebrows"),
-           ("eyelashes", "eyelashes01.mhclo", "Eyelashes"),
-           ("clothes", "female_casualsuit01.mhclo", "Clothes"),
-           ("clothes", "shoes06.mhclo", "Clothes"),
-       ],
-       "outfit": "female_casualsuit01",
-       "hoodie_color": (0.12, 0.12, 0.14),
-       "denim_color": (0.30, 0.45, 0.65),
-       "helmet_color": (0.85, 0.35, 0.20),
-   }
-   ```
-3. Run:
+2. Add an entry to `PRESETS` specifying `macro`, `skin`, `assets`, `outfit`, `output`, and accessory flags (`wear_hood`, `wear_beanie`, `wear_knee_pads`).
+3. If using custom graphic logos, place the PNG asset in `scripts/assets/` and stamp it within the texture recoloring step.
+4. Run:
    ```bash
-   /Applications/Blender.app/Contents/MacOS/Blender -b --python scripts/build_skater_makehuman.py -- female
+   /Applications/Blender.app/Contents/MacOS/Blender -b --python scripts/build_skater_makehuman.py -- <preset_name>
    ```
-4. Verify the newly exported `public/models/skater.glb` in game.
+5. Register the new character in [`src/ui/LandingPage.ts`](../src/ui/LandingPage.ts) in `SKATER_CHARACTERS` with an `id`, display `name`, and `modelUrl`.
+6. Run `npm run build` and test the character live in the Garage selector!

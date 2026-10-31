@@ -43,6 +43,11 @@ public/models/im_gefilde.glb
 public/models/im_gefilde_park.glb
 public/textures/skatepark_multi_tex0.png
 
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
 # Logs
 npm-debug.log*
 yarn-debug.log*
