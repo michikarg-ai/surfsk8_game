@@ -42,9 +42,9 @@ const TIME_SCALE = 0.75;
 /** Real gravity. Combined with energy conservation, max climb height = v² / (2g). */
 const GRAVITY = 9.81;
 /** Rolling resistance of urethane wheels on concrete (m/s²). */
-const ROLLING_RESISTANCE = 0.46;
+const ROLLING_RESISTANCE = 0.28;
 /** Aerodynamic drag coefficient (per metre). */
-const AIR_DRAG = 0.012;
+const AIR_DRAG = 0.010;
 /** Hard speed cap (m/s, simulation speed). */
 const MAX_SPEED = 9.5;
 /** Speed given by the single initial push-off (only from a standstill). */
@@ -54,13 +54,13 @@ const STANDSTILL_SPEED = 0.4;
 
 // ---- Flat-ground pumping (alternating ← → carves with the right rhythm) ----
 /** Time between two direction switches (real seconds) that still counts as a pump. */
-const PUMP_MIN_INTERVAL = 0.22;
-const PUMP_MAX_INTERVAL = 0.9;
+const PUMP_MIN_INTERVAL = 0.20;
+const PUMP_MAX_INTERVAL = 1.0;
 /** Sweet spot of the rhythm: ~1 full left-right cycle per second. */
-const PUMP_PERFECT_MIN = 0.36;
-const PUMP_PERFECT_MAX = 0.6;
-const PUMP_GAIN_PERFECT = 1.04;
-const PUMP_GAIN_GOOD = 0.52;
+const PUMP_PERFECT_MIN = 0.32;
+const PUMP_PERFECT_MAX = 0.65;
+const PUMP_GAIN_PERFECT = 1.15;
+const PUMP_GAIN_GOOD = 0.62;
 /** Pumping on flat ground tapers off towards this speed. */
 const MAX_PUMP_SPEED = 5.4;
 
@@ -69,10 +69,10 @@ const MAX_PUMP_SPEED = 5.4;
  * Extra acceleration (fraction of the downhill gravity component) gained by compressing
  * while dropping DOWN a wall. Holding S/Shift on the drop pumps harder.
  */
-const WALL_PUMP_GAIN = 0.36;
-const WALL_PUMP_GAIN_ACTIVE = 0.56;
+const WALL_PUMP_GAIN = 0.40;
+const WALL_PUMP_GAIN_ACTIVE = 0.60;
 /** Stretching the body on the climb slightly counters gravity (fraction of g·sinθ). */
-const WALL_STRETCH_ASSIST = 0.06;
+const WALL_STRETCH_ASSIST = 0.08;
 
 // ---- Tricks ----
 const LAYBACK_MIN_SPEED = 4.5;
@@ -420,9 +420,7 @@ export class SurfskateController {
       const cosT = 1 / Math.sqrt(1 + grade * grade);
 
       // Non-gravitational tangential acceleration (pump, friction, slides)
-      // Carving without active pump impulse scrubs speed from front-truck swivel friction:
-      const carveScrub = Math.abs(this.leanAngle) * 0.40;
-      let aExtra = -ROLLING_RESISTANCE - AIR_DRAG * this.speed * this.speed - carveScrub;
+      let aExtra = -ROLLING_RESISTANCE - AIR_DRAG * this.speed * this.speed;
       if (this.bertSlideActive && this.speed > 0.4) {
         // Bert slide scrubs heavy speed: urethane wheels sliding sideways + planted hand on concrete
         aExtra -= 4.2 + 0.35 * this.speed;
