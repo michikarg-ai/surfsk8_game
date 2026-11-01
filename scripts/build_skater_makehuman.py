@@ -65,6 +65,7 @@ PRESETS = {
         "denim_color": (0.28, 0.43, 0.62),  # faded blue jeans
         "helmet_color": (0.0, 0.55, 0.52),  # turquoise
         "wear_beanie": True,
+        "wear_basecap": False,
         "wear_knee_pads": False,
         "output": os.path.join(ROOT_DIR, "public", "models", "skater.glb"),
     },
@@ -88,6 +89,8 @@ PRESETS = {
         "tshirt_color": (0.94, 0.94, 0.93),  # clean off-white cotton T-shirt
         "denim_color": (0.28, 0.44, 0.68),  # stonewashed blue denim
         "hair_color": (0.92, 0.78, 0.46),  # sunlit golden blonde
+        "basecap_color": (0.04, 0.08, 0.16),  # deep vintage navy twill
+        "wear_basecap": True,
         "wear_beanie": False,
         "wear_hood": False,
         "wear_knee_pads": False,
@@ -521,6 +524,243 @@ def shell_from_sphere(name, mat, scale, location, cut, segments=48, rings=24, th
     return obj
 
 
+def build_basecap(rig, body, meshes, preset):
+    """
+    Construct a realistic 6-panel surfskate baseball cap / dad cap:
+      - Crown: 6-panel hemispherical dome with subtle radial seams and athletic tilt
+      - Visor / Brim: curved skate visor extending forward with rounded corners
+      - Squatchee: fabric-covered top button at crown apex
+      - Rigged & skinned 100% to the head bone
+      - Radial & vertical hair compression: neatly tucks blonde hair under the cap dome
+    """
+    def bone_world(name, tail=False):
+        b = rig.data.bones[name]
+        return rig.matrix_world @ (b.tail_local if tail else b.head_local)
+
+    neck_top = bone_world("head").z
+    all_pts = np.array([body.matrix_world @ v.co for v in body.data.vertices])
+    head_pts = all_pts[all_pts[:, 2] > neck_top]
+    hmin, hmax = head_pts.min(0), head_pts.max(0)
+    hc = (hmin + hmax) / 2
+
+    cranium_cx = float(hmax[0] - 0.093)
+    cranium_cy = float(hc[1])
+    cranium_cz = float(hmax[2] - 0.065)
+
+    rx = 0.099
+    ry = 0.085
+    rz = 0.081
+
+    cap_color = preset.get("basecap_color", (0.04, 0.08, 0.16))
+    cap_mat = new_material("SkaterBasecap", cap_color, roughness=0.88)
+
+    tilt_angle = math.radians(-5.0)
+
+    def get_rim_unit_z(phi):
+        abs_phi = abs(phi)
+        if abs_phi < math.radians(55):
+            t = abs_phi / math.radians(55)
+            return -0.10 - 0.04 * (t ** 2)
+        elif abs_phi < math.radians(125):
+            t = (abs_phi - math.radians(55)) / math.radians(70)
+            return -0.14 - 0.14 * (t ** 1.2)
+        else:
+            t = (abs_phi - math.radians(125)) / math.radians(55)
+            return -0.28 - 0.08 * (t ** 0.8)
+
+    # 1. Crown dome
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=64, ring_count=44, radius=1.0)
+    crown = bpy.context.active_object
+    crown.name = "SkaterBasecapCrown"
+
+    bm = bmesh.new()
+    bm.from_mesh(crown.data)
+
+    verts_to_delete = []
+    for v in bm.verts:
+        phi = math.atan2(v.co.y, -v.co.x)
+        angle_mod = (phi + math.pi / 6) % (math.pi / 3) - (math.pi / 6)
+        seam_crease = 0.004 * math.exp(-((angle_mod * 8.0) ** 2)) * max(0.0, 1.0 - (v.co.z ** 2))
+
+        if v.co.x < -0.15 and v.co.z > 0.0:
+            v.co.x *= (1.0 + 0.035 * (1.0 - v.co.z**2))
+
+        r = math.hypot(v.co.x, v.co.y)
+        if r > 0.01:
+            v.co.x -= seam_crease * (v.co.x / r)
+            v.co.y -= seam_crease * (v.co.y / r)
+
+        rim_z = get_rim_unit_z(phi)
+        if v.co.z < rim_z:
+            verts_to_delete.append(v)
+
+    bmesh.ops.delete(bm, geom=verts_to_delete, context="VERTS")
+
+    for v in bm.verts:
+        if v.is_boundary:
+            phi = math.atan2(v.co.y, -v.co.x)
+            v.co.z = get_rim_unit_z(phi)
+            rad_xy = math.sqrt(max(0.01, 1.0 - v.co.z**2))
+            v.co.x = -math.cos(phi) * rad_xy
+            v.co.y = math.sin(phi) * rad_xy
+
+    bm.to_mesh(crown.data)
+    bm.free()
+
+    crown.scale = (rx, ry, rz)
+    crown.location = (cranium_cx, cranium_cy, cranium_cz)
+    crown.data.materials.append(cap_mat)
+    mod = crown.modifiers.new("Solidify", "SOLIDIFY")
+    mod.thickness = 0.0036
+    bpy.context.view_layer.objects.active = crown
+    bpy.ops.object.shade_smooth()
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    bpy.ops.object.modifier_apply(modifier="Solidify")
+
+    # 2. Curved Visor / Brim
+    bm_v = bmesh.new()
+    nu = 24
+    nv = 36
+    max_phi = math.radians(56.0)
+
+    grid = []
+    for i in range(nu + 1):
+        u = i / nu
+        row = []
+        for j in range(nv + 1):
+            s = -1.0 + 2.0 * (j / nv)
+            phi = s * max_phi
+
+            rim_uz = get_rim_unit_z(phi)
+            rim_xy_scale = math.sqrt(max(0.01, 1.0 - rim_uz**2))
+
+            x_rim = cranium_cx - rx * math.cos(phi) * rim_xy_scale
+            y_rim = cranium_cy + ry * math.sin(phi) * rim_xy_scale
+            z_rim = cranium_cz + rz * rim_uz
+
+            abs_s = abs(s)
+            reach = 0.016 + 0.056 * math.sqrt(max(0.0, 1.0 - (abs_s ** 3.0)))
+
+            dir_x = -math.cos(phi * 0.28)
+            dir_y = math.sin(phi * 0.45)
+
+            u_eff = max(0.0, u * 1.05 - 0.05)
+
+            x = x_rim + u_eff * reach * dir_x
+            y = y_rim + u_eff * reach * dir_y * 0.10
+
+            z_slope = -0.010 * u_eff
+            reach_factor = (reach - 0.016) / 0.056
+            z_curve = -0.010 * (s ** 2) * u_eff * (0.3 + 0.7 * reach_factor)
+
+            z = z_rim + z_slope + z_curve + 0.001 * (1.0 - u)
+
+            vert = bm_v.verts.new((x, y, z))
+            row.append(vert)
+        grid.append(row)
+
+    for i in range(nu):
+        for j in range(nv):
+            v0 = grid[i][j]
+            v1 = grid[i+1][j]
+            v2 = grid[i+1][j+1]
+            v3 = grid[i][j+1]
+            bm_v.faces.new((v0, v1, v2, v3))
+
+    bm_v.verts.ensure_lookup_table()
+    bm_v.faces.ensure_lookup_table()
+
+    visor_mesh = bpy.data.meshes.new("SkaterBasecapVisor_Mesh")
+    bm_v.to_mesh(visor_mesh)
+    bm_v.free()
+
+    visor = bpy.data.objects.new("SkaterBasecapVisor", visor_mesh)
+    bpy.context.scene.collection.objects.link(visor)
+    visor.data.materials.append(cap_mat)
+
+    mod_v = visor.modifiers.new("Solidify", "SOLIDIFY")
+    mod_v.thickness = 0.0034
+    mod_v.offset = 0.0
+    bpy.context.view_layer.objects.active = visor
+    bpy.ops.object.shade_smooth()
+    bpy.ops.object.modifier_apply(modifier="Solidify")
+
+    # 3. Squatchee / Top Button
+    apex_z = cranium_cz + rz + 0.002
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=10, radius=1.0)
+    squatchee = bpy.context.active_object
+    squatchee.name = "SkaterBasecapButton"
+    squatchee.scale = (0.008, 0.008, 0.004)
+    squatchee.location = (cranium_cx, cranium_cy, apex_z)
+    squatchee.data.materials.append(cap_mat)
+    bpy.ops.object.shade_smooth()
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+
+    # 4. Athletic tilt rotation around Y axis
+    cos_tilt = math.cos(tilt_angle)
+    sin_tilt = math.sin(tilt_angle)
+    for obj in (crown, visor, squatchee):
+        for v in obj.data.vertices:
+            wco = obj.matrix_world @ v.co
+            dx = wco.x - cranium_cx
+            dz = wco.z - cranium_cz
+            new_dx = dx * cos_tilt + dz * sin_tilt
+            new_dz = -dx * sin_tilt + dz * cos_tilt
+            wco.x = cranium_cx + new_dx
+            wco.z = cranium_cz + new_dz
+            v.co = obj.matrix_world.inverted() @ wco
+        obj.data.update()
+
+    # 5. Join crown, visor, squatchee into a single unified SkaterBasecap mesh
+    bpy.ops.object.select_all(action="DESELECT")
+    crown.select_set(True)
+    visor.select_set(True)
+    squatchee.select_set(True)
+    bpy.context.view_layer.objects.active = crown
+    bpy.ops.object.join()
+    basecap = crown
+    basecap.name = "SkaterBasecap"
+
+    # Skin to head bone
+    skin_to_bone(basecap, rig, "head")
+
+    # 6. Realistic radial & vertical hair compression
+    hair = next((m for m in meshes if "long01" in m.name), None)
+    if hair:
+        inv_w = hair.matrix_world.inverted()
+        for v in hair.data.vertices:
+            wco = hair.matrix_world @ v.co
+            dx = (wco.x - cranium_cx) * cos_tilt - (wco.z - cranium_cz) * sin_tilt
+            dz = (wco.x - cranium_cx) * sin_tilt + (wco.z - cranium_cz) * cos_tilt
+            dy = wco.y - cranium_cy
+
+            phi = math.atan2(dy, -dx)
+            rim_uz = get_rim_unit_z(phi)
+            rim_z_thresh = rim_uz * rz
+
+            if dz > rim_z_thresh:
+                t_z = min(0.98, max(0.0, dz / rz))
+                inner_scale = math.sqrt(max(0.01, 1.0 - t_z**2)) * 0.94
+                norm_r = math.hypot(dx / (rx * inner_scale), dy / (ry * inner_scale))
+                if norm_r > 1.0:
+                    dx /= norm_r
+                    dy /= norm_r
+                if dz > (rz * 0.95):
+                    dz = rz * 0.94
+
+                wco.x = cranium_cx + dx * cos_tilt + dz * sin_tilt
+                wco.z = cranium_cz - dx * sin_tilt + dz * cos_tilt
+                wco.y = cranium_cy + dy
+                v.co = inv_w @ wco
+            elif wco.x < (cranium_cx - 0.02) and abs(wco.y - cranium_cy) < 0.082 and wco.z > 1.625:
+                wco.x += 0.028
+                if wco.z > 1.638:
+                    wco.z = 1.636
+                v.co = inv_w @ wco
+
+        hair.data.update()
+
+
 def deck_half_width(t):
     """
     SmoothStar 34" Filipe Toledo #77 surfskate outline (measured from top-view reference):
@@ -899,6 +1139,10 @@ def main():
         beanie_cuff.data.materials.append(cuff_mat)
         bpy.ops.object.shade_smooth()
         skin_to_bone(beanie_cuff, rig, "head")
+
+    # ---- Vintage surfskate basecap (curved visor, 6-panel dome + button), skinned to head ----
+    if preset.get("wear_basecap", False):
+        build_basecap(rig, body, meshes, preset)
 
     # ---- Draped hoodie collar & back hood (closed manifold torus around neck/upper back) ----
     if preset.get("wear_hood", True):

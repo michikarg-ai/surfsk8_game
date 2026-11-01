@@ -34,7 +34,10 @@ export class LandingPage {
   private skaterVisuals: SkaterVisuals;
   private dummyController: SurfskateController;
   private noteTimeout: number | null = null;
-  private currentSkaterIndex = 0;
+  private currentSkaterIndex = (() => {
+    const s = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('skater') : null;
+    return s === 'female' || s === 'sophie' || s === '1' ? 1 : 0;
+  })();
 
   // In-slot notice views for skatepark & board selection
   private parkThumbView: HTMLElement | null = null;
@@ -123,6 +126,9 @@ export class LandingPage {
 
   public async load(): Promise<void> {
     const currentSkater = SKATER_CHARACTERS[this.currentSkaterIndex];
+    if (this.playerNameEl) {
+      this.playerNameEl.textContent = currentSkater.name;
+    }
     await this.skaterVisuals.load(currentSkater.modelUrl);
   }
 

@@ -117,6 +117,10 @@ class SurfskateMunichGame {
     this.controller.resetToSpawn();
     this.lastTime = performance.now();
     requestAnimationFrame((t) => this.animate(t));
+
+    if (new URLSearchParams(window.location.search).get('play') === '1') {
+      this.landingPage.startGame();
+    }
   }
 
   private bindEvents(): void {
