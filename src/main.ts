@@ -9,6 +9,9 @@ import { LandingPage } from './ui/LandingPage';
 import { SurfAudio } from './audio/SurfAudio';
 import { PretzelCollectibles } from './world/PretzelCollectibles';
 
+export type GraphicsPreset = 'auto' | 'high' | 'medium' | 'low';
+export type EffectiveQuality = 'high' | 'medium' | 'low';
+
 class SurfskateMunichGame {
   private renderer: THREE.WebGLRenderer;
   private scene: THREE.Scene;
@@ -26,6 +29,16 @@ class SurfskateMunichGame {
   private keys = new Set<string>();
   private autoFlowEnabled = false;
   private lastTime = performance.now();
+
+  private graphicsPreset: GraphicsPreset =
+    (localStorage.getItem('surfsk8.graphicsPreset') as GraphicsPreset) || 'auto';
+  private effectiveQuality: EffectiveQuality = 'high';
+  private frameTimes: number[] = [];
+  private readonly fpsHistorySize = 60;
+  private currentFps = 60;
+  private fpsDisplayTimer = 0;
+  private autoQualityCooldown = 3.5;
+  private timeSinceLastQualityChange = 0;
 
   // SNAP slow-motion state (real seconds remaining)
   private slowMoTimer = 0;
@@ -74,6 +87,7 @@ class SurfskateMunichGame {
       onToggleAutoFlow: () => this.toggleAutoFlow(),
       onResetSession: () => this.resetSession(),
       onToggleMusic: () => this.toggleMusic(),
+      onCycleQuality: () => this.cycleGraphicsQuality(),
     });
     this.pretzels = new PretzelCollectibles(this.scene, this.hud, this.audio);
     this.landingPage = new LandingPage(
@@ -87,11 +101,13 @@ class SurfskateMunichGame {
         void this.skaterVisuals.load(modelUrl);
       }
     );
+    this.landingPage.onCycleQuality = () => this.cycleGraphicsQuality();
 
     this.audio.onTrackChange = () => {
       this.syncHUDButtons();
     };
 
+    this.applyEffectiveQuality();
     this.bindEvents();
     this.handleResize();
     this.syncHUDButtons();
@@ -168,6 +184,8 @@ class SurfskateMunichGame {
           this.toggleAspectMode();
         } else if (code === 'KeyM') {
           this.toggleMusic();
+        } else if (code === 'KeyQ') {
+          this.cycleGraphicsQuality();
         }
         return;
       }
@@ -200,6 +218,8 @@ class SurfskateMunichGame {
         this.toggleMusic();
       } else if (code === 'KeyN') {
         this.nextTrack();
+      } else if (code === 'KeyQ') {
+        this.cycleGraphicsQuality();
       } else if (code === 'Backspace' || code === 'KeyX') {
         this.resetSession();
       }
@@ -256,6 +276,42 @@ class SurfskateMunichGame {
     this.landingPage.show();
   }
 
+  public cycleGraphicsQuality(): void {
+    const cycle: GraphicsPreset[] = ['auto', 'high', 'medium', 'low'];
+    const idx = cycle.indexOf(this.graphicsPreset);
+    const next = cycle[(idx + 1) % cycle.length];
+    this.setGraphicsPreset(next);
+  }
+
+  public setGraphicsPreset(preset: GraphicsPreset): void {
+    this.graphicsPreset = preset;
+    localStorage.setItem('surfsk8.graphicsPreset', preset);
+    if (preset !== 'auto') {
+      this.effectiveQuality = preset;
+    }
+    this.applyEffectiveQuality();
+    this.syncHUDButtons();
+  }
+
+  private applyEffectiveQuality(): void {
+    const q = this.effectiveQuality;
+    const dpr = window.devicePixelRatio || 1;
+    const targetPixelRatio =
+      q === 'high' ? Math.min(dpr, 1.5) : q === 'medium' ? Math.min(dpr, 1.0) : Math.min(dpr, 0.85);
+
+    this.renderer.setPixelRatio(targetPixelRatio);
+    this.renderer.shadowMap.enabled = q !== 'low';
+    this.renderer.shadowMap.type = q === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    this.renderer.shadowMap.needsUpdate = true;
+
+    this.worldScene.setQuality(q);
+    this.skaterVisuals.setQuality(q);
+    if (this.landingPage) {
+      this.landingPage.setQuality(q);
+    }
+    this.handleResize();
+  }
+
   public resetSession(): void {
     this.controller.resetToSpawn();
     this.hud.resetSession();
@@ -273,6 +329,10 @@ class SurfskateMunichGame {
       this.audio.isMusicActive,
       `${current}/${total}`
     );
+    this.hud.updateQualityButton(this.graphicsPreset, this.effectiveQuality);
+    if (this.landingPage) {
+      this.landingPage.updateQualityLabel(this.graphicsPreset, this.effectiveQuality);
+    }
   }
 
   private handleResize(): void {
@@ -387,6 +447,40 @@ class SurfskateMunichGame {
     this.surfCamera.update(realDt, this.controller);
     this.hud.update(dt, this.controller);
     this.audio.update(this.controller);
+
+    // FPS measurement & live HUD counter
+    this.frameTimes.push(realDt);
+    if (this.frameTimes.length > this.fpsHistorySize) {
+      this.frameTimes.shift();
+    }
+    const avgDt = this.frameTimes.reduce((acc, v) => acc + v, 0) / this.frameTimes.length;
+    this.currentFps = Math.round(1.0 / Math.max(0.001, avgDt));
+
+    this.fpsDisplayTimer += realDt;
+    if (this.fpsDisplayTimer >= 0.35) {
+      this.fpsDisplayTimer = 0;
+      this.hud.updateFPS(this.currentFps);
+    }
+
+    // Auto-quality watchdog: automatically step down if hardware struggles (<46 / <40 FPS)
+    if (this.graphicsPreset === 'auto') {
+      this.timeSinceLastQualityChange += realDt;
+      if (timeSec > 3.0 && this.timeSinceLastQualityChange > this.autoQualityCooldown) {
+        if (this.currentFps < 46 && this.effectiveQuality === 'high') {
+          this.effectiveQuality = 'medium';
+          this.applyEffectiveQuality();
+          this.timeSinceLastQualityChange = 0;
+          this.hud.showTrickBanner('AUTO QUALITY: MEDIUM', false);
+          this.syncHUDButtons();
+        } else if (this.currentFps < 40 && this.effectiveQuality === 'medium') {
+          this.effectiveQuality = 'low';
+          this.applyEffectiveQuality();
+          this.timeSinceLastQualityChange = 0;
+          this.hud.showTrickBanner('AUTO QUALITY: PERFORMANCE', false);
+          this.syncHUDButtons();
+        }
+      }
+    }
 
     this.renderer.render(this.scene, this.surfCamera.camera);
     requestAnimationFrame((t) => this.animate(t));

@@ -121,6 +121,16 @@ export class SkaterVisuals {
 
   // Soft contact ambient-occlusion shadow directly beneath the surfskate deck
   private contactShadowMesh: THREE.Mesh;
+  private currentQuality: 'high' | 'medium' | 'low' = 'high';
+
+  public setQuality(quality: 'high' | 'medium' | 'low'): void {
+    this.currentQuality = quality;
+    if (quality === 'low') {
+      this.trailMesh.visible = false;
+    } else {
+      this.trailMesh.visible = true;
+    }
+  }
 
   constructor(scene: THREE.Scene) {
     scene.add(this.root);
@@ -834,13 +844,15 @@ export class SkaterVisuals {
     // Spray flies off the OUTSIDE rail of the turn, like water off a surfboard
     const side = -Math.sign(ctrl.leanAngle || 1);
     if (ctrl.isGrinding) {
-      for (let i = 0; i < 5; i++) this.emitParticle(2, ctrl, fwd, right, up, side);
+      const sparkCount = this.currentQuality === 'low' ? 2 : this.currentQuality === 'medium' ? 3 : 5;
+      for (let i = 0; i < sparkCount; i++) this.emitParticle(2, ctrl, fwd, right, up, side);
     } else if (spray > 0.15) {
       // Fresh burst when a trick starts (spray jumps up), then a steady fan while it lasts
-      const burst = spray > 0.9 && this.prevSpray < 0.5 ? 80 : 0;
-      const droplets = burst + Math.round(10 * spray);
+      const scale = this.currentQuality === 'low' ? 0.35 : this.currentQuality === 'medium' ? 0.65 : 1.0;
+      const burst = Math.round((spray > 0.9 && this.prevSpray < 0.5 ? 80 : 0) * scale);
+      const droplets = Math.max(1, Math.round((burst + 10 * spray) * scale));
       for (let i = 0; i < droplets; i++) this.emitParticle(0, ctrl, fwd, right, up, side);
-      const mist = (burst ? 16 : 0) + (Math.random() < spray ? 2 : 0);
+      const mist = Math.round(((burst ? 16 : 0) + (Math.random() < spray ? 2 : 0)) * scale);
       for (let i = 0; i < mist; i++) this.emitParticle(1, ctrl, fwd, right, up, side);
     }
     this.prevSpray = spray;

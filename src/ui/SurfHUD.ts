@@ -10,6 +10,7 @@ export interface HUDCallbacks {
   onToggleAutoFlow: () => void;
   onResetSession: () => void;
   onToggleMusic: () => void;
+  onCycleQuality?: () => void;
 }
 
 export class SurfHUD {
@@ -51,6 +52,8 @@ export class SurfHUD {
   private btnTruckFeelEl: HTMLButtonElement;
   private btnAutoFlowEl: HTMLButtonElement;
   private btnMusicEl: HTMLButtonElement | null = null;
+  private btnQualityEl: HTMLButtonElement | null = null;
+  private btnFpsEl: HTMLButtonElement | null = null;
 
   // SNAP trick overlays
   private snapBannerEl: HTMLDivElement;
@@ -103,6 +106,8 @@ export class SurfHUD {
     this.btnTruckFeelEl = document.getElementById('btn-truckfeel') as HTMLButtonElement;
     this.btnAutoFlowEl = document.getElementById('btn-autoflow') as HTMLButtonElement;
     this.btnMusicEl = document.getElementById('btn-music') as HTMLButtonElement | null;
+    this.btnQualityEl = document.getElementById('btn-quality') as HTMLButtonElement | null;
+    this.btnFpsEl = document.getElementById('btn-fps') as HTMLButtonElement | null;
     const btnResetEl = document.getElementById('btn-reset') as HTMLButtonElement;
 
     this.btnAspectEl.addEventListener('click', () => this.callbacks.onToggleAspect());
@@ -112,6 +117,9 @@ export class SurfHUD {
     this.btnAutoFlowEl.addEventListener('click', () => this.callbacks.onToggleAutoFlow());
     if (this.btnMusicEl) {
       this.btnMusicEl.addEventListener('click', () => this.callbacks.onToggleMusic());
+    }
+    if (this.btnQualityEl) {
+      this.btnQualityEl.addEventListener('click', () => this.callbacks.onCycleQuality?.());
     }
     btnResetEl.addEventListener('click', () => this.callbacks.onResetSession());
   }
@@ -392,6 +400,33 @@ export class SurfHUD {
         ? `🎵 Track ${trackLabel} [M] [N]`
         : '🔇 Music: OFF [M]';
       this.btnMusicEl.classList.toggle('active-auto', musicActive);
+    }
+  }
+
+  public updateQualityButton(
+    preset: 'auto' | 'high' | 'medium' | 'low',
+    effective: 'high' | 'medium' | 'low'
+  ): void {
+    if (!this.btnQualityEl) return;
+    const labels = {
+      auto: `⚡ Quality: AUTO (${effective.toUpperCase()}) [Q]`,
+      high: '⚡ Quality: HIGH [Q]',
+      medium: '⚡ Quality: MEDIUM [Q]',
+      low: '⚡ Quality: PERFORMANCE [Q]',
+    };
+    this.btnQualityEl.textContent = labels[preset];
+    this.btnQualityEl.classList.toggle('active-auto', preset === 'auto');
+  }
+
+  public updateFPS(fps: number): void {
+    if (!this.btnFpsEl) return;
+    this.btnFpsEl.textContent = `📊 ${fps} FPS`;
+    if (fps < 45) {
+      this.btnFpsEl.style.color = '#ff4d4d';
+    } else if (fps < 55) {
+      this.btnFpsEl.style.color = '#f2cc26';
+    } else {
+      this.btnFpsEl.style.color = '#00d6c3';
     }
   }
 

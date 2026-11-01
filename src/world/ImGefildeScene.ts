@@ -204,7 +204,7 @@ export class ImGefildeScene {
           roughness: 0.78,
           metalness: 0.02,
           envMapIntensity: 0.85,
-          side: THREE.DoubleSide,
+          side: THREE.FrontSide,
         });
       }
     });
@@ -253,5 +253,48 @@ export class ImGefildeScene {
       spot.intensity = 15.0;
       spot.visible = true;
     });
+  }
+
+  public setQuality(quality: 'high' | 'medium' | 'low'): void {
+    if (quality === 'high') {
+      this.sunLight.castShadow = true;
+      if (this.sunLight.shadow.mapSize.x !== 2048) {
+        this.sunLight.shadow.mapSize.set(2048, 2048);
+        this.sunLight.shadow.map?.dispose();
+        this.sunLight.shadow.map = null;
+      }
+      this.hemiLight.intensity = 0.95;
+      this.sunLight.intensity = 1.35;
+      this.fillLight.intensity = 0.38;
+      this.floodLights.forEach((spot) => {
+        spot.intensity = 15.0;
+        spot.visible = true;
+      });
+    } else if (quality === 'medium') {
+      this.sunLight.castShadow = true;
+      if (this.sunLight.shadow.mapSize.x !== 1024) {
+        this.sunLight.shadow.mapSize.set(1024, 1024);
+        this.sunLight.shadow.map?.dispose();
+        this.sunLight.shadow.map = null;
+      }
+      this.hemiLight.intensity = 1.1;
+      this.sunLight.intensity = 1.45;
+      this.fillLight.intensity = 0.42;
+      this.floodLights.forEach((spot, idx) => {
+        spot.visible = idx === 0 || idx === 2;
+        spot.intensity = 18.0;
+      });
+    } else {
+      // 'low' (Performance mode: dynamic shadows & heavy spotlights off, boost ambient fill)
+      this.sunLight.castShadow = false;
+      this.sunLight.shadow.map?.dispose();
+      this.sunLight.shadow.map = null;
+      this.hemiLight.intensity = 1.35;
+      this.sunLight.intensity = 1.65;
+      this.fillLight.intensity = 0.55;
+      this.floodLights.forEach((spot) => {
+        spot.visible = false;
+      });
+    }
   }
 }

@@ -49,6 +49,9 @@ export class LandingPage {
   private boardNoticeView: HTMLElement | null = null;
   private parkNoticeTimeout: number | null = null;
   private boardNoticeTimeout: number | null = null;
+  private qualityBtnEl: HTMLElement | null = null;
+
+  public onCycleQuality?: () => void;
 
   constructor(
     parkSurface: ParkSurface,
@@ -213,10 +216,22 @@ export class LandingPage {
       this.startGame();
     });
 
+    this.qualityBtnEl = document.getElementById('landing-quality-btn');
+    if (this.qualityBtnEl) {
+      this.qualityBtnEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.onCycleQuality?.();
+      });
+    }
+
     this.updateActiveSectionVisuals();
   }
 
   public handleKeyDown(code: string): void {
+    if (code === 'KeyQ') {
+      this.onCycleQuality?.();
+      return;
+    }
     if (code === 'ArrowDown' || code === 'KeyS') {
       this.activeCategoryIndex = (this.activeCategoryIndex + 1) % SELECTOR_CATEGORIES.length;
       this.updateActiveSectionVisuals();
@@ -369,6 +384,21 @@ export class LandingPage {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+  }
+
+  public setQuality(quality: 'high' | 'medium' | 'low'): void {
+    const dpr = window.devicePixelRatio || 1;
+    const targetPixelRatio = quality === 'high' ? Math.min(dpr, 1.5) : quality === 'medium' ? Math.min(dpr, 1.0) : Math.min(dpr, 0.85);
+    this.renderer.setPixelRatio(targetPixelRatio);
+    this.renderer.shadowMap.enabled = quality !== 'low';
+    this.renderer.shadowMap.type = quality === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    this.handleResize();
+  }
+
+  public updateQualityLabel(preset: string, effective: string): void {
+    if (!this.qualityBtnEl) return;
+    const label = preset === 'auto' ? `AUTO (${effective.toUpperCase()})` : preset.toUpperCase();
+    this.qualityBtnEl.textContent = `⚡ QUALITY: ${label}`;
   }
 
   public update(timeSec: number, dt: number): void {
