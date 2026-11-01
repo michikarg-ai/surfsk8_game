@@ -795,39 +795,31 @@ export class SkaterVisuals {
 
       const projectTarget = '#include <project_vertex>';
       const projectReplacement = `
-        // --- SOPHIE DYNAMIC HAIR WIND & FLUTTER SIMULATION ---
+        // --- SOPHIE PURE BACKWARD HAIR WIND SIMULATION ---
+        // Roots at crown (Y > 1.63) are anchored; ends (Y < 1.60) flex smoothly
         float rootFactor = clamp((1.63 - position.y) / 0.55, 0.0, 1.0);
-        float flex = pow(rootFactor, 1.7);
+        float flex = pow(rootFactor, 1.6);
         float backWeight = smoothstep(-0.06, 0.04, position.x);
-        flex *= mix(0.20, 1.0, backWeight);
+        flex *= mix(0.15, 1.0, backWeight);
 
         vec4 hairWorldPos = modelMatrix * vec4( transformed, 1.0 );
         float windSpeed = length(uHairWind);
-        vec3 windDir = windSpeed > 0.001 ? normalize(uHairWind) : vec3(0.0, 0.0, -1.0);
 
-        // 1. Aerodynamic wind deflection (streams cleanly straight backward)
-        // Scaled with speed: gentle at low speeds, clearly streaming back at higher speeds
-        float windPushMag = (windSpeed * 0.023) * flex;
-        windPushMag = min(windPushMag, 0.22 * flex);
-        vec3 steadyDeflection = windDir * windPushMag;
+        // Horizontal backward wind direction: strictly backwards along the travel path
+        vec3 windDir = vec3(0.0);
+        if (windSpeed > 0.05) {
+          windDir = normalize(vec3(uHairWind.x, 0.0, uHairWind.z));
+        }
 
-        // Subtle lift so strands float cleanly above the shoulders
-        steadyDeflection.y += windPushMag * 0.22 * backWeight;
+        // Pure backward aerodynamic deflection: streams backwards, stronger with speed
+        float windPushMag = (windSpeed * 0.038) * flex;
+        windPushMag = min(windPushMag, 0.35 * flex);
+        vec3 backwardDeflection = windDir * windPushMag;
 
-        // 2. Turn inertia: subtle lag during carves & cutbacks
-        vec3 inertiaDeflection = uHairTurnInertia * (0.010 * flex);
+        // Slight lift so trailing strands float cleanly off the shoulders
+        backwardDeflection.y += windPushMag * 0.16 * backWeight;
 
-        // 3. Delicate natural traveling ripple along the slipstream
-        float rippleFreq = 8.0 + windSpeed * 2.0;
-        float wave = sin(uHairTime * rippleFreq + hairWorldPos.y * 8.0 + position.z * 10.0);
-        float rippleAmp = (0.002 + windSpeed * 0.002) * flex;
-        vec3 flutterDeflection = vec3(0.0, wave * 0.5, 0.0) * rippleAmp + windDir * (wave * 0.5 * rippleAmp);
-
-        // 4. Subtle ambient breathing at rest
-        float idleWave = sin(uHairTime * 1.8 + position.y * 4.0) * 0.0025 * flex;
-        vec3 idleDeflection = vec3(0.0, idleWave, 0.0);
-
-        hairWorldPos.xyz += steadyDeflection + inertiaDeflection + flutterDeflection + idleDeflection;
+        hairWorldPos.xyz += backwardDeflection;
 
         vec4 mvPosition = viewMatrix * hairWorldPos;
         gl_Position = projectionMatrix * mvPosition;
