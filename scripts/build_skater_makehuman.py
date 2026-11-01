@@ -163,6 +163,49 @@ def recolor_male_suit(img, hoodie, denim):
         jeans_c = np.clip(denim[c] * d_detail + fade_lift * fade_tint[c], 0.0, 1.0)
         px[..., c] = np.where(shirt, hoodie[c] * s_detail, jeans_c)
     px[..., 3] = 1.0
+
+    # Surfskate Munich circular logo on hoodie (front chest and back)
+    logo_path = os.path.join(ROOT_DIR, "scripts", "assets", "surfskate_munich_logo.png")
+    if os.path.exists(logo_path):
+        logo_img = bpy.data.images.load(logo_path)
+        lw, lh = logo_img.size
+        lpx = np.empty(lw * lh * 4, dtype=np.float32)
+        logo_img.pixels.foreach_get(lpx)
+        lpx = lpx.reshape(lh, lw, 4)
+        bpy.data.images.remove(logo_img)
+
+        def apply_logo(center_u, center_v, diam_px):
+            td = int(diam_px)
+            scaled = np.zeros((td, td, 4), dtype=np.float32)
+            for y in range(td):
+                sy = y * lh / td
+                iy = int(sy)
+                fy = sy - iy
+                iy1 = min(lh - 1, iy + 1)
+                for x in range(td):
+                    sx = x * lw / td
+                    ix = int(sx)
+                    fx = sx - ix
+                    ix1 = min(lw - 1, ix + 1)
+                    top = lpx[iy, ix] * (1 - fx) + lpx[iy, ix1] * fx
+                    bot = lpx[iy1, ix] * (1 - fx) + lpx[iy1, ix1] * fx
+                    scaled[y, x] = top * (1 - fy) + bot * fy
+
+            cx = int(round(center_u * w))
+            cy = int(round(center_v * h))
+            x0 = cx - td // 2
+            y0 = cy - td // 2
+            for y in range(td):
+                for x in range(td):
+                    a = scaled[y, x, 3]
+                    if a > 0:
+                        px[y0 + y, x0 + x, :3] = px[y0 + y, x0 + x, :3] * (1 - a) + scaled[y, x, :3] * a
+
+        # 1. Front chest logo: centered on pectorals below collar
+        apply_logo(0.5604, 0.7840, round(0.110 * w))
+        # 2. Back print logo: centered on upper back below draped hood
+        apply_logo(0.1696, 0.7550, round(0.128 * w))
+
     img.pixels.foreach_set(px.ravel())
     img.update()
     img.pack()
