@@ -149,6 +149,18 @@ class SurfskateMunichGame {
         if (code === 'Enter' || code === 'NumpadEnter') {
           e.preventDefault();
           this.landingPage.startGame();
+        } else if (
+          code === 'ArrowUp' ||
+          code === 'ArrowDown' ||
+          code === 'ArrowLeft' ||
+          code === 'ArrowRight' ||
+          code === 'KeyW' ||
+          code === 'KeyS' ||
+          code === 'KeyA' ||
+          code === 'KeyD'
+        ) {
+          e.preventDefault();
+          this.landingPage.handleKeyDown(code);
         } else if (code === 'KeyR') {
           this.toggleAspectMode();
         }

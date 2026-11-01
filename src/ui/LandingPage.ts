@@ -16,6 +16,8 @@ export const SKATER_CHARACTERS: SkaterCharacter[] = [
   { id: 'female', name: 'SOPHIE', modelUrl: '/models/skater_female.glb' },
 ];
 
+export const SELECTOR_CATEGORIES: SelectorCategory[] = ['skater', 'skatepark', 'board'];
+
 const INSTAGRAM_URL = 'https://www.instagram.com/surfskate_munich/';
 
 export class LandingPage {
@@ -34,6 +36,7 @@ export class LandingPage {
   private skaterVisuals: SkaterVisuals;
   private dummyController: SurfskateController;
   private noteTimeout: number | null = null;
+  private activeCategoryIndex = 0;
   private currentSkaterIndex = (() => {
     const s = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('skater') : null;
     return s === 'female' || s === 'sophie' || s === '1' ? 1 : 0;
@@ -144,24 +147,23 @@ export class LandingPage {
         e.stopPropagation();
         const kind = (btn.dataset.kind || 'skater') as SelectorCategory;
         const dir = parseInt(btn.dataset.dir || '1', 10);
-
-        if (kind === 'skater') {
-          this.currentSkaterIndex =
-            (this.currentSkaterIndex + dir + SKATER_CHARACTERS.length) %
-            SKATER_CHARACTERS.length;
-          const skater = SKATER_CHARACTERS[this.currentSkaterIndex];
-          if (this.playerNameEl) {
-            this.playerNameEl.textContent = skater.name;
-          }
-          void this.skaterVisuals.load(skater.modelUrl);
-          if (this.onSelectSkater) {
-            this.onSelectSkater(skater.modelUrl);
-          }
-          this.showInstagramPrompt('skater', btn);
-        } else {
-          this.showInstagramPrompt(kind, btn);
-        }
+        this.triggerSelect(kind, dir);
       });
+    });
+
+    // Row hover & click synchronization with keyboard active index
+    SELECTOR_CATEGORIES.forEach((cat, idx) => {
+      const sectionEl = document.getElementById(`sel-section-${cat}`);
+      if (sectionEl) {
+        sectionEl.addEventListener('mouseenter', () => {
+          this.activeCategoryIndex = idx;
+          this.updateActiveSectionVisuals();
+        });
+        sectionEl.addEventListener('click', () => {
+          this.activeCategoryIndex = idx;
+          this.updateActiveSectionVisuals();
+        });
+      }
     });
 
     const closeBtn = document.getElementById('landing-ig-note-close');
@@ -210,6 +212,77 @@ export class LandingPage {
     this.startBtnEl.addEventListener('click', () => {
       this.startGame();
     });
+
+    this.updateActiveSectionVisuals();
+  }
+
+  public handleKeyDown(code: string): void {
+    if (code === 'ArrowDown' || code === 'KeyS') {
+      this.activeCategoryIndex = (this.activeCategoryIndex + 1) % SELECTOR_CATEGORIES.length;
+      this.updateActiveSectionVisuals();
+    } else if (code === 'ArrowUp' || code === 'KeyW') {
+      this.activeCategoryIndex =
+        (this.activeCategoryIndex - 1 + SELECTOR_CATEGORIES.length) % SELECTOR_CATEGORIES.length;
+      this.updateActiveSectionVisuals();
+    } else if (code === 'ArrowLeft' || code === 'KeyA') {
+      const cat = SELECTOR_CATEGORIES[this.activeCategoryIndex];
+      this.triggerSelect(cat, -1);
+    } else if (code === 'ArrowRight' || code === 'KeyD') {
+      const cat = SELECTOR_CATEGORIES[this.activeCategoryIndex];
+      this.triggerSelect(cat, 1);
+    }
+  }
+
+  public setActiveCategory(kind: SelectorCategory): void {
+    const idx = SELECTOR_CATEGORIES.indexOf(kind);
+    if (idx !== -1) {
+      this.activeCategoryIndex = idx;
+      this.updateActiveSectionVisuals();
+    }
+  }
+
+  private updateActiveSectionVisuals(): void {
+    SELECTOR_CATEGORIES.forEach((cat, idx) => {
+      const el = document.getElementById(`sel-section-${cat}`);
+      if (el) {
+        if (idx === this.activeCategoryIndex) {
+          el.classList.add('active');
+        } else {
+          el.classList.remove('active');
+        }
+      }
+    });
+  }
+
+  public triggerSelect(kind: SelectorCategory, dir: number): void {
+    this.setActiveCategory(kind);
+
+    // Visual button press animation on corresponding arrow button
+    const btn = this.overlayEl.querySelector<HTMLButtonElement>(
+      `.sel-arrow[data-kind="${kind}"][data-dir="${dir}"]`
+    );
+    if (btn) {
+      btn.classList.add('keyboard-press');
+      window.setTimeout(() => btn.classList.remove('keyboard-press'), 160);
+    }
+
+    const rowEl = document.getElementById(`sel-section-${kind}`);
+
+    if (kind === 'skater') {
+      this.currentSkaterIndex =
+        (this.currentSkaterIndex + dir + SKATER_CHARACTERS.length) % SKATER_CHARACTERS.length;
+      const skater = SKATER_CHARACTERS[this.currentSkaterIndex];
+      if (this.playerNameEl) {
+        this.playerNameEl.textContent = skater.name;
+      }
+      void this.skaterVisuals.load(skater.modelUrl);
+      if (this.onSelectSkater) {
+        this.onSelectSkater(skater.modelUrl);
+      }
+      this.showInstagramPrompt('skater', btn || rowEl || undefined);
+    } else {
+      this.showInstagramPrompt(kind, btn || rowEl || undefined);
+    }
   }
 
   public showInstagramPrompt(kind: SelectorCategory, triggerBtn?: HTMLElement): void {
@@ -285,6 +358,7 @@ export class LandingPage {
   public show(): void {
     this.isVisible = true;
     this.overlayEl.classList.remove('hidden');
+    this.updateActiveSectionVisuals();
     this.handleResize();
   }
 
