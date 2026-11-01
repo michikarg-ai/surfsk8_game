@@ -30,7 +30,7 @@ A realistic 3D WebGL surfskate simulator set in the real-world **Skatepark "Im G
 - **Realistic Rigged Skaters & IK**:
   - Full skeletal humanoid models with real-time inverse kinematics (IK) anchoring feet to the deck.
   - **Lukas**: Custom CC0 MakeHuman/MPFB avatar with turquoise knit beanie, charcoal hoodie, stone-washed faded blue jeans, and vulcanized black-suede skate shoes.
-  - **Lena**: Sun-tanned female surfskater with honey-blonde hair, white *Surf Skate Munich* circular logo T-shirt, stone-washed ripped blue jeans, and vulcanized skate shoes.
+  - **Lena**: Sun-tanned female surfskater with honey-blonde hair, dynamic GPU wind & flutter physics (hair streams backwards in the wind, ripples with turbulent eddies, and sways outward under centrifugal force during deep carves), white *Surf Skate Munich* circular logo T-shirt, stone-washed ripped blue jeans, and vulcanized skate shoes.
   - 34" SmoothStar Filipe Toledo-inspired surfboard deck with rounded nose, wide rail chest, and wide squash tail.
 - **Real-World Photogrammetry & LiDAR Park**:
   - 3D reconstruction generated from drone and action camera photogrammetry.

@@ -162,8 +162,13 @@ The script [`scripts/build_skater_makehuman.py`](../scripts/build_skater_makehum
 - **Shoe Collar Tapering**:
   - The slim jeans hem ends at local `z = 0.22`, while the puffy tongue of `shoes06` originally reached `z = 0.258`.
   - When `is_female=True`, `style_skate_shoes()` automatically tapers the shoe ankle collar and upper tongue inward by 15-18% above `z = 0.205m`, eliminating any mesh poke-through while keeping the vulcanized sole flat.
-- **Hair Styling**:
+- **Hair Styling & Dynamic GPU Wind Physics**:
   - Honey-blonde hair (`long01`) uses `style_blonde_hair(meshes, drape_over_hood=False)` to drop naturally over the shoulders and down the back of the T-shirt.
+  - In Three.js ([`src/entities/SkaterVisuals.ts`](../src/entities/SkaterVisuals.ts)), an automated GPU vertex shader simulation reacts dynamically in real time:
+    - **Aerodynamic Drag & Lift**: Streams backward opposite to the skater's world velocity vector and lifts slightly off the back as speed increases.
+    - **Turbulent Flutter**: Multi-frequency out-of-phase ripples trailing the slipstream.
+    - **Centrifugal Carve Inertia**: Swings hair outward under angular velocity during tight cutbacks and snaps.
+    - **Scalp Anchoring**: Roots at the scalp (`Y > 1.63m`) remain fixed, while strand tips enjoy 100% deflection.
 - **Export Target**: `public/models/skater_female.glb`.
 
 ---

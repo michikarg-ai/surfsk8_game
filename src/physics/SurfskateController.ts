@@ -110,7 +110,7 @@ export class SurfskateController {
   // Responsive analog-style steering filter for keyboard control
   private steerHoldTime = 0;
   private lastSteerDir = 0;
-  private smoothedYawRate = 0;
+  public smoothedYawRate = 0;
 
   // Skater body compression & upper-body leading state
   public compression = 0.15;
