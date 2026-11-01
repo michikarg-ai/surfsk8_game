@@ -821,7 +821,14 @@
         height: clamp(86px, 7vw, 108px);
       }
       .board-slot-wrap {
-        height: clamp(66px, 5.2vw, 82px);
+        height: clamp(86px, 7vw, 108px);
+        background:
+          radial-gradient(ellipse 80% 65% at 50% 45%, #524b42 0%, #302b26 55%, #181614 100%);
+        border: 1.5px solid rgba(255, 255, 255, 0.18);
+        box-shadow:
+          inset 0 1px 2px rgba(255, 255, 255, 0.18),
+          inset 0 0 25px rgba(0, 0, 0, 0.5),
+          0 3px 10px rgba(0, 0, 0, 0.32);
       }
       .slot-view {
         position: absolute;
@@ -854,11 +861,22 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        background:
+          radial-gradient(ellipse 70% 60% at 50% 38%, rgba(255, 225, 170, 0.22) 0%, rgba(242, 116, 31, 0.08) 50%, rgba(0, 0, 0, 0) 80%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(0, 0, 0, 0.22) 100%);
+        padding: 4px 10px;
+        box-sizing: border-box;
       }
       .board-icon-svg {
-        width: 154px;
-        height: 38px;
-        filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
+        width: 100%;
+        max-width: 204px;
+        height: auto;
+        max-height: 66px;
+        filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
+        transition: transform 0.22s ease-out;
+      }
+      .board-slot-wrap:hover .board-icon-svg {
+        transform: translateY(-2px) scale(1.02);
       }
 
       /* Redesigned In-Box Community Notice Card */
@@ -1062,19 +1080,114 @@
               <div class="slot-display-wrap board-slot-wrap" id="board-slot-wrap">
                 <div class="slot-view slot-thumb-view active" id="board-icon-view">
                   <div class="board-icon-wrap">
-                    <svg class="board-icon-svg" viewBox="0 0 180 42" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <!-- Surfskate deck side silhouette with kicktail & nose rocker -->
-                      <path d="M12 11 C22 17, 36 18, 92 18 C144 18, 156 17, 168 12 C170 11, 172 13, 170 15 C157 21, 144 22, 92 22 C35 22, 21 21, 9 14 C7 13, 9 10, 12 11 Z" fill="#1d1d1b"/>
-                      <!-- Front surf-adapter truck -->
-                      <polygon points="40,21 54,21 50,29 38,29" fill="#3b3b38"/>
-                      <!-- Rear truck -->
-                      <polygon points="126,21 140,21 138,29 128,29" fill="#3b3b38"/>
-                      <!-- Front wheel -->
-                      <circle cx="44" cy="31" r="7.5" fill="#181818"/>
-                      <circle cx="44" cy="31" r="3.2" fill="#d8d5cc"/>
-                      <!-- Rear wheel -->
-                      <circle cx="133" cy="31" r="7.5" fill="#181818"/>
-                      <circle cx="133" cy="31" r="3.2" fill="#d8d5cc"/>
+                    <svg class="board-icon-svg" viewBox="0 0 200 58" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <defs>
+                        <!-- Blonde Canadian maple wood core gradient -->
+                        <linearGradient id="wood-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+                          <stop offset="0%" stop-color="#f6d3ab" />
+                          <stop offset="25%" stop-color="#e2ab70" />
+                          <stop offset="70%" stop-color="#c68a4b" />
+                          <stop offset="100%" stop-color="#996024" />
+                        </linearGradient>
+
+                        <!-- Charcoal silicon-carbide griptape gradient -->
+                        <linearGradient id="grip-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stop-color="#2a2826" />
+                          <stop offset="35%" stop-color="#3c3935" />
+                          <stop offset="70%" stop-color="#2e2c29" />
+                          <stop offset="100%" stop-color="#201f1e" />
+                        </linearGradient>
+
+                        <!-- Polished cast aluminum truck metal -->
+                        <linearGradient id="truck-metal" x1="0%" y1="0%" x2="0%" y2="100%">
+                          <stop offset="0%" stop-color="#ffffff" />
+                          <stop offset="22%" stop-color="#e2e8f0" />
+                          <stop offset="65%" stop-color="#94a3b8" />
+                          <stop offset="100%" stop-color="#475569" />
+                        </linearGradient>
+
+                        <!-- High-rebound 78A urethane wheel gradient (Munich Sunset Orange) -->
+                        <radialGradient id="wheel-urethane" cx="35%" cy="32%" r="68%">
+                          <stop offset="0%" stop-color="#ff9e58" />
+                          <stop offset="50%" stop-color="#f2741f" />
+                          <stop offset="85%" stop-color="#c2410c" />
+                          <stop offset="100%" stop-color="#7c2d12" />
+                        </radialGradient>
+
+                        <!-- Wheel rim curvature highlight -->
+                        <linearGradient id="rim-highlight" x1="0%" y1="0%" x2="0%" y2="100%">
+                          <stop offset="0%" stop-color="rgba(255,255,255,0.75)" />
+                          <stop offset="100%" stop-color="rgba(0,0,0,0.4)" />
+                        </linearGradient>
+
+                        <!-- Soft floor contact shadow gradient -->
+                        <radialGradient id="shadow-radial" cx="50%" cy="50%" r="50%">
+                          <stop offset="0%" stop-color="rgba(0,0,0,0.58)" />
+                          <stop offset="55%" stop-color="rgba(0,0,0,0.22)" />
+                          <stop offset="100%" stop-color="rgba(0,0,0,0)" />
+                        </radialGradient>
+                      </defs>
+
+                      <!-- 1. Contact shadows on display floor -->
+                      <ellipse cx="100" cy="53" rx="84" ry="3.2" fill="url(#shadow-radial)" />
+                      <ellipse cx="50" cy="52" rx="17" ry="3.6" fill="url(#shadow-radial)" />
+                      <ellipse cx="148" cy="52" rx="17" ry="3.6" fill="url(#shadow-radial)" />
+
+                      <!-- 2. Front Surfskate Thruster Truck (Aluminum) -->
+                      <g class="truck-front">
+                        <polygon points="42,22 62,22 59,27 45,27" fill="#1e293b" />
+                        <path d="M46,27 L58,27 L54,38 L43,38 Z" fill="url(#truck-metal)" />
+                        <rect x="44" y="31" width="11" height="6" rx="2" fill="#64748b" />
+                        <line x1="45" y1="33" x2="54" y2="33" stroke="#f1f5f9" stroke-width="0.8" />
+                        <line x1="45" y1="35" x2="54" y2="35" stroke="#f1f5f9" stroke-width="0.8" />
+                        <rect x="39" y="37" width="22" height="4.5" rx="1.5" fill="url(#truck-metal)" />
+                      </g>
+
+                      <!-- 3. Rear Surfskate Truck (Aluminum) -->
+                      <g class="truck-rear">
+                        <polygon points="140,22 158,22 155,27 143,27" fill="#1e293b" />
+                        <path d="M143,27 L155,27 L152,38 L144,38 Z" fill="url(#truck-metal)" />
+                        <circle cx="149" cy="33" r="3.5" fill="#475569" />
+                        <rect x="137" y="37" width="22" height="4.5" rx="1.5" fill="url(#truck-metal)" />
+                      </g>
+
+                      <!-- 4. Front Wheel (78A 65mm Surfskate wheel) -->
+                      <g class="wheel-front">
+                        <circle cx="50" cy="42" r="9.5" fill="url(#wheel-urethane)" stroke="#9a3412" stroke-width="0.6" />
+                        <circle cx="50" cy="42" r="9.5" fill="none" stroke="url(#rim-highlight)" stroke-width="1.0" opacity="0.6" />
+                        <circle cx="50" cy="42" r="4.4" fill="#1c1917" />
+                        <circle cx="50" cy="42" r="3.4" fill="url(#truck-metal)" />
+                        <circle cx="50" cy="42" r="1.4" fill="#0f172a" />
+                      </g>
+
+                      <!-- 5. Rear Wheel (78A 65mm Surfskate wheel) -->
+                      <g class="wheel-rear">
+                        <circle cx="148" cy="42" r="9.5" fill="url(#wheel-urethane)" stroke="#9a3412" stroke-width="0.6" />
+                        <circle cx="148" cy="42" r="9.5" fill="none" stroke="url(#rim-highlight)" stroke-width="1.0" opacity="0.6" />
+                        <circle cx="148" cy="42" r="4.4" fill="#1c1917" />
+                        <circle cx="148" cy="42" r="3.4" fill="url(#truck-metal)" />
+                        <circle cx="148" cy="42" r="1.4" fill="#0f172a" />
+                      </g>
+
+                      <!-- 6. Surfskate Deck Profile (Kicktail, concave body, surfboard nose rocker) -->
+                      <!-- Layer A: Blonde Canadian Maple Wood Core -->
+                      <path d="M12 12.5 C24 17.5, 42 19, 100 19 C154 19, 172 17.5, 186 11.5 C188.5 10.5, 190.5 12.8, 188 15 C174 23, 154 24, 100 24 C40 24, 22 22.5, 10 16 C7.5 14.5, 9.5 11.5, 12 12.5 Z"
+                            fill="url(#wood-grad)" stroke="#78350f" stroke-width="0.6" />
+
+                      <!-- Layer B: Charcoal Griptape on top surface -->
+                      <path d="M12.5 12.6 C24.5 17.4, 42 18.8, 100 18.8 C154 18.8, 171.5 17.4, 185.5 11.7 C187 11.2, 188 12.5, 186.5 13.6 C173.5 19.8, 154 20.8, 100 20.8 C41 20.8, 23 19.6, 11 14.8 C9.5 14, 10.5 12.2, 12.5 12.6 Z"
+                            fill="url(#grip-grad)" />
+
+                      <!-- Layer C: Golden Maple Edge Highlight Reveal -->
+                      <path d="M11 15.5 C23 21, 41 22.2, 100 22.2 C154 22.2, 172 21, 186.5 14.5"
+                            stroke="#fef08a" stroke-width="1.1" stroke-opacity="0.9" fill="none" />
+
+                      <!-- Layer D: Soft Deck Top Sheen -->
+                      <path d="M14 13.8 C26 17.8, 44 19.2, 100 19.2 C154 19.2, 170 17.8, 184 12.8"
+                            stroke="rgba(255,255,255,0.22)" stroke-width="0.8" fill="none" />
+
+                      <!-- Layer E: Munich Brand Spiral/Wave Accent on Deck Rail -->
+                      <path d="M88 20.6 Q95 21.6 102 20.6 Q109 19.6 116 20.6" stroke="#f2741f" stroke-width="1.3" fill="none" stroke-linecap="round" />
                     </svg>
                   </div>
                 </div>
