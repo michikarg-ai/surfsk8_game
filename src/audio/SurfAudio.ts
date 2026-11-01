@@ -7,17 +7,23 @@ import { SurfskateController } from '../physics/SurfskateController';
  */
 export class SurfAudio {
   private ctx: AudioContext | null = null;
+  private masterGain: GainNode | null = null;
   private rollGain: GainNode | null = null;
   private rollFilter: BiquadFilterNode | null = null;
   private slideGain: GainNode | null = null;
   private whiteNoise: AudioBuffer | null = null;
   private isMuted = false;
+  private isPaused = true;
 
   public initOnFirstGesture(): void {
     if (this.ctx) return;
     try {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new AudioCtx();
+
+      this.masterGain = this.ctx.createGain();
+      this.masterGain.gain.value = this.isPaused ? 0.0 : 1.0;
+      this.masterGain.connect(this.ctx.destination);
 
       // White noise buffer for airy swooshes (SNAP)
       this.whiteNoise = this.ctx.createBuffer(1, this.ctx.sampleRate * 2, this.ctx.sampleRate);
@@ -51,7 +57,7 @@ export class SurfAudio {
 
       rollSource.connect(this.rollFilter);
       this.rollFilter.connect(this.rollGain);
-      this.rollGain.connect(this.ctx.destination);
+      this.rollGain.connect(this.masterGain);
       rollSource.start();
 
       // 2. Bert Slide / Lip Slash / Coping Grind Loop
@@ -69,18 +75,60 @@ export class SurfAudio {
 
       slideSource.connect(slideFilter);
       slideFilter.connect(this.slideGain);
-      this.slideGain.connect(this.ctx.destination);
+      this.slideGain.connect(this.masterGain);
       slideSource.start();
     } catch {
       // Web Audio not available or blocked
     }
   }
 
+  public pause(): void {
+    this.isPaused = true;
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    if (this.rollGain) {
+      this.rollGain.gain.cancelScheduledValues(now);
+      this.rollGain.gain.setValueAtTime(0, now);
+      this.rollGain.gain.value = 0;
+    }
+    if (this.slideGain) {
+      this.slideGain.gain.cancelScheduledValues(now);
+      this.slideGain.gain.setValueAtTime(0, now);
+      this.slideGain.gain.value = 0;
+    }
+    if (this.masterGain) {
+      this.masterGain.gain.cancelScheduledValues(now);
+      this.masterGain.gain.setValueAtTime(0, now);
+      this.masterGain.gain.value = 0;
+    }
+    if (this.ctx.state === 'running') {
+      this.ctx.suspend().catch(() => {});
+    }
+  }
+
+  public resume(): void {
+    this.isPaused = false;
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    if (this.masterGain) {
+      this.masterGain.gain.cancelScheduledValues(now);
+      this.masterGain.gain.setValueAtTime(1.0, now);
+      this.masterGain.gain.value = 1.0;
+    }
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+  }
+
   public update(ctrl: SurfskateController): void {
-    if (!this.ctx || !this.rollGain || !this.rollFilter || !this.slideGain || this.isMuted) return;
+    if (!this.ctx || !this.rollGain || !this.rollFilter || !this.slideGain || this.isMuted || this.isPaused) return;
 
     if (this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
+    }
+    if (this.masterGain && this.masterGain.gain.value < 0.5) {
+      this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.masterGain.gain.setValueAtTime(1.0, this.ctx.currentTime);
     }
 
     const now = this.ctx.currentTime;
@@ -96,7 +144,7 @@ export class SurfAudio {
   }
 
   public playManeuverChime(): void {
-    if (!this.ctx || this.isMuted) return;
+    if (!this.ctx || this.isMuted || this.isPaused || !this.masterGain) return;
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -108,7 +156,7 @@ export class SurfAudio {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.masterGain);
     osc.start(now);
     osc.stop(now + 0.19);
   }
@@ -119,8 +167,9 @@ export class SurfAudio {
    * "whoomp" of moving air and a short urethane-on-concrete hiss. No tonal beeps.
    */
   public playSnapSwoosh(perfect = false): void {
-    if (!this.ctx || !this.whiteNoise || this.isMuted) return;
+    if (!this.ctx || !this.whiteNoise || this.isMuted || this.isPaused || !this.masterGain) return;
     const ctx = this.ctx;
+    const master = this.masterGain;
     const now = ctx.currentTime;
     const dur = perfect ? 0.95 : 0.8; // stretched to match the slow-motion moment
 
@@ -149,7 +198,7 @@ export class SurfAudio {
     }
     src.connect(bp);
     bp.connect(g);
-    tail.connect(ctx.destination);
+    tail.connect(master);
     src.start(now);
     src.stop(now + dur + 0.05);
 
@@ -166,7 +215,7 @@ export class SurfAudio {
     ag.gain.exponentialRampToValueAtTime(0.0001, now + dur * 0.85);
     air.connect(lp);
     lp.connect(ag);
-    ag.connect(ctx.destination);
+    ag.connect(master);
     air.start(now, 0.5);
     air.stop(now + dur);
 
@@ -184,7 +233,7 @@ export class SurfAudio {
     hg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.32);
     hiss.connect(hp);
     hp.connect(hg);
-    hg.connect(ctx.destination);
+    hg.connect(master);
     hiss.start(now, 1.0);
     hiss.stop(t0 + 0.35);
   }
@@ -199,8 +248,9 @@ export class SurfAudio {
    * Each trick gets its own pitch/length/pan character.
    */
   public playTrickSwoosh(trick: 'SNAP' | 'LAYBACK' | 'BERTSLIDE' | 'REVERSE360', perfect = false): void {
-    if (!this.ctx || !this.whiteNoise || this.isMuted) return;
+    if (!this.ctx || !this.whiteNoise || this.isMuted || this.isPaused || !this.masterGain) return;
     const ctx = this.ctx;
+    const master = this.masterGain;
     const now = ctx.currentTime;
 
     const profile = {
@@ -226,7 +276,7 @@ export class SurfAudio {
     delay.connect(damp);
     damp.connect(fb);
     fb.connect(delay);
-    damp.connect(ctx.destination);
+    damp.connect(master);
 
     const panNode = (from: number, to: number, t0: number, t1: number): AudioNode | null => {
       if (typeof ctx.createStereoPanner !== 'function') return null;
@@ -260,7 +310,7 @@ export class SurfAudio {
       src.connect(f);
       f.connect(g);
       const out: AudioNode = pan ? (g.connect(pan), pan) : g;
-      out.connect(ctx.destination);
+      out.connect(master);
       if (sendWet) out.connect(wet);
       src.start(start, Math.random() * 1.0);
       src.stop(stop + 0.05);
@@ -309,7 +359,7 @@ export class SurfAudio {
     bg.gain.exponentialRampToValueAtTime(0.55 * vol, tHit + 0.02);
     bg.gain.exponentialRampToValueAtTime(0.0001, tHit + 0.55);
     boom.connect(bg);
-    bg.connect(ctx.destination);
+    bg.connect(master);
     boom.start(tHit);
     boom.stop(tHit + 0.6);
 

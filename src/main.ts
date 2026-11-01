@@ -74,7 +74,11 @@ class SurfskateMunichGame {
     });
     this.landingPage = new LandingPage(
       this.parkSurface,
-      () => this.resetSession(),
+      () => {
+        this.resetSession();
+        this.audio.resume();
+        this.lastTime = performance.now();
+      },
       (modelUrl) => {
         void this.skaterVisuals.load(modelUrl);
       }
@@ -115,13 +119,13 @@ class SurfskateMunichGame {
     const hudGarageBtn = document.getElementById('btn-hud-garage');
     if (hudGarageBtn) {
       hudGarageBtn.addEventListener('click', () => {
-        this.landingPage.show();
+        this.pauseGameAndOpenLanding();
       });
     }
     const dockGarageBtn = document.getElementById('btn-garage');
     if (dockGarageBtn) {
       dockGarageBtn.addEventListener('click', () => {
-        this.landingPage.show();
+        this.pauseGameAndOpenLanding();
       });
     }
 
@@ -140,7 +144,7 @@ class SurfskateMunichGame {
       }
 
       if (code === 'Escape') {
-        this.landingPage.show();
+        this.pauseGameAndOpenLanding();
         return;
       }
 
@@ -198,6 +202,14 @@ class SurfskateMunichGame {
   public toggleAutoFlow(): void {
     this.autoFlowEnabled = !this.autoFlowEnabled;
     this.syncHUDButtons();
+  }
+
+  public pauseGameAndOpenLanding(): void {
+    if (this.landingPage.isVisible) return;
+    this.keys.clear();
+    this.audio.pause();
+    this.slowMoTimer = 0;
+    this.landingPage.show();
   }
 
   public resetSession(): void {
