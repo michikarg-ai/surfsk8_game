@@ -8,11 +8,11 @@ export interface InputState {
   compressCrouch: boolean;
   jumpOllie: boolean;
   grindSlash: boolean;
-  snapSlide: boolean; // C for Bert Slide
-  snapTrick: boolean; // Q for the surf-style SNAP at the top of a wall
-  laybackTrick: boolean; // F for the Layback (hold while carving fast)
-  reverseTrick: boolean; // E for the FS Reverse 360
-  indyGrabTrick: boolean; // Space (while in air) or G for Indy Grab
+  snapSlide: boolean; // V for Bert Slide
+  snapTrick: boolean; // F for the surf-style SNAP at the top of a wall
+  laybackTrick: boolean; // G for the Layback (hold while carving fast)
+  reverseTrick: boolean; // B for the FS Reverse 360
+  indyGrabTrick: boolean; // Space (while in air) or I for Indy Grab
 }
 
 /** The scoring tricks. Only these give points. */
@@ -42,9 +42,9 @@ const TIME_SCALE = 0.75;
 /** Real gravity. Combined with energy conservation, max climb height = v² / (2g). */
 const GRAVITY = 9.81;
 /** Rolling resistance of urethane wheels on concrete (m/s²). */
-const ROLLING_RESISTANCE = 0.14;
+const ROLLING_RESISTANCE = 0.46;
 /** Aerodynamic drag coefficient (per metre). */
-const AIR_DRAG = 0.008;
+const AIR_DRAG = 0.012;
 /** Hard speed cap (m/s, simulation speed). */
 const MAX_SPEED = 9.5;
 /** Speed given by the single initial push-off (only from a standstill). */
@@ -420,7 +420,9 @@ export class SurfskateController {
       const cosT = 1 / Math.sqrt(1 + grade * grade);
 
       // Non-gravitational tangential acceleration (pump, friction, slides)
-      let aExtra = -ROLLING_RESISTANCE - AIR_DRAG * this.speed * this.speed;
+      // Carving without active pump impulse scrubs speed from front-truck swivel friction:
+      const carveScrub = Math.abs(this.leanAngle) * 0.40;
+      let aExtra = -ROLLING_RESISTANCE - AIR_DRAG * this.speed * this.speed - carveScrub;
       if (this.bertSlideActive && this.speed > 0.4) {
         // Bert slide scrubs heavy speed: urethane wheels sliding sideways + planted hand on concrete
         aExtra -= 4.2 + 0.35 * this.speed;
@@ -854,7 +856,7 @@ export class SurfskateController {
     const deepBertCarve = absLean >= 0.34;
     const deepLaybackCarve = absLean >= 0.42;
 
-    // ---------------- FS REVERSE 360 (E) ----------------
+    // ---------------- FS REVERSE 360 (B) ----------------
     // Carve frontside (toe-side, →), then whip the tail around a full 360° while the
     // board keeps travelling in the same direction, and ride out forward again.
     const reversePressed = input.reverseTrick && !this.prevReverseInput;
@@ -892,7 +894,7 @@ export class SurfskateController {
       return; // nothing else while spinning
     }
 
-    // ---------------- BERT SLIDE (C) ----------------
+    // ---------------- BERT SLIDE (V) ----------------
     // High-speed hand-plant slide: carve deep at high speed, plant the inside hand on the
     // concrete, throw the outside arm high, and hold through the pivot arc.
     const bertPressed = input.snapSlide && !this.prevBertInput;
@@ -918,7 +920,7 @@ export class SurfskateController {
         if (!this.bertScored) this.trickFail('BERT SLIDE: stalled — enter with more speed!');
       } else if (!input.snapSlide && this.bertHold < BERT_HOLD_TIME) {
         this.bertSlideActive = false;
-        if (!this.bertScored) this.trickFail('BERT SLIDE: hold C through the slide!');
+        if (!this.bertScored) this.trickFail('BERT SLIDE: hold V through the slide!');
       } else if ((!input.snapSlide && this.bertHold >= 0.65) || this.bertHold >= 1.2) {
         this.bertSlideActive = false;
         if (this.bertScored) {
@@ -940,7 +942,7 @@ export class SurfskateController {
     const bertRate = this.bertSlideActive ? 11.0 : 8.5;
     this.bertSlideAmount += ((this.bertSlideActive ? 1 : 0) - this.bertSlideAmount) * Math.min(1, dt * bertRate);
 
-    // ---------------- LAYBACK (F) ----------------
+    // ---------------- LAYBACK (G) ----------------
     // High-speed power carve: lay the body back into a fast, deep carve and drag the back hand.
     const laybackPressed = input.laybackTrick && !this.prevLaybackInput;
     this.prevLaybackInput = input.laybackTrick;
@@ -958,7 +960,7 @@ export class SurfskateController {
       }
     } else {
       if (this.laybackActive && !this.laybackScored) {
-        this.trickFail('LAYBACK: hold F through the carve!');
+        this.trickFail('LAYBACK: hold G through the carve!');
       }
       this.laybackActive = false;
     }

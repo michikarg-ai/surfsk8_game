@@ -199,13 +199,13 @@ export class SurfHUD {
       this.snapHintEl.textContent = ctrl.snapFeedback;
       this.snapHintEl.className = 'visible fail';
     } else if (ctrl.indyGrabReady && !ctrl.indyGrabActive) {
-      this.snapHintEl.textContent = 'INDY GRAB — HOLD SPACE or G';
+      this.snapHintEl.textContent = 'INDY GRAB — HOLD SPACE';
       this.snapHintEl.className = 'visible ready';
     } else if (ctrl.indyGrabActive) {
       this.snapHintEl.textContent = 'TWEAK THE INDY!';
       this.snapHintEl.className = 'visible ready';
     } else if (ctrl.snapWindow === 'READY' && !ctrl.snapActive) {
-      this.snapHintEl.textContent = 'SNAP READY — press Q';
+      this.snapHintEl.textContent = 'SNAP READY — press F';
       this.snapHintEl.className = 'visible ready';
     } else if (ctrl.snapWindow === 'TOO_SLOW') {
       this.snapHintEl.textContent = 'Too slow to snap';
@@ -371,9 +371,9 @@ export class SurfHUD {
     this.btnAtmosphereEl.textContent = '🌙 Floodlit Munich Night';
 
     const camLabels: Record<CameraStyle, string> = {
-      follow: '🎥 Follow Cam [V]',
-      filmer: '📹 Filmer Cam [V]',
-      mural: '🌴 Palm Mural Cam [V]',
+      follow: '🎥 Follow Cam [C]',
+      filmer: '📹 Filmer Cam [C]',
+      mural: '🌴 Palm Mural Cam [C]',
     };
     this.btnCameraEl.textContent = camLabels[cameraStyle];
 

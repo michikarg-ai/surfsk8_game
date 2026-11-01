@@ -185,7 +185,7 @@ class SurfskateMunichGame {
         this.toggleAspectMode();
       } else if (code === 'KeyL') {
         this.toggleAtmosphereMode();
-      } else if (code === 'KeyV') {
+      } else if (code === 'KeyC') {
         this.cycleCameraStyle();
       } else if (code === 'KeyT') {
         this.cycleTruckFeel();
@@ -296,12 +296,11 @@ class SurfskateMunichGame {
         this.keys.has('ShiftRight'),
       jumpOllie: this.keys.has('Space'),
       grindSlash: false, // coping grinds are not part of the trick set
-      snapSlide: this.keys.has('KeyC'),
-      snapTrick: this.keys.has('KeyQ'),
-      laybackTrick: this.keys.has('KeyF'),
-      reverseTrick: this.keys.has('KeyE'),
+      snapTrick: this.keys.has('KeyF'),
+      laybackTrick: this.keys.has('KeyG'),
+      snapSlide: this.keys.has('KeyV'),
+      reverseTrick: this.keys.has('KeyB'),
       indyGrabTrick:
-        this.keys.has('KeyG') ||
         this.keys.has('KeyI') ||
         (!this.controller.isGrounded && this.keys.has('Space')),
     };
