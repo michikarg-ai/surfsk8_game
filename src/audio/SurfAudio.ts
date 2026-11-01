@@ -19,6 +19,7 @@ export class SurfAudio {
   private playlist: string[] = [
     'audio/surfskate_anthem_1.mp3',
     'audio/surfskate_anthem_2.mp3',
+    'audio/surfskate_anthem_3.mp3',
   ];
   private currentTrackIndex = 0;
   private music: HTMLAudioElement | null = null;

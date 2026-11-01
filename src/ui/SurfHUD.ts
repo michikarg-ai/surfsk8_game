@@ -362,7 +362,7 @@ export class SurfHUD {
     truckPreset: TruckFeelPreset,
     autoFlow: boolean,
     musicActive = true,
-    trackLabel = '1/2'
+    trackLabel = '1/3'
   ): void {
     this.btnAspectEl.textContent =
       aspect === '9:16' ? '📱 9:16 IG Reel Mode [R]' : '🖥️ 16:9 Desktop [R]';
