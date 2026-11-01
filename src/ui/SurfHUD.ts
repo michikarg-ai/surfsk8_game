@@ -26,6 +26,8 @@ export class SurfHUD {
 
   private scoreEl: HTMLElement;
   private bestComboEl: HTMLElement;
+  private pretzelCountEl: HTMLElement | null = null;
+  private pretzelBlockEl: HTMLElement | null = null;
   private timerEl: HTMLElement;
   private speedEl: HTMLElement;
   private speedoEl: HTMLElement;
@@ -70,6 +72,8 @@ export class SurfHUD {
     frame.appendChild(this.coachHintEl);
     this.scoreEl = document.getElementById('hud-score')!;
     this.bestComboEl = document.getElementById('hud-best-combo')!;
+    this.pretzelCountEl = document.getElementById('hud-pretzel-count');
+    this.pretzelBlockEl = document.getElementById('hud-pretzel-block');
     this.timerEl = document.getElementById('hud-timer')!;
     this.speedEl = document.getElementById('hud-speed')!;
     this.speedoEl = document.getElementById('hud-speedo')!;
@@ -302,6 +306,34 @@ export class SurfHUD {
     this.speedoEl.classList.toggle('redline', frac > 0.75);
   }
 
+  public addBonusScore(points: number): void {
+    this.totalScore += points;
+    if (this.totalScore > this.bestCombo) {
+      this.bestCombo = this.totalScore;
+      this.bestComboEl.textContent = this.bestCombo.toLocaleString();
+    }
+    this.scoreEl.textContent = this.totalScore.toLocaleString();
+    this.scoreEl.style.transform = 'scale(1.22)';
+    this.scoreEl.style.color = '#fbbf24';
+    setTimeout(() => {
+      this.scoreEl.style.transform = '';
+      this.scoreEl.style.color = '';
+    }, 400);
+  }
+
+  public updatePretzelCount(collected: number, total: number): void {
+    if (this.pretzelCountEl) {
+      this.pretzelCountEl.textContent = `🥨 ${collected}/${total}`;
+    }
+    if (this.pretzelBlockEl) {
+      const isComplete = collected >= total && total > 0;
+      this.pretzelBlockEl.classList.toggle('complete', isComplete);
+      if (isComplete && this.pretzelCountEl) {
+        this.pretzelCountEl.textContent = `🥨 ${collected}/${total} ⭐`;
+      }
+    }
+  }
+
   public resetSession(): void {
     this.totalScore = 0;
     this.bestCombo = 0;
@@ -314,6 +346,7 @@ export class SurfHUD {
     this.scoreEl.textContent = '0';
     this.bestComboEl.textContent = '0';
     this.comboContainerEl.classList.remove('active');
+    this.updatePretzelCount(0, 5);
   }
 
   public updateButtons(

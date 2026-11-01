@@ -485,4 +485,41 @@ export class SurfAudio {
   public get isMusicActive(): boolean {
     return !this.isMusicMuted;
   }
+
+  /**
+   * Rewarding Munich pretzel pickup sound:
+   * Single pretzel: bright rising bell chime (D5 -> A5).
+   * All 5 collected: triumphant Bavarian victory arpeggio fanfare (C5 -> E5 -> G5 -> C6).
+   */
+  public playPretzelPickup(isAllCollected = false): void {
+    if (!this.ctx || this.isMuted || this.isPaused || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+    const master = this.masterGain;
+
+    const notes = isAllCollected
+      ? [523.25, 659.25, 783.99, 1046.5] // C5, E5, G5, C6
+      : [587.33, 880.0];                 // D5, A5 bell chime
+
+    const noteStep = isAllCollected ? 0.09 : 0.07;
+    const duration = isAllCollected ? 0.45 : 0.28;
+
+    notes.forEach((freq, idx) => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      const t0 = now + idx * noteStep;
+
+      osc.type = isAllCollected ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(freq, t0);
+
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(isAllCollected ? 0.22 : 0.16, t0 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+
+      osc.connect(gain);
+      gain.connect(master);
+
+      osc.start(t0);
+      osc.stop(t0 + duration + 0.05);
+    });
+  }
 }

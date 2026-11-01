@@ -7,6 +7,7 @@ import { SurfCamera } from './camera/SurfCamera';
 import { SurfHUD } from './ui/SurfHUD';
 import { LandingPage } from './ui/LandingPage';
 import { SurfAudio } from './audio/SurfAudio';
+import { PretzelCollectibles } from './world/PretzelCollectibles';
 
 class SurfskateMunichGame {
   private renderer: THREE.WebGLRenderer;
@@ -20,6 +21,7 @@ class SurfskateMunichGame {
   private hud: SurfHUD;
   private landingPage: LandingPage;
   private audio = new SurfAudio();
+  private pretzels: PretzelCollectibles;
 
   private keys = new Set<string>();
   private autoFlowEnabled = false;
@@ -73,6 +75,7 @@ class SurfskateMunichGame {
       onResetSession: () => this.resetSession(),
       onToggleMusic: () => this.toggleMusic(),
     });
+    this.pretzels = new PretzelCollectibles(this.scene, this.hud, this.audio);
     this.landingPage = new LandingPage(
       this.parkSurface,
       () => {
@@ -234,6 +237,7 @@ class SurfskateMunichGame {
   public resetSession(): void {
     this.controller.resetToSpawn();
     this.hud.resetSession();
+    this.pretzels.reset();
   }
 
   private syncHUDButtons(): void {
@@ -353,6 +357,7 @@ class SurfskateMunichGame {
     });
     this.worldScene.update(timeSec);
     this.skaterVisuals.update(dt, this.controller);
+    this.pretzels.update(dt, this.controller.position);
     this.surfCamera.update(realDt, this.controller);
     this.hud.update(dt, this.controller);
     this.audio.update(this.controller);
