@@ -127,6 +127,9 @@ class SurfskateMunichGame {
     window.addEventListener('resize', () => this.handleResize());
     new ResizeObserver(() => this.handleResize()).observe(this.viewportContainer);
     window.addEventListener('pointerdown', () => this.audio.initOnFirstGesture(), { once: true });
+    document.addEventListener('visibilitychange', () => {
+      this.audio.handleVisibilityChange(!document.hidden);
+    });
 
     const hudGarageBtn = document.getElementById('btn-hud-garage');
     if (hudGarageBtn) {
@@ -163,6 +166,8 @@ class SurfskateMunichGame {
           this.landingPage.handleKeyDown(code);
         } else if (code === 'KeyR') {
           this.toggleAspectMode();
+        } else if (code === 'KeyM') {
+          this.toggleMusic();
         }
         return;
       }
@@ -246,6 +251,7 @@ class SurfskateMunichGame {
     if (this.landingPage.isVisible) return;
     this.keys.clear();
     this.audio.pause();
+    this.audio.playGarageMusic();
     this.slowMoTimer = 0;
     this.landingPage.show();
   }
@@ -387,7 +393,16 @@ class SurfskateMunichGame {
   }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  const game = new SurfskateMunichGame();
-  (window as unknown as Record<string, unknown>).surfskateGame = game;
-});
+function initGame(): void {
+  const existingGame = (window as unknown as Record<string, unknown>).surfskateGame;
+  if (!existingGame) {
+    const game = new SurfskateMunichGame();
+    (window as unknown as Record<string, unknown>).surfskateGame = game;
+  }
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', () => initGame());
+} else {
+  initGame();
+}

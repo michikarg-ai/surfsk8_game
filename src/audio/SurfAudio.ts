@@ -23,21 +23,40 @@ export class SurfAudio {
   ];
   private currentTrackIndex = 0;
   private music: HTMLAudioElement | null = null;
+  private garageMusic: HTMLAudioElement | null = null;
+  private isGarageMode = true; // Starts in garage mode (LandingPage)
   private isMusicMuted = false;
   private musicVolume = 0.38;
+  private garageVolume = 0.35;
   private duckTimer: number | null = null;
 
   public onTrackChange?: (trackIndex: number) => void;
 
-  private getTrackUrl(index: number): string {
+  private resolveUrl(relPath: string): string {
     const meta = import.meta as unknown as { env?: { BASE_URL?: string } };
     const base = meta.env?.BASE_URL || '/';
     const prefix = base.endsWith('/') ? base : base + '/';
+    const cleanPath = relPath.startsWith('/') ? relPath.slice(1) : relPath;
+    return `${prefix}${cleanPath}`;
+  }
+
+  private getTrackUrl(index: number): string {
     const safeIndex = ((index % this.playlist.length) + this.playlist.length) % this.playlist.length;
-    return `${prefix}${this.playlist[safeIndex]}`;
+    return this.resolveUrl(this.playlist[safeIndex]);
   }
 
   public initOnFirstGesture(): void {
+    if (!this.garageMusic) {
+      try {
+        this.garageMusic = new Audio(this.resolveUrl('audio/garage_theme.mp3'));
+        this.garageMusic.loop = true;
+        this.garageMusic.volume = this.garageVolume;
+        this.garageMusic.preload = 'auto';
+      } catch {
+        // Audio element not supported
+      }
+    }
+
     if (!this.music) {
       try {
         this.music = new Audio(this.getTrackUrl(this.currentTrackIndex));
@@ -50,6 +69,17 @@ export class SurfAudio {
         });
       } catch {
         // Audio element not supported
+      }
+    }
+
+    // Play appropriate music on initial gesture depending on mode
+    if (this.isGarageMode) {
+      if (!this.isMusicMuted && !this.isMuted && this.garageMusic) {
+        this.garageMusic.play().catch(() => {});
+      }
+    } else {
+      if (!this.isPaused && !this.isMusicMuted && !this.isMuted && this.music) {
+        this.music.play().catch(() => {});
       }
     }
 
@@ -150,8 +180,30 @@ export class SurfAudio {
     }
   }
 
+  public playGarageMusic(): void {
+    this.isGarageMode = true;
+    if (this.music) {
+      this.music.pause();
+    }
+    this.initOnFirstGesture();
+    if (this.garageMusic) {
+      this.garageMusic.volume = this.garageVolume;
+      if (!this.isMusicMuted && !this.isMuted) {
+        this.garageMusic.play().catch(() => {});
+      }
+    }
+  }
+
+  public stopGarageMusic(): void {
+    this.isGarageMode = false;
+    if (this.garageMusic) {
+      this.garageMusic.pause();
+    }
+  }
+
   public resume(): void {
     this.isPaused = false;
+    this.stopGarageMusic();
     this.initOnFirstGesture();
     if (this.masterGain && this.ctx) {
       const now = this.ctx.currentTime;
@@ -457,11 +509,21 @@ export class SurfAudio {
 
   public toggleMusic(): boolean {
     this.isMusicMuted = !this.isMusicMuted;
-    if (this.music) {
-      if (this.isMusicMuted) {
-        this.music.pause();
-      } else if (!this.isPaused) {
-        this.music.play().catch(() => {});
+    if (this.isGarageMode) {
+      if (this.garageMusic) {
+        if (this.isMusicMuted) {
+          this.garageMusic.pause();
+        } else {
+          this.garageMusic.play().catch(() => {});
+        }
+      }
+    } else {
+      if (this.music) {
+        if (this.isMusicMuted) {
+          this.music.pause();
+        } else if (!this.isPaused) {
+          this.music.play().catch(() => {});
+        }
       }
     }
     return !this.isMusicMuted;
@@ -472,11 +534,26 @@ export class SurfAudio {
     if (this.music) {
       this.music.src = this.getTrackUrl(this.currentTrackIndex);
       this.music.currentTime = 0;
-      if (!this.isPaused && !this.isMusicMuted && !this.isMuted) {
+      if (!this.isGarageMode && !this.isPaused && !this.isMusicMuted && !this.isMuted) {
         this.music.play().catch(() => {});
       }
     }
     this.onTrackChange?.(this.currentTrackIndex);
+  }
+
+  public handleVisibilityChange(visible: boolean): void {
+    if (!visible) {
+      if (this.garageMusic) this.garageMusic.pause();
+      if (this.music) this.music.pause();
+    } else {
+      if (!this.isMusicMuted && !this.isMuted) {
+        if (this.isGarageMode) {
+          this.garageMusic?.play().catch(() => {});
+        } else if (!this.isPaused) {
+          this.music?.play().catch(() => {});
+        }
+      }
+    }
   }
 
   public get trackInfo(): { current: number; total: number; currentSrc: string } {
