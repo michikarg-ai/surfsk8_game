@@ -72,6 +72,11 @@ export class SkaterVisuals {
     Left: { upper: 0.46, lower: 0.44 },
     Right: { upper: 0.46, lower: 0.44 },
   };
+  private armLengths: Record<Side, { upper: number; lower: number }> = {
+    Left: { upper: 0.28, lower: 0.26 },
+    Right: { upper: 0.28, lower: 0.26 },
+  };
+  private rightFingerBones: THREE.Bone[] = [];
   private footRestInDeck: Record<Side, THREE.Quaternion> = {
     Left: new THREE.Quaternion(),
     Right: new THREE.Quaternion(),
@@ -335,6 +340,18 @@ export class SkaterVisuals {
         const footQ = this.bones[`${side}Foot`].getWorldQuaternion(new THREE.Quaternion());
         this.footRestInDeck[side] = deckQ.clone().invert().multiply(footQ);
       }
+      for (const side of ['Left', 'Right'] as Side[]) {
+        const shoulder = this.worldPos(this.bones[`${side}Arm`]);
+        const elbow = this.worldPos(this.bones[`${side}ForeArm`]);
+        const wrist = this.worldPos(this.bones[`${side}Hand`]);
+        this.armLengths[side] = { upper: shoulder.distanceTo(elbow), lower: elbow.distanceTo(wrist) };
+      }
+      this.rightFingerBones = [];
+      this.bones.RightHand.traverse((child) => {
+        if (child !== this.bones.RightHand && (child as THREE.Bone).isBone) {
+          this.rightFingerBones.push(child as THREE.Bone);
+        }
+      });
     }
 
     this.root.position.copy(prevPos);
@@ -401,6 +418,27 @@ export class SkaterVisuals {
     this.aimBone(leg, foot, target.clone().sub(knee));
   }
 
+  /** Analytic two-bone IK: shoulder -> elbow -> wrist/hand reaching `target`, elbow bending toward `poleDir`. */
+  private solveArm(side: Side, target: THREE.Vector3, poleDir: THREE.Vector3): void {
+    const arm = this.bones[`${side}Arm`];
+    const foreArm = this.bones[`${side}ForeArm`];
+    const hand = this.bones[`${side}Hand`];
+    const { upper, lower } = this.armLengths[side];
+
+    const shoulder = this.worldPos(arm);
+    const toTarget = target.clone().sub(shoulder);
+    const dist = THREE.MathUtils.clamp(toTarget.length(), 0.05, (upper + lower) * 0.999);
+    const dir = toTarget.normalize();
+    const along = (upper * upper - lower * lower + dist * dist) / (2 * dist);
+    const height = Math.sqrt(Math.max(0, upper * upper - along * along));
+    const pole = poleDir.clone().sub(dir.clone().multiplyScalar(poleDir.dot(dir))).normalize();
+    const elbowTarget = shoulder.clone().addScaledVector(dir, along).addScaledVector(pole, height);
+
+    this.aimBone(arm, foreArm, elbowTarget.clone().sub(shoulder));
+    const elbow = this.worldPos(foreArm);
+    this.aimBone(foreArm, hand, target.clone().sub(elbow));
+  }
+
   /** Pose the whole skeleton for the current riding state. */
   private poseSkeleton(ctrl: SurfskateController, dt: number): void {
     const b = this.bones;
@@ -449,9 +487,11 @@ export class SkaterVisuals {
       hipsLocal.z = THREE.MathUtils.lerp(hipsLocal.z, -0.30, bert);
     }
     if (indy > 0.001) {
-      hipsLocal.x = THREE.MathUtils.lerp(hipsLocal.x, -0.05, indy);
-      hipsLocal.y = THREE.MathUtils.lerp(hipsLocal.y, DECK_TOP + 0.21, indy);
-      hipsLocal.z = THREE.MathUtils.lerp(hipsLocal.z, -0.05, indy);
+      // In a deep tuck for Indy grab: hips shift back over heel rail (+X) and drop low,
+      // so knees compress tightly to chest and the center of mass stays right over the deck.
+      hipsLocal.x = THREE.MathUtils.lerp(hipsLocal.x, 0.10, indy);
+      hipsLocal.y = THREE.MathUtils.lerp(hipsLocal.y, DECK_TOP + 0.14, indy);
+      hipsLocal.z = THREE.MathUtils.lerp(hipsLocal.z, 0.02, indy);
     }
     const hipsWorld = board.localToWorld(hipsLocal.clone());
     b.Hips.position.copy(b.Hips.parent!.worldToLocal(hipsWorld));
@@ -460,53 +500,55 @@ export class SkaterVisuals {
     this.rotateBoneAxis(
       b.Hips,
       boardY,
-      (0.18 + lead * 0.2) * (1 - bert) * (1 - indy) + 0.16 * bert - 0.14 * indy
+      (0.18 + lead * 0.2) * (1 - bert) * (1 - indy) + 0.16 * bert + 0.16 * indy
     );
     this.rotateBoneAxis(
       b.Hips,
       boardZ,
-      (bodyLean + crouch * 0.18 - lay * 0.3) * (1 - bert) * (1 - indy) - 0.22 * bert - 0.32 * indy
+      (bodyLean + crouch * 0.18 - lay * 0.3) * (1 - bert) * (1 - indy) - 0.22 * bert + 0.22 * indy
     );
-    this.rotateBoneAxis(b.Hips, boardX, -0.76 * bert + 0.16 * indy);
+    this.rotateBoneAxis(b.Hips, boardX, -0.76 * bert + 0.12 * indy);
 
     // 3. Spine: forward bend over the toes when crouching, shoulders lead the turn.
     //    In a Bertslide the torso tilts laterally toward the tail (-Z) while keeping the chest open (-X).
-    //    In an Indy grab, the torso crunches forward toward the toe rail so the trailing hand can grip.
-    this.rotateBoneAxis(b.Spine, boardY, 0.12 * bert - 0.12 * indy);
+    //    In an Indy grab, the torso crunches deeply forward (+boardZ) toward the frontside toe rail.
+    this.rotateBoneAxis(b.Spine, boardY, 0.12 * bert + 0.18 * indy);
     this.rotateBoneAxis(
       b.Spine,
       boardZ,
-      (crouch * 0.22 + 0.06 - lay * 0.45) * (1 - bert) * (1 - indy) - 0.12 * bert - 0.34 * indy
+      (crouch * 0.22 + 0.06 - lay * 0.45) * (1 - bert) * (1 - indy) - 0.12 * bert + 0.28 * indy
     );
-    this.rotateBoneAxis(b.Spine, boardX, -0.24 * bert + 0.14 * indy);
-    this.rotateBoneAxis(b.Spine1, boardY, lead * 0.3 * (1 - bert) * (1 - indy) + 0.14 * bert - 0.10 * indy);
+    this.rotateBoneAxis(b.Spine, boardX, -0.24 * bert + 0.16 * indy);
+    this.rotateBoneAxis(b.Spine1, boardY, lead * 0.3 * (1 - bert) * (1 - indy) + 0.14 * bert + 0.14 * indy);
     this.rotateBoneAxis(
       b.Spine1,
       boardZ,
-      (crouch * 0.14 - lay * 0.35) * (1 - bert) * (1 - indy) - 0.08 * bert - 0.26 * indy
+      (crouch * 0.14 - lay * 0.35) * (1 - bert) * (1 - indy) - 0.08 * bert + 0.20 * indy
     );
-    this.rotateBoneAxis(b.Spine1, boardX, -0.20 * bert + 0.12 * indy);
+    this.rotateBoneAxis(b.Spine1, boardX, -0.20 * bert + 0.14 * indy);
     this.rotateBoneAxis(
       b.Spine2,
       boardY,
-      (0.22 + lead * 0.35 + lay * 0.3) * (1 - bert) * (1 - indy) + 0.10 * bert - 0.18 * indy
+      (0.22 + lead * 0.35 + lay * 0.3) * (1 - bert) * (1 - indy) + 0.10 * bert + 0.10 * indy
     );
+    this.rotateBoneAxis(b.Spine2, boardZ, 0.14 * indy);
+    this.rotateBoneAxis(b.Spine2, boardX, 0.08 * indy);
 
     // 4. Head: lift the head and turn to look toward the nose (+Z) / camera (-X)
     const forwardBend = (bodyLean + crouch * 0.54 + 0.06 - lay * 1.1) * (1 - bert) * (1 - indy);
-    this.rotateBoneAxis(b.Neck, boardZ, -forwardBend * 0.45 - 0.18 * bert + 0.24 * indy);
-    this.rotateBoneAxis(b.Neck, boardX, 0.42 * bert + 0.12 * indy);
+    this.rotateBoneAxis(b.Neck, boardZ, -forwardBend * 0.45 - 0.18 * bert + 0.12 * indy);
+    this.rotateBoneAxis(b.Neck, boardX, 0.42 * bert + 0.08 * indy);
     this.rotateBoneAxis(
       b.Neck,
       boardY,
-      (0.28 + lead * 0.18) * (1 - bert) * (1 - indy) + 0.32 * bert + 0.22 * indy
+      (0.28 + lead * 0.18) * (1 - bert) * (1 - indy) + 0.32 * bert + 0.18 * indy
     );
-    this.rotateBoneAxis(b.Head, boardZ, -forwardBend * 0.4 - 0.22 * bert + 0.20 * indy);
-    this.rotateBoneAxis(b.Head, boardX, 0.38 * bert + 0.10 * indy);
+    this.rotateBoneAxis(b.Head, boardZ, -forwardBend * 0.4 - 0.22 * bert + 0.10 * indy);
+    this.rotateBoneAxis(b.Head, boardX, 0.38 * bert + 0.08 * indy);
     this.rotateBoneAxis(
       b.Head,
       boardY,
-      (0.28 + lead * 0.18) * (1 - bert) * (1 - indy) + 0.36 * bert + 0.18 * indy
+      (0.28 + lead * 0.18) * (1 - bert) * (1 - indy) + 0.36 * bert + 0.20 * indy
     );
 
     // 5. Arms:
@@ -518,8 +560,8 @@ export class SkaterVisuals {
     const normLFore = this.boardDir(-0.45, -0.25 + armLift + lay * 0.5, 0.85);
     const bertLArm = this.boardDir(-0.16, 0.90, 0.38);
     const bertLFore = this.boardDir(-0.10, 0.92, 0.36);
-    const indyLArm = this.boardDir(0.38, 0.88, -0.28);
-    const indyLFore = this.boardDir(0.42, 0.82, -0.32);
+    const indyLArm = this.boardDir(0.48, 0.85, -0.15);
+    const indyLFore = this.boardDir(0.55, 0.75, -0.25);
     const targetLArm = normLArm.lerp(bertLArm, bert).lerp(indyLArm, indy);
     const targetLFore = normLFore.lerp(bertLFore, bert).lerp(indyLFore, indy);
     this.aimBone(b.LeftArm, b.LeftForeArm, targetLArm);
@@ -535,12 +577,60 @@ export class SkaterVisuals {
         : this.boardDir(-0.5, -0.55 + armLift, -0.45);
     const bertRArm = this.boardDir(-0.10, -0.99, -0.04);
     const bertRFore = this.boardDir(-0.08, -0.99, 0.04);
-    const indyRArm = this.boardDir(-0.58, -0.76, 0.22);
-    const indyRFore = this.boardDir(-0.64, -0.72, 0.24);
-    const targetRArm = normRArm.lerp(bertRArm, bert).lerp(indyRArm, indy);
-    const targetRFore = normRFore.lerp(bertRFore, bert).lerp(indyRFore, indy);
-    this.aimBone(b.RightArm, b.RightForeArm, targetRArm);
-    this.aimBone(b.RightForeArm, b.RightHand, targetRFore);
+
+    if (indy > 0.001) {
+      // 1. Exact contact target on the frontside (toe-side) rail of the board between the feet:
+      // Front foot is at Z = +0.17, Back foot is at Z = -0.21.
+      // Midpoint between feet is Z = -0.02.
+      // Frontside (toe-side) rail is at X = -0.134 (half-width of deck is 0.136m).
+      // Height is DECK_TOP + 0.018m (resting right on the rail/deck edge).
+      const indyGrabLocal = new THREE.Vector3(-0.134, DECK_TOP + 0.018, -0.020);
+      const indyGrabWorld = deck.localToWorld(indyGrabLocal);
+
+      // Normal unconstrained hand target from directional aiming
+      const targetRArm = normRArm.lerp(bertRArm, bert);
+      const targetRFore = normRFore.lerp(bertRFore, bert);
+      const shoulderWorld = this.worldPos(b.RightArm);
+      const { upper, lower } = this.armLengths.Right;
+      const restHandWorld = shoulderWorld.clone()
+        .addScaledVector(targetRArm, upper)
+        .addScaledVector(targetRFore, lower);
+
+      // Smoothly blend from normal hand target to the exact frontside rail grab point
+      const targetHand = restHandWorld.lerp(indyGrabWorld, indy);
+
+      // Elbow pole: elbow bends outward & slightly rearward away from torso and knees
+      const indyElbowPole = this.boardDir(-0.48, 0.28, -0.78);
+      const normElbowPole = this.boardDir(0.6, -0.2, -0.6);
+      const targetElbowPole = normElbowPole.lerp(indyElbowPole, indy);
+
+      // Two-bone IK solving shoulder and elbow so RightHand touches the frontside rail
+      this.solveArm('Right', targetHand, targetElbowPole);
+
+      // Orient RightHand to grip the rail cleanly with fingers curling over the frontside edge:
+      // Local +Y is finger direction; local +X is thumb (towards nose +Z); local +Z is palm normal.
+      if (indy > 0.02) {
+        const railTangent = this.boardDir(0, 0, 1); // thumb toward nose (+Z)
+        const fingerDir = this.boardDir(-0.45, -0.89, 0); // fingers curl down and around toe rail
+        const palmNormal = new THREE.Vector3().crossVectors(railTangent, fingerDir).normalize();
+        const gripRot = new THREE.Matrix4().makeBasis(railTangent, fingerDir, palmNormal);
+        const gripQuat = new THREE.Quaternion().setFromRotationMatrix(gripRot);
+        const curHandQuat = b.RightHand.getWorldQuaternion(new THREE.Quaternion());
+        this.setBoneWorldQuat(b.RightHand, curHandQuat.slerp(gripQuat, indy));
+
+        if (this.rightFingerBones.length > 0 && indy > 0.05) {
+          const curl = 0.40 * indy;
+          for (const finger of this.rightFingerBones) {
+            finger.rotateX(curl);
+          }
+        }
+      }
+    } else {
+      const targetRArm = normRArm.lerp(bertRArm, bert);
+      const targetRFore = normRFore.lerp(bertRFore, bert);
+      this.aimBone(b.RightArm, b.RightForeArm, targetRArm);
+      this.aimBone(b.RightForeArm, b.RightHand, targetRFore);
+    }
 
     // 6. Legs: two-bone IK onto the (rolling) deck
     const deckQ = deck.getWorldQuaternion(new THREE.Quaternion());
@@ -553,8 +643,8 @@ export class SkaterVisuals {
           : this.boardDir(-0.68, 0.16, -0.72);
       const indyPole =
         side === 'Left'
-          ? this.boardDir(-0.85, 0.48, 0.32)
-          : this.boardDir(-0.90, 0.38, -0.22);
+          ? this.boardDir(-0.75, 0.35, 0.55)
+          : this.boardDir(-0.80, 0.30, -0.52);
       const targetPole = normPole.lerp(bertPole, bert).lerp(indyPole, indy);
       this.solveLeg(side, target, targetPole);
       // Feet stay planted on the griptape
