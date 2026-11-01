@@ -36,6 +36,8 @@ export class PretzelCollectibles {
   private saltGeometry: THREE.BoxGeometry;
   private saltMaterial: THREE.MeshStandardMaterial;
 
+  public static readonly PRETZEL_SCALE = 0.42;
+
   public collectedCount = 0;
   public readonly totalCount = 5;
 
@@ -107,25 +109,25 @@ export class PretzelCollectibles {
     // 5 High-Altitude Signature Spots across Skatepark "Im Gefilde"
     // Placed high up on transition walls, domes and coping so players must build speed and pump to reach them
     const configs: PretzelConfig[] = [
-      // 1. High NW Over-Vert Cradle Wall Coping (requires maximum speed & wall climb/air)
-      { id: 1, name: 'Hohe Cradle-Wand', position: new THREE.Vector3(-6.2, 2.95, -14.6) },
-      // 2. East Sunset Palm Mural Quarterpipe Wall (requires speed across the flow basin)
-      { id: 2, name: 'Sunset Palm Mural Wall', position: new THREE.Vector3(23.2, 2.75, 4.6) },
+      // 1. High NW Over-Vert Cradle Wall Coping (requires maximum speed & wall climb/air to the high coping)
+      { id: 1, name: 'Hohe Cradle-Wand', position: new THREE.Vector3(-6.4, 3.15, -15.4) },
+      // 2. East Sunset Palm Mural Quarterpipe Wall (requires speed across the flow basin to hit the wall lip)
+      { id: 2, name: 'Sunset Palm Mural Wall', position: new THREE.Vector3(23.5, 3.45, 5.0) },
       // 3. Central Volcano Dome High Apex (requires fast launch or pop over the crest)
-      { id: 3, name: 'Vulkan-Dome', position: new THREE.Vector3(7.6, 2.25, -0.8) },
+      { id: 3, name: 'Vulkan-Dome', position: new THREE.Vector3(6.8, 2.30, -1.2) },
       // 4. NW Upper Spine Roller Crest (requires high-speed pump or launch over the spine)
-      { id: 4, name: 'Spine-Roller', position: new THREE.Vector3(-5.5, 2.20, -7.0) },
-      // 5. South-East Deep Bowl High Wall (requires deep bowl carving and pumping to coping)
-      { id: 5, name: 'SE Deep Bowl', position: new THREE.Vector3(11.6, 2.35, 19.5) },
+      { id: 4, name: 'Spine-Roller', position: new THREE.Vector3(-4.0, 2.25, -6.0) },
+      // 5. South-East Deep Bowl High Wall Coping (requires deep bowl carving and pumping to coping)
+      { id: 5, name: 'SE Deep Bowl', position: new THREE.Vector3(12.8, 3.10, 21.8) },
     ];
 
     for (const cfg of configs) {
       const container = new THREE.Group();
       container.position.copy(cfg.position);
 
-      // 1. Pretzel Mesh
+      // 1. Pretzel Mesh (compact, authentic Bavarian size)
       const mesh = new THREE.Mesh(this.pretzelGeometry, this.pretzelMaterial);
-      mesh.scale.set(0.68, 0.68, 0.68);
+      mesh.scale.set(PretzelCollectibles.PRETZEL_SCALE, PretzelCollectibles.PRETZEL_SCALE, PretzelCollectibles.PRETZEL_SCALE);
       mesh.castShadow = true;
       container.add(mesh);
 
@@ -150,8 +152,8 @@ export class PretzelCollectibles {
       }
       mesh.add(saltGroup);
 
-      // 2. Subtle Glowing Pickup Halo / Ring
-      const ringGeo = new THREE.TorusGeometry(0.55, 0.015, 8, 36);
+      // 2. Subtle Glowing Pickup Halo / Ring sized to the pretzel
+      const ringGeo = new THREE.TorusGeometry(0.38, 0.012, 8, 36);
       const ringMat = new THREE.MeshBasicMaterial({
         color: 0xf59e0b,
         transparent: true,
@@ -163,8 +165,8 @@ export class PretzelCollectibles {
       container.add(glowRing);
 
       // 3. Warm Golden Point Light casting glow onto the concrete bowl at night
-      const light = new THREE.PointLight(0xf59e0b, 1.4, 4.2);
-      light.position.set(0, 0.1, 0);
+      const light = new THREE.PointLight(0xf59e0b, 1.2, 3.2);
+      light.position.set(0, 0.08, 0);
       container.add(light);
 
       this.group.add(container);
@@ -200,11 +202,11 @@ export class PretzelCollectibles {
           item.container.visible = false;
         } else {
           // Explode / expand and fade out
-          const s = 0.68 * (1.0 + progress * 1.4);
+          const s = PretzelCollectibles.PRETZEL_SCALE * (1.0 + progress * 1.4);
           item.mesh.scale.set(s, s, s);
           item.mesh.rotation.y += dt * 12.0;
           item.mesh.position.y += dt * 1.5;
-          item.light.intensity = Math.max(0, 1.4 * (1.0 - progress));
+          item.light.intensity = Math.max(0, 1.2 * (1.0 - progress));
           (item.glowRing.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.65 * (1.0 - progress));
         }
         continue;
@@ -216,13 +218,14 @@ export class PretzelCollectibles {
       item.glowRing.rotation.z += dt * 1.0;
       item.glowRing.scale.setScalar(1.0 + Math.sin(time * 3.5 + item.id) * 0.08);
 
-      // Collision check with skater: requires skater body/board to reach up towards pretzel altitude
+      // Collision check with skater: tighter skill-based radius requiring high pump speed / air and accuracy
       const dx = skaterPos.x - item.container.position.x;
       const dz = skaterPos.z - item.container.position.z;
-      const dy = item.container.position.y - skaterPos.y; // skater body spans y..y+1.8m
+      const dy = item.container.position.y - skaterPos.y;
       const distXZ = Math.hypot(dx, dz);
 
-      if (distXZ < 1.55 && dy >= -0.45 && dy <= 1.50) {
+      // Skateboard must reach within 0.85m of pretzel altitude (no ground roll skimming) and within 0.95m horizontally
+      if (distXZ < 0.95 && dy >= -0.25 && dy <= 0.85) {
         this.collectItem(item);
       }
     }
@@ -316,9 +319,13 @@ export class PretzelCollectibles {
       item.popping = false;
       item.popTimer = 0;
       item.container.visible = true;
-      item.mesh.scale.set(0.68, 0.68, 0.68);
+      item.mesh.scale.set(
+        PretzelCollectibles.PRETZEL_SCALE,
+        PretzelCollectibles.PRETZEL_SCALE,
+        PretzelCollectibles.PRETZEL_SCALE
+      );
       item.mesh.position.set(0, 0, 0);
-      item.light.intensity = 1.4;
+      item.light.intensity = 1.2;
       (item.glowRing.material as THREE.MeshBasicMaterial).opacity = 0.65;
     }
     // Clear particles
