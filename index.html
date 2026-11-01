@@ -700,19 +700,19 @@
       .landing-select-board {
         position: absolute;
         z-index: 4;
-        left: clamp(22px, 8.6%, 140px);
-        top: 26.5%;
-        width: clamp(248px, 20.5vw, 316px);
+        left: clamp(28px, 6.5vw, 130px);
+        top: 20%;
+        width: clamp(330px, 25.5vw, 420px);
         background:
-          radial-gradient(circle at 15% 12%, rgba(255, 255, 255, 0.96), rgba(235, 232, 224, 0.94) 65%, rgba(216, 212, 202, 0.93) 100%);
+          radial-gradient(circle at 15% 12%, rgba(255, 255, 255, 0.98), rgba(240, 237, 230, 0.96) 65%, rgba(222, 218, 208, 0.95) 100%);
         color: #121212;
-        border-radius: 5px;
-        padding: 14px 18px 16px;
+        border-radius: 8px;
+        padding: 20px 24px 22px;
         box-shadow:
-          0 20px 48px rgba(0, 0, 0, 0.78),
-          0 3px 10px rgba(0, 0, 0, 0.55),
-          inset 0 0 0 2px rgba(255, 255, 255, 0.65),
-          inset 0 0 18px rgba(90, 75, 55, 0.18);
+          0 24px 60px rgba(0, 0, 0, 0.85),
+          0 4px 14px rgba(0, 0, 0, 0.6),
+          inset 0 0 0 2px rgba(255, 255, 255, 0.75),
+          inset 0 0 22px rgba(90, 75, 55, 0.16);
         border: 1px solid rgba(40, 35, 28, 0.45);
       }
       .sel-section {
@@ -726,7 +726,7 @@
       }
       .sel-heading {
         font-family: var(--font-hud);
-        font-size: clamp(19px, 1.65vw, 25px);
+        font-size: clamp(21px, 1.7vw, 26px);
         font-weight: 800;
         letter-spacing: 0.03em;
         line-height: 1.05;
@@ -735,31 +735,32 @@
       }
       .sel-subtitle {
         font-family: var(--font-hud);
-        font-size: clamp(15px, 1.25vw, 19px);
+        font-size: clamp(16px, 1.3vw, 20px);
         font-weight: 800;
         letter-spacing: 0.04em;
         text-transform: uppercase;
         color: #1b1b1b;
         text-align: center;
-        margin-top: 1px;
+        margin-top: 2px;
+        margin-bottom: 2px;
       }
       .sel-player-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 8px;
-        margin-top: 2px;
+        margin-top: 3px;
       }
       .sel-picker {
         display: flex;
         align-items: center;
         justify-content: space-between;
         flex: 1;
-        gap: 6px;
+        gap: 8px;
       }
       .sel-player-name {
         font-family: var(--font-hud);
-        font-size: clamp(24px, 2.05vw, 31px);
+        font-size: clamp(28px, 2.3vw, 36px);
         font-weight: 800;
         letter-spacing: 0.04em;
         text-transform: uppercase;
@@ -772,23 +773,23 @@
         flex-direction: column;
         align-items: flex-start;
         font-family: var(--font-hud);
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 800;
-        line-height: 1.18;
+        line-height: 1.25;
         letter-spacing: 0.05em;
         color: #1e1e1e;
-        padding-left: 6px;
-        border-left: 1.5px solid rgba(0, 0, 0, 0.16);
+        padding-left: 9px;
+        border-left: 1.5px solid rgba(0, 0, 0, 0.18);
       }
       .sel-arrow {
         background: transparent;
         border: none;
         color: #111111;
         font-family: var(--font-hud);
-        font-size: 22px;
+        font-size: 26px;
         font-weight: 900;
         line-height: 1;
-        padding: 4px 7px;
+        padding: 6px 11px;
         cursor: pointer;
         border-radius: 4px;
         transition: background 0.14s ease, color 0.14s ease, transform 0.12s ease;
@@ -803,18 +804,42 @@
       }
       .sel-divider {
         border: none;
-        height: 1.5px;
+        height: 2px;
         background: linear-gradient(90deg, rgba(0,0,0,0.08), rgba(0,0,0,0.32) 50%, rgba(0,0,0,0.08));
-        margin: 10px 0 9px;
+        margin: 12px 0 11px;
       }
-      .park-thumb-wrap {
+      .slot-display-wrap {
         flex: 1;
-        height: 44px;
-        border-radius: 3px;
+        position: relative;
+        border-radius: 6px;
         overflow: hidden;
-        border: 1.5px solid rgba(0, 0, 0, 0.45);
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-        background: #1c1b18;
+        border: 2px solid rgba(0, 0, 0, 0.45);
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.32);
+        background: #181715;
+      }
+      .park-slot-wrap {
+        height: clamp(86px, 7vw, 108px);
+      }
+      .board-slot-wrap {
+        height: clamp(66px, 5.2vw, 82px);
+      }
+      .slot-view {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        pointer-events: none;
+        transform: scale(0.96);
+        transition: opacity 0.26s cubic-bezier(0.16, 1, 0.3, 1), transform 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .slot-view.active {
+        opacity: 1;
+        pointer-events: auto;
+        transform: scale(1);
       }
       .park-thumb {
         width: 100%;
@@ -823,77 +848,91 @@
         display: block;
       }
       .board-icon-wrap {
-        flex: 1;
+        width: 100%;
+        height: 100%;
         display: flex;
         align-items: center;
         justify-content: center;
-        height: 36px;
       }
       .board-icon-svg {
-        width: 126px;
-        height: 32px;
-        filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.25));
+        width: 154px;
+        height: 38px;
+        filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
       }
 
-      /* Instagram Community Note Toast */
-      #landing-ig-note {
-        position: absolute;
-        z-index: 6;
-        left: clamp(22px, 8.6%, 140px);
-        top: calc(26.5% + 328px);
-        width: clamp(268px, 24vw, 370px);
-        background: rgba(18, 17, 15, 0.95);
-        border-left: 5px solid var(--orange);
-        border-top: 1px solid rgba(255, 255, 255, 0.18);
-        border-right: 1px solid rgba(255, 255, 255, 0.18);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.18);
-        border-radius: 4px;
-        padding: 12px 32px 12px 14px;
-        color: var(--white);
+      /* Redesigned In-Box Community Notice Card */
+      .slot-notice-view {
+        background: linear-gradient(135deg, #151412 0%, #1e1d1a 60%, #26211c 100%);
+        border: 1.5px solid rgba(242, 116, 31, 0.7);
+        box-shadow: inset 0 0 18px rgba(242, 116, 31, 0.18);
+        padding: 6px 26px 6px 12px;
+        flex-direction: column;
+        justify-content: center;
+        text-align: center;
+      }
+      .notice-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
         font-family: var(--font-hud);
-        font-size: 16px;
-        font-weight: 700;
-        letter-spacing: 0.03em;
-        line-height: 1.3;
-        box-shadow: 0 16px 38px rgba(0, 0, 0, 0.82);
-        opacity: 0;
-        transform: translateY(-8px) scale(0.97);
-        pointer-events: none;
-        transition: opacity 0.2s ease, transform 0.2s ease;
-      }
-      #landing-ig-note.visible {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-        pointer-events: auto;
-      }
-      #landing-ig-note a {
+        font-size: 14.5px;
+        font-weight: 900;
+        letter-spacing: 0.05em;
         color: var(--yellow);
+        text-transform: uppercase;
+        margin-bottom: 2px;
+      }
+      .notice-ig-icon {
+        width: 14px;
+        height: 14px;
+        fill: var(--orange);
+        flex-shrink: 0;
+      }
+      .notice-text {
+        font-family: var(--font-hud);
+        font-size: clamp(13px, 1.1vw, 15px);
+        font-weight: 700;
+        line-height: 1.22;
+        letter-spacing: 0.02em;
+        color: #f5f4ee;
+      }
+      .notice-text a {
+        color: var(--orange);
         text-decoration: underline;
         font-weight: 800;
-        word-break: break-all;
+        transition: color 0.15s ease;
       }
-      #landing-ig-note a:hover {
-        color: var(--orange);
+      .notice-text a:hover {
+        color: var(--yellow);
       }
-      #landing-ig-note strong {
-        color: var(--orange);
+      .notice-text strong {
+        color: var(--yellow);
         text-transform: uppercase;
       }
-      #landing-ig-note-close {
+      .notice-dismiss {
         position: absolute;
-        top: 6px;
-        right: 8px;
+        top: 3px;
+        right: 5px;
         background: transparent;
         border: none;
-        color: var(--muted);
-        font-size: 16px;
+        color: #8c8982;
+        font-size: 17px;
         font-weight: 900;
         cursor: pointer;
         line-height: 1;
         padding: 2px 4px;
+        border-radius: 3px;
+        transition: color 0.15s ease, background 0.15s ease;
       }
-      #landing-ig-note-close:hover {
-        color: var(--white);
+      .notice-dismiss:hover {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.15);
+      }
+
+      /* Fallback toast hidden */
+      #landing-ig-note {
+        display: none;
       }
 
       /* Press Enter to Start button */
@@ -931,9 +970,9 @@
       }
       body.reel-mode .landing-select-board {
         left: 16px;
-        top: 92px;
-        width: 224px;
-        padding: 10px 12px;
+        top: 86px;
+        width: clamp(280px, 86vw, 360px);
+        padding: 16px 18px;
       }
       body.reel-mode #landing-ig-note {
         left: 16px;
@@ -987,13 +1026,25 @@
           <hr class="sel-divider" />
 
           <!-- 2. Select Skatepark -->
-          <div class="sel-section">
+          <div class="sel-section" id="sel-section-skatepark">
             <div class="sel-heading">SELECT SKATEPARK</div>
             <div class="sel-subtitle">IM GEFILDE - MUNICH</div>
             <div class="sel-picker">
               <button class="sel-arrow" data-kind="skatepark" data-dir="-1" aria-label="Previous skatepark">&#10094;</button>
-              <div class="park-thumb-wrap">
-                <img src="/textures/im_gefilde_thumb.png" alt="Im Gefilde - Munich" class="park-thumb" />
+              <div class="slot-display-wrap park-slot-wrap" id="park-slot-wrap">
+                <div class="slot-view slot-thumb-view active" id="park-thumb-view">
+                  <img src="/textures/im_gefilde_thumb.png" alt="Im Gefilde - Munich" class="park-thumb" />
+                </div>
+                <div class="slot-view slot-notice-view" id="park-notice-view">
+                  <div class="notice-badge">
+                    <svg class="notice-ig-icon" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689-.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                    <span>MORE TO COME!</span>
+                  </div>
+                  <div class="notice-text">
+                    Tell us on <a href="https://www.instagram.com/surfskate_munich/" target="_blank" rel="noopener noreferrer">@surfskate_munich</a> which <strong>skatepark</strong> you want to see next!
+                  </div>
+                  <button class="notice-dismiss" id="park-notice-dismiss" title="Show photo">&times;</button>
+                </div>
               </div>
               <button class="sel-arrow" data-kind="skatepark" data-dir="1" aria-label="Next skatepark">&#10095;</button>
             </div>
@@ -1002,26 +1053,40 @@
           <hr class="sel-divider" />
 
           <!-- 3. Select Board -->
-          <div class="sel-section">
+          <div class="sel-section" id="sel-section-board">
             <div class="sel-heading">SELECT BOARD</div>
             <div class="sel-subtitle">THE SPIRAL - 32&quot;</div>
             <div class="sel-picker">
               <button class="sel-arrow" data-kind="board" data-dir="-1" aria-label="Previous board">&#10094;</button>
-              <div class="board-icon-wrap">
-                <svg class="board-icon-svg" viewBox="0 0 180 42" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <!-- Surfskate deck side silhouette with kicktail & nose rocker -->
-                  <path d="M12 11 C22 17, 36 18, 92 18 C144 18, 156 17, 168 12 C170 11, 172 13, 170 15 C157 21, 144 22, 92 22 C35 22, 21 21, 9 14 C7 13, 9 10, 12 11 Z" fill="#1d1d1b"/>
-                  <!-- Front surf-adapter truck -->
-                  <polygon points="40,21 54,21 50,29 38,29" fill="#3b3b38"/>
-                  <!-- Rear truck -->
-                  <polygon points="126,21 140,21 138,29 128,29" fill="#3b3b38"/>
-                  <!-- Front wheel -->
-                  <circle cx="44" cy="31" r="7.5" fill="#181818"/>
-                  <circle cx="44" cy="31" r="3.2" fill="#d8d5cc"/>
-                  <!-- Rear wheel -->
-                  <circle cx="133" cy="31" r="7.5" fill="#181818"/>
-                  <circle cx="133" cy="31" r="3.2" fill="#d8d5cc"/>
-                </svg>
+              <div class="slot-display-wrap board-slot-wrap" id="board-slot-wrap">
+                <div class="slot-view slot-thumb-view active" id="board-icon-view">
+                  <div class="board-icon-wrap">
+                    <svg class="board-icon-svg" viewBox="0 0 180 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <!-- Surfskate deck side silhouette with kicktail & nose rocker -->
+                      <path d="M12 11 C22 17, 36 18, 92 18 C144 18, 156 17, 168 12 C170 11, 172 13, 170 15 C157 21, 144 22, 92 22 C35 22, 21 21, 9 14 C7 13, 9 10, 12 11 Z" fill="#1d1d1b"/>
+                      <!-- Front surf-adapter truck -->
+                      <polygon points="40,21 54,21 50,29 38,29" fill="#3b3b38"/>
+                      <!-- Rear truck -->
+                      <polygon points="126,21 140,21 138,29 128,29" fill="#3b3b38"/>
+                      <!-- Front wheel -->
+                      <circle cx="44" cy="31" r="7.5" fill="#181818"/>
+                      <circle cx="44" cy="31" r="3.2" fill="#d8d5cc"/>
+                      <!-- Rear wheel -->
+                      <circle cx="133" cy="31" r="7.5" fill="#181818"/>
+                      <circle cx="133" cy="31" r="3.2" fill="#d8d5cc"/>
+                    </svg>
+                  </div>
+                </div>
+                <div class="slot-view slot-notice-view" id="board-notice-view">
+                  <div class="notice-badge">
+                    <svg class="notice-ig-icon" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689-.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                    <span>MORE TO COME!</span>
+                  </div>
+                  <div class="notice-text">
+                    Tell us on <a href="https://www.instagram.com/surfskate_munich/" target="_blank" rel="noopener noreferrer">@surfskate_munich</a> which <strong>board</strong> you want to see next!
+                  </div>
+                  <button class="notice-dismiss" id="board-notice-dismiss" title="Show board icon">&times;</button>
+                </div>
               </div>
               <button class="sel-arrow" data-kind="board" data-dir="1" aria-label="Next board">&#10095;</button>
             </div>

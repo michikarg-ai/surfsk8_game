@@ -36,6 +36,14 @@ export class LandingPage {
   private noteTimeout: number | null = null;
   private currentSkaterIndex = 0;
 
+  // In-slot notice views for skatepark & board selection
+  private parkThumbView: HTMLElement | null = null;
+  private parkNoticeView: HTMLElement | null = null;
+  private boardIconView: HTMLElement | null = null;
+  private boardNoticeView: HTMLElement | null = null;
+  private parkNoticeTimeout: number | null = null;
+  private boardNoticeTimeout: number | null = null;
+
   constructor(
     parkSurface: ParkSurface,
     private onStartGame: () => void,
@@ -158,36 +166,104 @@ export class LandingPage {
       });
     }
 
+    this.parkThumbView = document.getElementById('park-thumb-view');
+    this.parkNoticeView = document.getElementById('park-notice-view');
+    this.boardIconView = document.getElementById('board-icon-view');
+    this.boardNoticeView = document.getElementById('board-notice-view');
+
+    const parkDismiss = document.getElementById('park-notice-dismiss');
+    if (parkDismiss) {
+      parkDismiss.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.revertParkView();
+      });
+    }
+
+    const boardDismiss = document.getElementById('board-notice-dismiss');
+    if (boardDismiss) {
+      boardDismiss.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.revertBoardView();
+      });
+    }
+
+    if (this.parkThumbView) {
+      this.parkThumbView.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.showInstagramPrompt('skatepark');
+      });
+    }
+
+    if (this.boardIconView) {
+      this.boardIconView.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.showInstagramPrompt('board');
+      });
+    }
+
     this.startBtnEl.addEventListener('click', () => {
       this.startGame();
     });
   }
 
   public showInstagramPrompt(kind: SelectorCategory, triggerBtn?: HTMLElement): void {
-    const label =
-      kind === 'skater' ? 'skater' : kind === 'skatepark' ? 'skatepark' : 'board';
+    if (kind === 'skatepark') {
+      if (this.parkThumbView && this.parkNoticeView) {
+        this.parkThumbView.classList.remove('active');
+        this.parkNoticeView.classList.add('active');
 
-    this.noteTextEl.innerHTML = `More to come, check <a href="${INSTAGRAM_URL}" target="_blank" rel="noopener noreferrer">${INSTAGRAM_URL}</a> and tell us which <strong>${label}</strong> you want to see next!`;
-    this.noteEl.classList.remove('visible');
-    // Force reflow so repeat clicks re-trigger the pop animation
-    void this.noteEl.offsetWidth;
-    this.noteEl.classList.add('visible');
+        if (this.parkNoticeTimeout !== null) {
+          window.clearTimeout(this.parkNoticeTimeout);
+        }
+        this.parkNoticeTimeout = window.setTimeout(() => {
+          this.revertParkView();
+        }, 8500);
+      }
+    } else if (kind === 'board') {
+      if (this.boardIconView && this.boardNoticeView) {
+        this.boardIconView.classList.remove('active');
+        this.boardNoticeView.classList.add('active');
+
+        if (this.boardNoticeTimeout !== null) {
+          window.clearTimeout(this.boardNoticeTimeout);
+        }
+        this.boardNoticeTimeout = window.setTimeout(() => {
+          this.revertBoardView();
+        }, 8500);
+      }
+    }
 
     if (triggerBtn) {
-      const row = triggerBtn.closest('.sel-section');
+      const row = triggerBtn.closest<HTMLElement>('.sel-section');
       if (row) {
-        row.classList.remove(' bump');
+        row.classList.remove('bump');
+        void row.offsetWidth;
         row.classList.add('bump');
         setTimeout(() => row.classList.remove('bump'), 320);
       }
     }
+  }
 
-    if (this.noteTimeout !== null) {
-      window.clearTimeout(this.noteTimeout);
+  public revertParkView(): void {
+    if (this.parkNoticeTimeout !== null) {
+      window.clearTimeout(this.parkNoticeTimeout);
+      this.parkNoticeTimeout = null;
     }
-    this.noteTimeout = window.setTimeout(() => {
-      this.noteEl.classList.remove('visible');
-    }, 9000);
+    if (this.parkThumbView && this.parkNoticeView) {
+      this.parkNoticeView.classList.remove('active');
+      this.parkThumbView.classList.add('active');
+    }
+  }
+
+  public revertBoardView(): void {
+    if (this.boardNoticeTimeout !== null) {
+      window.clearTimeout(this.boardNoticeTimeout);
+      this.boardNoticeTimeout = null;
+    }
+    if (this.boardIconView && this.boardNoticeView) {
+      this.boardNoticeView.classList.remove('active');
+      this.boardIconView.classList.add('active');
+    }
   }
 
   public startGame(): void {
