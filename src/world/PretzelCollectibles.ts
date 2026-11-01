@@ -112,7 +112,7 @@ export class PretzelCollectibles {
       // 1. High NW Over-Vert Cradle Wall Coping (requires maximum speed & wall climb/air to the high coping)
       { id: 1, name: 'Hohe Cradle-Wand', position: new THREE.Vector3(-6.4, 3.15, -15.4) },
       // 2. East Sunset Palm Mural Quarterpipe Wall (requires speed across the flow basin to hit the wall lip)
-      { id: 2, name: 'Sunset Palm Mural Wall', position: new THREE.Vector3(23.5, 3.45, 5.0) },
+      { id: 2, name: 'Sunset Palm Mural Wall', position: new THREE.Vector3(23.2, 1.65, 2.7) },
       // 3. Central Volcano Dome High Apex (requires fast launch or pop over the crest)
       { id: 3, name: 'Vulkan-Dome', position: new THREE.Vector3(6.8, 2.30, -1.2) },
       // 4. NW Upper Spine Roller Crest (requires high-speed pump or launch over the spine)
@@ -224,8 +224,8 @@ export class PretzelCollectibles {
       const dy = item.container.position.y - skaterPos.y;
       const distXZ = Math.hypot(dx, dz);
 
-      // Skateboard must reach within 0.85m of pretzel altitude (no ground roll skimming) and within 0.95m horizontally
-      if (distXZ < 0.95 && dy >= -0.25 && dy <= 0.85) {
+      // Skateboard must reach within pretzel altitude (no ground roll skimming) and within range horizontally
+      if (distXZ < 1.15 && dy >= -0.45 && dy <= 1.25) {
         this.collectItem(item);
       }
     }
