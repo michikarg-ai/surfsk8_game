@@ -15,22 +15,38 @@ export class SurfAudio {
   private isMuted = false;
   private isPaused = true;
 
-  // High-energy background soundtrack
+  // High-energy background soundtrack playlist
+  private playlist: string[] = [
+    'audio/surfskate_anthem_1.mp3',
+    'audio/surfskate_anthem_2.mp3',
+  ];
+  private currentTrackIndex = 0;
   private music: HTMLAudioElement | null = null;
   private isMusicMuted = false;
   private musicVolume = 0.38;
   private duckTimer: number | null = null;
 
+  public onTrackChange?: (trackIndex: number) => void;
+
+  private getTrackUrl(index: number): string {
+    const meta = import.meta as unknown as { env?: { BASE_URL?: string } };
+    const base = meta.env?.BASE_URL || '/';
+    const prefix = base.endsWith('/') ? base : base + '/';
+    const safeIndex = ((index % this.playlist.length) + this.playlist.length) % this.playlist.length;
+    return `${prefix}${this.playlist[safeIndex]}`;
+  }
+
   public initOnFirstGesture(): void {
     if (!this.music) {
       try {
-        const meta = import.meta as unknown as { env?: { BASE_URL?: string } };
-        const base = meta.env?.BASE_URL || '/';
-        const prefix = base.endsWith('/') ? base : base + '/';
-        this.music = new Audio(`${prefix}audio/surfskate_anthem.mp3`);
-        this.music.loop = true;
+        this.music = new Audio(this.getTrackUrl(this.currentTrackIndex));
+        this.music.loop = false; // Alternating playlist: play next track on ended
         this.music.volume = this.musicVolume;
         this.music.preload = 'auto';
+
+        this.music.addEventListener('ended', () => {
+          this.playNextTrack();
+        });
       } catch {
         // Audio element not supported
       }
@@ -444,6 +460,26 @@ export class SurfAudio {
       }
     }
     return !this.isMusicMuted;
+  }
+
+  public playNextTrack(): void {
+    this.currentTrackIndex = (this.currentTrackIndex + 1) % this.playlist.length;
+    if (this.music) {
+      this.music.src = this.getTrackUrl(this.currentTrackIndex);
+      this.music.currentTime = 0;
+      if (!this.isPaused && !this.isMusicMuted && !this.isMuted) {
+        this.music.play().catch(() => {});
+      }
+    }
+    this.onTrackChange?.(this.currentTrackIndex);
+  }
+
+  public get trackInfo(): { current: number; total: number; currentSrc: string } {
+    return {
+      current: this.currentTrackIndex + 1,
+      total: this.playlist.length,
+      currentSrc: this.getTrackUrl(this.currentTrackIndex),
+    };
   }
 
   public get isMusicActive(): boolean {

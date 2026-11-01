@@ -322,7 +322,8 @@ export class SurfHUD {
     cameraStyle: CameraStyle,
     truckPreset: TruckFeelPreset,
     autoFlow: boolean,
-    musicActive = true
+    musicActive = true,
+    trackLabel = '1/2'
   ): void {
     this.btnAspectEl.textContent =
       aspect === '9:16' ? '📱 9:16 IG Reel Mode [R]' : '🖥️ 16:9 Desktop [R]';
@@ -348,7 +349,9 @@ export class SurfHUD {
     this.btnAutoFlowEl.classList.toggle('active-auto', autoFlow);
 
     if (this.btnMusicEl) {
-      this.btnMusicEl.textContent = musicActive ? '🎵 Music: ON [M]' : '🔇 Music: OFF [M]';
+      this.btnMusicEl.textContent = musicActive
+        ? `🎵 Track ${trackLabel} [M] [N]`
+        : '🔇 Music: OFF [M]';
       this.btnMusicEl.classList.toggle('active-auto', musicActive);
     }
   }

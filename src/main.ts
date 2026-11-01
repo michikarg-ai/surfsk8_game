@@ -85,6 +85,10 @@ class SurfskateMunichGame {
       }
     );
 
+    this.audio.onTrackChange = () => {
+      this.syncHUDButtons();
+    };
+
     this.bindEvents();
     this.handleResize();
     this.syncHUDButtons();
@@ -170,6 +174,8 @@ class SurfskateMunichGame {
         this.toggleAutoFlow();
       } else if (code === 'KeyM') {
         this.toggleMusic();
+      } else if (code === 'KeyN') {
+        this.nextTrack();
       } else if (code === 'Backspace' || code === 'KeyX') {
         this.resetSession();
       }
@@ -212,6 +218,11 @@ class SurfskateMunichGame {
     this.syncHUDButtons();
   }
 
+  public nextTrack(): void {
+    this.audio.playNextTrack();
+    this.syncHUDButtons();
+  }
+
   public pauseGameAndOpenLanding(): void {
     if (this.landingPage.isVisible) return;
     this.keys.clear();
@@ -226,13 +237,15 @@ class SurfskateMunichGame {
   }
 
   private syncHUDButtons(): void {
+    const { current, total } = this.audio.trackInfo;
     this.hud.updateButtons(
       this.surfCamera.aspectMode,
       this.worldScene.mode,
       this.surfCamera.cameraStyle,
       this.controller.truckPreset,
       this.autoFlowEnabled,
-      this.audio.isMusicActive
+      this.audio.isMusicActive,
+      `${current}/${total}`
     );
   }
 
