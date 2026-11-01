@@ -2,7 +2,7 @@
 
 A realistic 3D WebGL surfskate simulator set in the real-world **Skatepark "Im Gefilde"** in Munich/Neubiberg, Germany. Built with **Three.js**, **TypeScript**, and **Vite**.
 
-![Surfskate Munich](reference_images/skater_in_skatepark.png)
+![Surfskate Munich In-Game](reference_images/ingame_preview.png)
 
 ---
 
