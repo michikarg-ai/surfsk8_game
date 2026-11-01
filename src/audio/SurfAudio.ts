@@ -297,7 +297,10 @@ export class SurfAudio {
    *  4. a long airy shimmer tail through a feedback delay (cheap reverb).
    * Each trick gets its own pitch/length/pan character.
    */
-  public playTrickSwoosh(trick: 'SNAP' | 'LAYBACK' | 'BERTSLIDE' | 'REVERSE360', perfect = false): void {
+  public playTrickSwoosh(
+    trick: 'SNAP' | 'LAYBACK' | 'BERTSLIDE' | 'REVERSE360' | 'INDYGRAB',
+    perfect = false
+  ): void {
     this.duckMusic(1.2);
     if (!this.ctx || !this.whiteNoise || this.isMuted || this.isPaused || !this.masterGain) return;
     const ctx = this.ctx;
@@ -309,6 +312,7 @@ export class SurfAudio {
       LAYBACK: { pre: 0.28, main: 1.05, top: 1900, low: 300, pan: -1, boom: 55 },
       BERTSLIDE: { pre: 0.22, main: 0.95, top: 3200, low: 520, pan: 1, boom: 60 },
       REVERSE360: { pre: 0.3, main: 1.2, top: 2800, low: 350, pan: -1, boom: 50 },
+      INDYGRAB: { pre: 0.14, main: 1.15, top: 3400, low: 340, pan: 0, boom: 75 },
     }[trick];
     const vol = perfect ? 1.0 : 0.85;
     const tHit = now + profile.pre;

@@ -390,6 +390,9 @@ export class LandingPage {
     ctrl.laybackAmount = 0;
     ctrl.reverseActive = false;
     ctrl.boardYawOffset = 0;
+    ctrl.indyGrabActive = false;
+    ctrl.indyGrabAmount = 0;
+    ctrl.indyGrabReady = false;
     ctrl.sprayIntensity = 0;
 
     ctrl.leanAngle = carveWave * 0.14;

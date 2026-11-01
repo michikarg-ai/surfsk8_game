@@ -12,10 +12,11 @@ export interface InputState {
   snapTrick: boolean; // Q for the surf-style SNAP at the top of a wall
   laybackTrick: boolean; // F for the Layback (hold while carving fast)
   reverseTrick: boolean; // E for the FS Reverse 360
+  indyGrabTrick: boolean; // Space (while in air) or G for Indy Grab
 }
 
 /** The scoring tricks. Only these give points. */
-export type TrickId = 'SNAP' | 'LAYBACK' | 'BERTSLIDE' | 'REVERSE360';
+export type TrickId = 'SNAP' | 'LAYBACK' | 'BERTSLIDE' | 'REVERSE360' | 'INDYGRAB';
 
 export interface ManeuverEvent {
   name: string;
@@ -174,6 +175,18 @@ export class SurfskateController {
   private reverseTimer = 0;
   private prevReverseInput = false;
 
+  // Indy Grab (airborne trick)
+  public indyGrabActive = false;
+  /** Smoothed 0..1 amount of the airborne Indy grab tuck and board tweak. */
+  public indyGrabAmount = 0;
+  public indyGrabReady = false;
+  private indyGrabHold = 0;
+  private indyGrabScored = false;
+  private airLaunchedFromWall = false;
+  private airLaunchHeight = 0;
+  private airLaunchSpeed = 0;
+  private prevIndyInput = false;
+
   /**
    * Visual yaw of the board relative to the direction of travel (radians):
    * the tail sliding out during a Bert slide and the full spin of the FS Reverse 360.
@@ -227,6 +240,12 @@ export class SurfskateController {
     this.bertSlideAmount = 0;
     this.reverseActive = false;
     this.boardYawOffset = 0;
+    this.indyGrabActive = false;
+    this.indyGrabAmount = 0;
+    this.indyGrabReady = false;
+    this.indyGrabHold = 0;
+    this.indyGrabScored = false;
+    this.airLaunchedFromWall = false;
     this.lastPumpDir = 0;
     this.timeSincePumpSwitch = 99;
   }
@@ -321,7 +340,7 @@ export class SurfskateController {
 
     const targetCompression = input.compressCrouch
       ? 0.92
-      : this.bertSlideActive || this.snapActive
+      : this.bertSlideActive || this.snapActive || this.indyGrabActive
       ? 0.95
       : this.laybackActive
       ? 0.7
@@ -449,8 +468,18 @@ export class SurfskateController {
         this.airTime = 0;
         this.airRotation = 0;
         this.maxAirHeight = 0;
-        const upPop = 3.4;
-        const vy = Math.max(upPop * 0.75, this.speed * sinT * 0.9 + upPop * 0.8);
+        this.airLaunchedFromWall = isOnWall;
+        this.airLaunchHeight = h0;
+        this.airLaunchSpeed = this.speed;
+        this.indyGrabActive = false;
+        this.indyGrabHold = 0;
+        this.indyGrabScored = false;
+        this.indyGrabAmount = 0;
+        this.indyGrabReady = false;
+
+        const isWallPop = isOnWall && (grade > 0.04 || h0 > 0.35);
+        const upPop = isWallPop ? 4.2 : 3.4;
+        const vy = Math.max(upPop * 0.75, this.speed * Math.max(0, sinT) * 1.05 + upPop * 0.85);
         this.velocity.set(
           -Math.sin(this.heading) * this.speed * cosT,
           vy,
@@ -522,9 +551,59 @@ export class SurfskateController {
       const heightAboveSurface = this.position.y - this.currentSurface.height;
       this.maxAirHeight = Math.max(this.maxAirHeight, heightAboveSurface);
 
+      // ---- INDY GRAB in mid-air ----
+      const indyPressed = input.indyGrabTrick && !this.prevIndyInput;
+      this.prevIndyInput = input.indyGrabTrick;
+
+      // High enough to grab: above 0.36m from surface or reached apex >= 0.45m
+      const isHighEnough =
+        heightAboveSurface >= 0.36 || (this.maxAirHeight >= 0.45 && heightAboveSurface >= 0.22);
+      this.indyGrabReady = this.airLaunchedFromWall && isHighEnough;
+
+      if (input.indyGrabTrick) {
+        if (!this.airLaunchedFromWall) {
+          if (indyPressed) {
+            this.trickFail('INDY GRAB: Ollie off a steep wall for more air!');
+          }
+        } else if (!isHighEnough && this.velocity.y < 0) {
+          if (indyPressed) {
+            this.trickFail('INDY GRAB: Need more height off the wall!');
+          }
+        } else if (isHighEnough) {
+          this.indyGrabActive = true;
+          this.indyGrabHold += dt;
+          if (!this.indyGrabScored && this.indyGrabHold >= 0.26) {
+            this.indyGrabScored = true;
+            const isBigAir = this.maxAirHeight >= 0.82 || this.airLaunchSpeed >= 3.8;
+            this.emitTrick(
+              onManeuver,
+              'INDYGRAB',
+              isBigAir ? 'PERFECT INDY AIR!' : 'INDY GRAB!',
+              isBigAir ? 1800 : 1300,
+              isBigAir
+            );
+          }
+        }
+      } else {
+        this.indyGrabActive = false;
+      }
+
+      const targetGrabAmt = this.indyGrabActive ? 1.0 : 0.0;
+      const grabRate = this.indyGrabActive ? 14.0 : 9.0;
+      this.indyGrabAmount += (targetGrabAmt - this.indyGrabAmount) * Math.min(1, dt * grabRate);
+
       if (this.position.y <= this.currentSurface.height && this.velocity.y <= 0) {
         this.position.y = this.currentSurface.height;
         this.isGrounded = true;
+
+        if (this.indyGrabActive && !this.indyGrabScored) {
+          this.trickFail('INDY GRAB: Let go before landing or get more air!');
+        } else if (this.indyGrabScored) {
+          this.flowMeter = Math.min(100, this.flowMeter + 15);
+        }
+        this.indyGrabActive = false;
+        this.indyGrabAmount = 0;
+        this.indyGrabReady = false;
 
         // Keep only the velocity component tangent to the landing surface
         const n = this.currentSurface.normal;
@@ -535,7 +614,6 @@ export class SurfskateController {
           this.heading = Math.atan2(-tangentVel.x, -tangentVel.z);
         }
         this.flowMeter = Math.min(100, this.flowMeter + 10);
-        // Airs keep the flow going but are not scoring tricks
       }
     }
 

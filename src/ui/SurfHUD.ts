@@ -194,10 +194,16 @@ export class SurfHUD {
     this.truckDialFrontEl.style.transform = `rotate(${yawDeg}deg)`;
     this.leanReadoutEl.textContent = `${Math.abs(leanDeg)}°`;
 
-    // 4. SNAP hint / failure feedback
+    // 4. SNAP / INDY GRAB hint / failure feedback
     if (ctrl.snapFeedback) {
       this.snapHintEl.textContent = ctrl.snapFeedback;
       this.snapHintEl.className = 'visible fail';
+    } else if (ctrl.indyGrabReady && !ctrl.indyGrabActive) {
+      this.snapHintEl.textContent = 'INDY GRAB — HOLD SPACE or G';
+      this.snapHintEl.className = 'visible ready';
+    } else if (ctrl.indyGrabActive) {
+      this.snapHintEl.textContent = 'TWEAK THE INDY!';
+      this.snapHintEl.className = 'visible ready';
     } else if (ctrl.snapWindow === 'READY' && !ctrl.snapActive) {
       this.snapHintEl.textContent = 'SNAP READY — press Q';
       this.snapHintEl.className = 'visible ready';

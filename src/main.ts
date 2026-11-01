@@ -300,6 +300,10 @@ class SurfskateMunichGame {
       snapTrick: this.keys.has('KeyQ'),
       laybackTrick: this.keys.has('KeyF'),
       reverseTrick: this.keys.has('KeyE'),
+      indyGrabTrick:
+        this.keys.has('KeyG') ||
+        this.keys.has('KeyI') ||
+        (!this.controller.isGrounded && this.keys.has('Space')),
     };
   }
 
@@ -336,6 +340,7 @@ class SurfskateMunichGame {
       snapTrick: this.controller.snapWindow === 'READY',
       laybackTrick: false,
       reverseTrick: false,
+      indyGrabTrick: !this.controller.isGrounded && this.controller.indyGrabReady,
     };
   }
 

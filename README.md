@@ -27,6 +27,7 @@ A realistic 3D WebGL surfskate simulator set in the real-world **Skatepark "Im G
   - **BERTSLIDE** (<kbd>C</kbd>): High-speed hand-plant slide requiring an established carve (`≥ 14 km/h`), dropping the hips low, planting the inside hand, and kicking the tail out around a Bertleman arc.
   - **LAYBACK** (<kbd>F</kbd>): High-speed power carve (`≥ 16 km/h`), laying the shoulders back and dragging the trailing hand through the turn.
   - **FS REVERSE 360** (<kbd>E</kbd>): Frontside carve carving into a full 360° tail whip while maintaining forward travel.
+  - **INDY GRAB** (Hold <kbd>Space</kbd> or <kbd>G</kbd> in air): Ollie off a transition wall and grab the toe edge between the feet with the trailing hand while tweaking the board high.
 - **Realistic Rigged Skaters & IK**:
   - Full skeletal humanoid models with real-time inverse kinematics (IK) anchoring feet to the deck.
   - **Lukas**: Custom CC0 MakeHuman/MPFB avatar with turquoise knit beanie, charcoal hoodie, stone-washed faded blue jeans (no knee pads), and vulcanized black-suede skate shoes.
@@ -54,13 +55,14 @@ A realistic 3D WebGL surfskate simulator set in the real-world **Skatepark "Im G
 | **LAYBACK** | Hold <kbd>F</kbd> | High speed (`≥ 16 km/h`) + deep carve (drags trailing hand) |
 | **FS REVERSE 360** | <kbd>E</kbd> | Frontside (<kbd>→</kbd>) carve with speed |
 | **Ollie** | <kbd>Space</kbd> | Pop an air |
+| **INDY GRAB** | Hold <kbd>Space</kbd> or <kbd>G</kbd> in air | Ollie off a wall, grab the toe rail and tweak the board |
 | **Aspect mode (16:9 / 9:16)** | <kbd>R</kbd> | Toggle desktop ↔ Instagram Reel frame |
 | **Camera / Truck feel / Auto-shred** | <kbd>V</kbd> / <kbd>T</kbd> / <kbd>P</kbd> | Cycle camera, truck stiffness, or auto-line filmer |
 | **Tricks & Options overlay** | <kbd>H</kbd> | Toggle help dock |
 | **Return to Garage** | <kbd>ESC</kbd> | Return to character / park selector landing page |
 | **Reset session** | <kbd>X</kbd> / <kbd>Backspace</kbd> | Return to spawn point |
 
-Only the four scoring tricks award points. Each landed trick triggers slow motion, a dynamic camera zoom, scoring notifications, and a synthesized swoosh.
+Only the scoring tricks award points. Each landed trick triggers slow motion, a dynamic camera zoom, scoring notifications, and a synthesized swoosh.
 
 ---
 
