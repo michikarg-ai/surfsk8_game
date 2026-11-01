@@ -421,7 +421,10 @@ export class SurfskateController {
 
       // Non-gravitational tangential acceleration (pump, friction, slides)
       let aExtra = -ROLLING_RESISTANCE - AIR_DRAG * this.speed * this.speed;
-      if (this.bertSlideActive && this.speed > 0.5) aExtra -= 1.4; // Bert slide scrubs a bit of speed while whipping around
+      if (this.bertSlideActive && this.speed > 0.4) {
+        // Bert slide scrubs heavy speed: urethane wheels sliding sideways + planted hand on concrete
+        aExtra -= 4.2 + 0.35 * this.speed;
+      }
       if (this.laybackActive) aExtra -= 0.6; // laying back into the turn bleeds a little speed
       if (this.reverseActive) aExtra -= 1.2; // tail spin scrubs speed
 
@@ -452,7 +455,7 @@ export class SurfskateController {
         aExtra += WALL_STRETCH_ASSIST * GRAVITY * sinT;
       }
       // Going DOWN: compress into the knees and drive the board down the face → speed!
-      if (isOnWall && sinT < -0.05) {
+      if (isOnWall && sinT < -0.05 && !this.bertSlideActive) {
         const active = input.compressCrouch;
         aExtra += (active ? WALL_PUMP_GAIN_ACTIVE : WALL_PUMP_GAIN) * GRAVITY * -sinT * (0.4 + 0.6 * this.compression);
         this.pumpSyncQuality = active ? 'PERFECT PUMP!' : 'FLOW PUMP';
@@ -910,7 +913,7 @@ export class SurfskateController {
     if (this.bertSlideActive) {
       this.bertHold += dt;
       this.sprayIntensity = 1.0;
-      if (this.speed < BERT_MIN_SPEED * 0.58) {
+      if (this.speed < BERT_MIN_SPEED * 0.35) {
         this.bertSlideActive = false;
         if (!this.bertScored) this.trickFail('BERT SLIDE: stalled — enter with more speed!');
       } else if (!input.snapSlide && this.bertHold < BERT_HOLD_TIME) {
@@ -918,6 +921,10 @@ export class SurfskateController {
         if (!this.bertScored) this.trickFail('BERT SLIDE: hold C through the slide!');
       } else if ((!input.snapSlide && this.bertHold >= 0.65) || this.bertHold >= 1.2) {
         this.bertSlideActive = false;
+        if (this.bertScored) {
+          // Hooking up from the slide scrubs additional speed as wheels grip back in
+          this.speed = Math.max(1.3, this.speed * 0.82);
+        }
       }
       // Tail swings out wide around the planted hand
       const slideEnv = Math.sin(Math.min(1, this.bertHold / 0.22) * (Math.PI * 0.5));
