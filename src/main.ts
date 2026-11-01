@@ -71,6 +71,7 @@ class SurfskateMunichGame {
       onCycleTruckFeel: () => this.cycleTruckFeel(),
       onToggleAutoFlow: () => this.toggleAutoFlow(),
       onResetSession: () => this.resetSession(),
+      onToggleMusic: () => this.toggleMusic(),
     });
     this.landingPage = new LandingPage(
       this.parkSurface,
@@ -167,6 +168,8 @@ class SurfskateMunichGame {
         this.cycleTruckFeel();
       } else if (code === 'KeyP') {
         this.toggleAutoFlow();
+      } else if (code === 'KeyM') {
+        this.toggleMusic();
       } else if (code === 'Backspace' || code === 'KeyX') {
         this.resetSession();
       }
@@ -204,6 +207,11 @@ class SurfskateMunichGame {
     this.syncHUDButtons();
   }
 
+  public toggleMusic(): void {
+    this.audio.toggleMusic();
+    this.syncHUDButtons();
+  }
+
   public pauseGameAndOpenLanding(): void {
     if (this.landingPage.isVisible) return;
     this.keys.clear();
@@ -223,7 +231,8 @@ class SurfskateMunichGame {
       this.worldScene.mode,
       this.surfCamera.cameraStyle,
       this.controller.truckPreset,
-      this.autoFlowEnabled
+      this.autoFlowEnabled,
+      this.audio.isMusicActive
     );
   }
 

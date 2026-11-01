@@ -9,6 +9,7 @@ export interface HUDCallbacks {
   onCycleTruckFeel: () => void;
   onToggleAutoFlow: () => void;
   onResetSession: () => void;
+  onToggleMusic: () => void;
 }
 
 export class SurfHUD {
@@ -47,6 +48,7 @@ export class SurfHUD {
   private btnCameraEl: HTMLButtonElement;
   private btnTruckFeelEl: HTMLButtonElement;
   private btnAutoFlowEl: HTMLButtonElement;
+  private btnMusicEl: HTMLButtonElement | null = null;
 
   // SNAP trick overlays
   private snapBannerEl: HTMLDivElement;
@@ -96,6 +98,7 @@ export class SurfHUD {
     this.btnCameraEl = document.getElementById('btn-camera') as HTMLButtonElement;
     this.btnTruckFeelEl = document.getElementById('btn-truckfeel') as HTMLButtonElement;
     this.btnAutoFlowEl = document.getElementById('btn-autoflow') as HTMLButtonElement;
+    this.btnMusicEl = document.getElementById('btn-music') as HTMLButtonElement | null;
     const btnResetEl = document.getElementById('btn-reset') as HTMLButtonElement;
 
     this.btnAspectEl.addEventListener('click', () => this.callbacks.onToggleAspect());
@@ -103,6 +106,9 @@ export class SurfHUD {
     this.btnCameraEl.addEventListener('click', () => this.callbacks.onCycleCamera());
     this.btnTruckFeelEl.addEventListener('click', () => this.callbacks.onCycleTruckFeel());
     this.btnAutoFlowEl.addEventListener('click', () => this.callbacks.onToggleAutoFlow());
+    if (this.btnMusicEl) {
+      this.btnMusicEl.addEventListener('click', () => this.callbacks.onToggleMusic());
+    }
     btnResetEl.addEventListener('click', () => this.callbacks.onResetSession());
   }
 
@@ -315,7 +321,8 @@ export class SurfHUD {
     _atmosphere: AtmosphereMode,
     cameraStyle: CameraStyle,
     truckPreset: TruckFeelPreset,
-    autoFlow: boolean
+    autoFlow: boolean,
+    musicActive = true
   ): void {
     this.btnAspectEl.textContent =
       aspect === '9:16' ? '📱 9:16 IG Reel Mode [R]' : '🖥️ 16:9 Desktop [R]';
@@ -339,6 +346,11 @@ export class SurfHUD {
 
     this.btnAutoFlowEl.textContent = autoFlow ? '🤖 Auto-Shred: ON [P]' : '🎮 Manual Control [P]';
     this.btnAutoFlowEl.classList.toggle('active-auto', autoFlow);
+
+    if (this.btnMusicEl) {
+      this.btnMusicEl.textContent = musicActive ? '🎵 Music: ON [M]' : '🔇 Music: OFF [M]';
+      this.btnMusicEl.classList.toggle('active-auto', musicActive);
+    }
   }
 
   private renderCombo(): void {

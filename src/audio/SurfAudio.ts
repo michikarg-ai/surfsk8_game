@@ -15,7 +15,27 @@ export class SurfAudio {
   private isMuted = false;
   private isPaused = true;
 
+  // High-energy background soundtrack
+  private music: HTMLAudioElement | null = null;
+  private isMusicMuted = false;
+  private musicVolume = 0.38;
+  private duckTimer: number | null = null;
+
   public initOnFirstGesture(): void {
+    if (!this.music) {
+      try {
+        const meta = import.meta as unknown as { env?: { BASE_URL?: string } };
+        const base = meta.env?.BASE_URL || '/';
+        const prefix = base.endsWith('/') ? base : base + '/';
+        this.music = new Audio(`${prefix}audio/surfskate_anthem.mp3`);
+        this.music.loop = true;
+        this.music.volume = this.musicVolume;
+        this.music.preload = 'auto';
+      } catch {
+        // Audio element not supported
+      }
+    }
+
     if (this.ctx) return;
     try {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -84,6 +104,13 @@ export class SurfAudio {
 
   public pause(): void {
     this.isPaused = true;
+    if (this.duckTimer !== null) {
+      window.clearTimeout(this.duckTimer);
+      this.duckTimer = null;
+    }
+    if (this.music) {
+      this.music.pause();
+    }
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
     if (this.rollGain) {
@@ -108,15 +135,21 @@ export class SurfAudio {
 
   public resume(): void {
     this.isPaused = false;
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    if (this.masterGain) {
+    this.initOnFirstGesture();
+    if (this.masterGain && this.ctx) {
+      const now = this.ctx.currentTime;
       this.masterGain.gain.cancelScheduledValues(now);
       this.masterGain.gain.setValueAtTime(1.0, now);
       this.masterGain.gain.value = 1.0;
     }
-    if (this.ctx.state === 'suspended') {
+    if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
+    }
+    if (this.music) {
+      this.music.volume = this.musicVolume;
+      if (!this.isMusicMuted && !this.isMuted) {
+        this.music.play().catch(() => {});
+      }
     }
   }
 
@@ -167,6 +200,7 @@ export class SurfAudio {
    * "whoomp" of moving air and a short urethane-on-concrete hiss. No tonal beeps.
    */
   public playSnapSwoosh(perfect = false): void {
+    this.duckMusic(0.95);
     if (!this.ctx || !this.whiteNoise || this.isMuted || this.isPaused || !this.masterGain) return;
     const ctx = this.ctx;
     const master = this.masterGain;
@@ -248,6 +282,7 @@ export class SurfAudio {
    * Each trick gets its own pitch/length/pan character.
    */
   public playTrickSwoosh(trick: 'SNAP' | 'LAYBACK' | 'BERTSLIDE' | 'REVERSE360', perfect = false): void {
+    this.duckMusic(1.2);
     if (!this.ctx || !this.whiteNoise || this.isMuted || this.isPaused || !this.masterGain) return;
     const ctx = this.ctx;
     const master = this.masterGain;
@@ -383,5 +418,35 @@ export class SurfAudio {
         /* already gone */
       }
     }, (profile.pre + profile.main + 2.5) * 1000);
+  }
+
+  private duckMusic(durationSec = 1.1): void {
+    if (!this.music || this.isMusicMuted || this.isPaused) return;
+    if (this.duckTimer !== null) {
+      window.clearTimeout(this.duckTimer);
+    }
+    this.music.volume = this.musicVolume * 0.55;
+    this.duckTimer = window.setTimeout(() => {
+      if (this.music && !this.isMusicMuted) {
+        this.music.volume = this.musicVolume;
+      }
+      this.duckTimer = null;
+    }, durationSec * 1000);
+  }
+
+  public toggleMusic(): boolean {
+    this.isMusicMuted = !this.isMusicMuted;
+    if (this.music) {
+      if (this.isMusicMuted) {
+        this.music.pause();
+      } else if (!this.isPaused) {
+        this.music.play().catch(() => {});
+      }
+    }
+    return !this.isMusicMuted;
+  }
+
+  public get isMusicActive(): boolean {
+    return !this.isMusicMuted;
   }
 }
