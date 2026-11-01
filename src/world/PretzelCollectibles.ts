@@ -104,18 +104,19 @@ export class PretzelCollectibles {
   }
 
   private spawnPretzels(): void {
-    // 5 Signature Spots across Skatepark "Im Gefilde"
+    // 5 High-Altitude Signature Spots across Skatepark "Im Gefilde"
+    // Placed high up on transition walls, domes and coping so players must build speed and pump to reach them
     const configs: PretzelConfig[] = [
-      // 1. High Wall (NW Over-vert Cradle Wall): User requirement "Eine sollte oben an der hohen Wand sein"
-      { id: 1, name: 'Hohe Cradle-Wand', position: new THREE.Vector3(-6.2, 2.15, -14.2) },
-      // 2. Central "Fuck Scooters" Volcano Dome Apex
-      { id: 2, name: 'Vulkan-Dome', position: new THREE.Vector3(7.6, 1.65, -0.8) },
-      // 3. NW Upper Spine Roller Crest
-      { id: 3, name: 'Spine-Roller', position: new THREE.Vector3(-5.5, 1.45, -7.0) },
-      // 4. South-East Deep Bowl Sweeping Pocket
-      { id: 4, name: 'Deep Bowl Pocket', position: new THREE.Vector3(12.0, 1.05, 13.5) },
-      // 5. South Clover Bowl Pocket
-      { id: 5, name: 'South Clover Bowl', position: new THREE.Vector3(1.2, 0.95, 11.8) },
+      // 1. High NW Over-Vert Cradle Wall Coping (requires maximum speed & wall climb/air)
+      { id: 1, name: 'Hohe Cradle-Wand', position: new THREE.Vector3(-6.2, 2.95, -14.6) },
+      // 2. East Sunset Palm Mural Quarterpipe Wall (requires speed across the flow basin)
+      { id: 2, name: 'Sunset Palm Mural Wall', position: new THREE.Vector3(23.2, 2.75, 4.6) },
+      // 3. Central Volcano Dome High Apex (requires fast launch or pop over the crest)
+      { id: 3, name: 'Vulkan-Dome', position: new THREE.Vector3(7.6, 2.25, -0.8) },
+      // 4. NW Upper Spine Roller Crest (requires high-speed pump or launch over the spine)
+      { id: 4, name: 'Spine-Roller', position: new THREE.Vector3(-5.5, 2.20, -7.0) },
+      // 5. South-East Deep Bowl High Wall (requires deep bowl carving and pumping to coping)
+      { id: 5, name: 'SE Deep Bowl', position: new THREE.Vector3(11.6, 2.35, 19.5) },
     ];
 
     for (const cfg of configs) {
@@ -215,13 +216,13 @@ export class PretzelCollectibles {
       item.glowRing.rotation.z += dt * 1.0;
       item.glowRing.scale.setScalar(1.0 + Math.sin(time * 3.5 + item.id) * 0.08);
 
-      // Collision check with skater
+      // Collision check with skater: requires skater body/board to reach up towards pretzel altitude
       const dx = skaterPos.x - item.container.position.x;
       const dz = skaterPos.z - item.container.position.z;
       const dy = item.container.position.y - skaterPos.y; // skater body spans y..y+1.8m
       const distXZ = Math.hypot(dx, dz);
 
-      if (distXZ < 1.45 && dy >= -0.35 && dy <= 1.85) {
+      if (distXZ < 1.55 && dy >= -0.45 && dy <= 1.50) {
         this.collectItem(item);
       }
     }
