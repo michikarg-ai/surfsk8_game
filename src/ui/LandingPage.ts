@@ -13,7 +13,7 @@ export interface SkaterCharacter {
 
 export const SKATER_CHARACTERS: SkaterCharacter[] = [
   { id: 'male', name: 'LUKAS', modelUrl: '/models/skater.glb' },
-  { id: 'female', name: 'LENA', modelUrl: '/models/skater_female.glb' },
+  { id: 'female', name: 'SOPHIE', modelUrl: '/models/skater_female.glb' },
 ];
 
 const INSTAGRAM_URL = 'https://www.instagram.com/surfskate_munich/';

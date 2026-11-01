@@ -47,7 +47,7 @@ To generate or rebuild the skater models, run:
 # Male skater (Lukas) -> public/models/skater.glb
 /Applications/Blender.app/Contents/MacOS/Blender -b --python scripts/build_skater_makehuman.py -- male
 
-# Female skater (Lena) -> public/models/skater_female.glb
+# Female skater (Sophie) -> public/models/skater_female.glb
 /Applications/Blender.app/Contents/MacOS/Blender -b --python scripts/build_skater_makehuman.py -- female
 ```
 
@@ -141,11 +141,11 @@ The script [`scripts/build_skater_makehuman.py`](../scripts/build_skater_makehum
 
 ### Male Skater: Lukas (`preset = "male"`)
 - **Base Assets**: `male_casualsuit02.mhclo`, `toigo_light_skin_male_bronze.mhmat`, `shoes06.mhclo`.
-- **Gear**: Custom procedural turquoise ribbed knit beanie, charcoal dropped hoodie collar, dual knee pads with elastic straps.
+- **Gear**: Custom procedural turquoise ribbed knit beanie, charcoal dropped hoodie collar; no knee pads (`wear_knee_pads=False`).
 - **Outfit Styling**: Stone-washed faded blue jeans with worn thigh/knee fades and charcoal hoodie.
 - **Export Target**: `public/models/skater.glb`.
 
-### Female Skater: Lena (`preset = "female"`)
+### Female Skater: Sophie (`preset = "female"`)
 - **Base Assets**: `female_casualsuit01.mhclo` (short-sleeve cotton T-shirt + slim jeans), `toigo_light_skin_female_bronze.mhmat` (sun-tanned bronze skin), `long01.mhclo` (honey blonde hair), `shoes06.mhclo` (black vulcanized skate shoes).
 - **No Knee Pads / No Beanie / No Hoodie**: Configured with `wear_hood=False`, `wear_beanie=False`, and `wear_knee_pads=False`.
 - **T-Shirt & Munich Logo**:

@@ -65,6 +65,7 @@ PRESETS = {
         "denim_color": (0.28, 0.43, 0.62),  # faded blue jeans
         "helmet_color": (0.0, 0.55, 0.52),  # turquoise
         "wear_beanie": True,
+        "wear_knee_pads": False,
         "output": os.path.join(ROOT_DIR, "public", "models", "skater.glb"),
     },
     "female": {

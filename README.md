@@ -10,7 +10,7 @@ A realistic 3D WebGL surfskate simulator set in the real-world **Skatepark "Im G
 
 - **Landing Page & Character Selector**:
   - Interactive 3D garage / character showcase before starting the session.
-  - Cycle between male skater (**LUKAS**) and female skater (**LENA**) in real time with live 3D preview.
+  - Cycle between male skater (**LUKAS**) and female skater (**SOPHIE**) in real time with live 3D preview.
   - Community callout hooks encouraging players to visit [@surfskate_munich](https://www.instagram.com/surfskate_munich/) on Instagram to vote for future skaters, skateparks, and surfskate boards.
   - Seamless in-game return to the Garage at any time via <kbd>ESC</kbd> or the HUD broadcast button.
 - **Broadcast-Style Skewed Parallelogram HUD**:
@@ -29,8 +29,8 @@ A realistic 3D WebGL surfskate simulator set in the real-world **Skatepark "Im G
   - **FS REVERSE 360** (<kbd>E</kbd>): Frontside carve carving into a full 360° tail whip while maintaining forward travel.
 - **Realistic Rigged Skaters & IK**:
   - Full skeletal humanoid models with real-time inverse kinematics (IK) anchoring feet to the deck.
-  - **Lukas**: Custom CC0 MakeHuman/MPFB avatar with turquoise knit beanie, charcoal hoodie, stone-washed faded blue jeans, and vulcanized black-suede skate shoes.
-  - **Lena**: Sun-tanned female surfskater with honey-blonde hair, dynamic GPU wind & flutter physics (hair streams backwards in the wind, ripples with turbulent eddies, and sways outward under centrifugal force during deep carves), white *Surf Skate Munich* circular logo T-shirt, stone-washed ripped blue jeans, and vulcanized skate shoes.
+  - **Lukas**: Custom CC0 MakeHuman/MPFB avatar with turquoise knit beanie, charcoal hoodie, stone-washed faded blue jeans (no knee pads), and vulcanized black-suede skate shoes.
+  - **Sophie**: Sun-tanned female surfskater with honey-blonde hair, natural GPU wind & flutter physics (hair streams cleanly backwards with speed), white *Surf Skate Munich* circular logo T-shirt, stone-washed ripped blue jeans, and vulcanized skate shoes.
   - 34" SmoothStar Filipe Toledo-inspired surfboard deck with rounded nose, wide rail chest, and wide squash tail.
 - **Real-World Photogrammetry & LiDAR Park**:
   - 3D reconstruction generated from drone and action camera photogrammetry.
@@ -102,7 +102,7 @@ surfskate_game/
 │   │   ├── skatepark_multi.glb  # 3D photogrammetry park mesh
 │   │   ├── im_gefilde_lidar.json# LiDAR elevation grid for physical collision
 │   │   ├── skater.glb           # Male skater (Lukas) + procedural surfskate board
-│   │   └── skater_female.glb    # Female skater (Lena) + procedural surfskate board
+│   │   └── skater_female.glb    # Female skater (Sophie) + procedural surfskate board
 │   └── textures/                # Color maps and night sky dome
 ├── scripts/                     # Python & Swift asset processing tools
 │   ├── assets/                  # Logos and base board source assets

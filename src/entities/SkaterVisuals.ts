@@ -85,7 +85,7 @@ export class SkaterVisuals {
   private smoothCompression = 0.15;
   private smoothLean = 0;
 
-  // Dynamic hair wind, flutter & inertia simulation (female skater Lena)
+  // Dynamic hair wind, flutter & inertia simulation (female skater Sophie)
   private hairUniforms: HairWindUniforms | null = null;
   private hairElapsed = 0;
   private smoothedHairWind = new THREE.Vector3(0, 0, 0);
@@ -271,7 +271,7 @@ export class SkaterVisuals {
             mat.alphaTest = 0.18;
             mat.depthWrite = true;
             mat.side = THREE.DoubleSide;
-            this.attachHairWindShader(mat, this.hairUniforms, 'LenaWindHair_standard');
+            this.attachHairWindShader(mat, this.hairUniforms, 'SophieWindHair_standard');
             mat.needsUpdate = true;
 
             const depthMat = new THREE.MeshDepthMaterial({
@@ -279,7 +279,7 @@ export class SkaterVisuals {
               alphaTest: 0.18,
             });
             if (mat.map) depthMat.map = mat.map;
-            this.attachHairWindShader(depthMat, this.hairUniforms, 'LenaWindHair_depth');
+            this.attachHairWindShader(depthMat, this.hairUniforms, 'SophieWindHair_depth');
             mesh.customDepthMaterial = depthMat;
           }
         }
@@ -557,7 +557,7 @@ export class SkaterVisuals {
       this.poseSkeleton(ctrl, dt);
     }
 
-    // 5. Dynamic hair wind, flutter & inertia simulation (female skater Lena)
+    // 5. Dynamic hair wind, flutter & inertia simulation (female skater Sophie)
     if (this.hairUniforms) {
       this.hairElapsed += dt;
 
@@ -577,23 +577,23 @@ export class SkaterVisuals {
 
       // Apparent wind blows opposite to movement direction
       const targetWind = worldVel.clone().negate();
-      if (ctrl.speed < 0.25) {
-        // Gentle ambient breeze when standing still on landing page / garage
-        targetWind.set(0.4, 0.08, -0.3);
+      if (ctrl.speed < 0.2) {
+        // At standstill / calm, let hair rest naturally
+        targetWind.set(0, 0, 0);
       }
 
-      const smoothFactor = Math.min(1.0, dt * 10.0);
+      const smoothFactor = Math.min(1.0, dt * 7.0);
       this.smoothedHairWind.lerp(targetWind, smoothFactor);
 
-      // Centrifugal inertia: outward force swinging hair away from turn center
+      // Centrifugal inertia: slight outward lag during sharp carves
       const turnRate = ctrl.smoothedYawRate || 0;
-      const targetInertia = right.clone().multiplyScalar(-turnRate * ctrl.speed * 0.22);
-      this.smoothedHairInertia.lerp(targetInertia, Math.min(1.0, dt * 14.0));
+      const targetInertia = right.clone().multiplyScalar(-turnRate * ctrl.speed * 0.08);
+      this.smoothedHairInertia.lerp(targetInertia, Math.min(1.0, dt * 10.0));
 
       const flutterIntensity =
         THREE.MathUtils.clamp((ctrl.speed - 1.0) / 4.0, 0.0, 1.0) +
-        (ctrl.snapActive ? 0.8 : 0.0) +
-        (ctrl.bertSlideActive ? 0.5 : 0.0);
+        (ctrl.snapActive ? 0.4 : 0.0) +
+        (ctrl.bertSlideActive ? 0.3 : 0.0);
 
       this.hairUniforms.uHairWind.value.copy(this.smoothedHairWind);
       this.hairUniforms.uHairTurnInertia.value.copy(this.smoothedHairInertia);
@@ -795,39 +795,37 @@ export class SkaterVisuals {
 
       const projectTarget = '#include <project_vertex>';
       const projectReplacement = `
-        // --- LENA DYNAMIC HAIR WIND & FLUTTER SIMULATION ---
+        // --- SOPHIE DYNAMIC HAIR WIND & FLUTTER SIMULATION ---
         float rootFactor = clamp((1.63 - position.y) / 0.55, 0.0, 1.0);
-        float flex = pow(rootFactor, 1.6);
-        float backWeight = smoothstep(-0.07, 0.04, position.x);
-        flex *= mix(0.25, 1.0, backWeight);
+        float flex = pow(rootFactor, 1.7);
+        float backWeight = smoothstep(-0.06, 0.04, position.x);
+        flex *= mix(0.20, 1.0, backWeight);
 
         vec4 hairWorldPos = modelMatrix * vec4( transformed, 1.0 );
         float windSpeed = length(uHairWind);
         vec3 windDir = windSpeed > 0.001 ? normalize(uHairWind) : vec3(0.0, 0.0, -1.0);
 
-        // 1. Aerodynamic wind deflection (backward push + lift)
-        float windPushMag = (windSpeed * 0.034 + pow(windSpeed * 0.15, 1.6) * 0.035) * flex;
-        windPushMag = min(windPushMag, 0.35 * flex);
+        // 1. Aerodynamic wind deflection (streams cleanly straight backward)
+        // Scaled with speed: gentle at low speeds, clearly streaming back at higher speeds
+        float windPushMag = (windSpeed * 0.023) * flex;
+        windPushMag = min(windPushMag, 0.22 * flex);
         vec3 steadyDeflection = windDir * windPushMag;
-        steadyDeflection.y += windPushMag * 0.42 * backWeight;
 
-        // 2. Turn inertia: centrifugal outward swing during carves & cutbacks
-        vec3 inertiaDeflection = uHairTurnInertia * (0.024 * flex);
+        // Subtle lift so strands float cleanly above the shoulders
+        steadyDeflection.y += windPushMag * 0.22 * backWeight;
 
-        // 3. High-frequency turbulent flutter waves (trailing eddies)
-        float flutterFreq = 16.0 + windSpeed * 3.2;
-        float waveA = sin(uHairTime * flutterFreq + hairWorldPos.y * 14.0 + position.z * 22.0);
-        float waveB = cos(uHairTime * (flutterFreq * 1.33) - hairWorldPos.y * 16.0 + position.x * 28.0);
-        float waveC = sin(uHairTime * (flutterFreq * 0.77) + (hairWorldPos.x + hairWorldPos.z) * 12.0);
+        // 2. Turn inertia: subtle lag during carves & cutbacks
+        vec3 inertiaDeflection = uHairTurnInertia * (0.010 * flex);
 
-        float flutterAmp = (0.012 + windSpeed * 0.0075 + uHairFlutter * 0.020) * flex;
-        vec3 latAxis = normalize(cross(windDir, vec3(0.0, 1.0, 0.0)) + vec3(0.0001));
-        vec3 upAxis = vec3(0.0, 1.0, 0.0);
-        vec3 flutterDeflection = (latAxis * (waveA * 0.8 + waveC * 0.4) + upAxis * (waveB * 0.6)) * flutterAmp;
+        // 3. Delicate natural traveling ripple along the slipstream
+        float rippleFreq = 8.0 + windSpeed * 2.0;
+        float wave = sin(uHairTime * rippleFreq + hairWorldPos.y * 8.0 + position.z * 10.0);
+        float rippleAmp = (0.002 + windSpeed * 0.002) * flex;
+        vec3 flutterDeflection = vec3(0.0, wave * 0.5, 0.0) * rippleAmp + windDir * (wave * 0.5 * rippleAmp);
 
-        // 4. Subtle ambient idle breeze (when standing still on landing page or waiting at spawn)
-        float idleWave = sin(uHairTime * 2.8 + position.y * 6.0 + position.z * 10.0) * 0.012 * flex;
-        vec3 idleDeflection = vec3(idleWave * 0.6, idleWave * 0.3, idleWave * 0.8);
+        // 4. Subtle ambient breathing at rest
+        float idleWave = sin(uHairTime * 1.8 + position.y * 4.0) * 0.0025 * flex;
+        vec3 idleDeflection = vec3(0.0, idleWave, 0.0);
 
         hairWorldPos.xyz += steadyDeflection + inertiaDeflection + flutterDeflection + idleDeflection;
 
