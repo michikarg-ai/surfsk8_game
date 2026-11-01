@@ -288,6 +288,17 @@ export class SkaterVisuals {
             mesh.customDepthMaterial = depthMat;
           }
         }
+        if (mesh.name.includes('Basecap') || (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).some((m) => m?.name === 'SkaterBasecap')) {
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          for (const rawMat of mats) {
+            const mat = rawMat as THREE.MeshStandardMaterial;
+            if (mat) {
+              mat.color.setRGB(0.015, 0.015, 0.016);
+              mat.roughness = 0.90;
+              mat.needsUpdate = true;
+            }
+          }
+        }
       }
       if ((child as THREE.Bone).isBone) {
         const bone = child as THREE.Bone;

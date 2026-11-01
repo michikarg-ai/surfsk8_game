@@ -89,7 +89,7 @@ PRESETS = {
         "tshirt_color": (0.94, 0.94, 0.93),  # clean off-white cotton T-shirt
         "denim_color": (0.28, 0.44, 0.68),  # stonewashed blue denim
         "hair_color": (0.92, 0.78, 0.46),  # sunlit golden blonde
-        "basecap_color": (0.04, 0.08, 0.16),  # deep vintage navy twill
+        "basecap_color": (0.015, 0.015, 0.016),  # classic matte black twill
         "wear_basecap": True,
         "wear_beanie": False,
         "wear_hood": False,
