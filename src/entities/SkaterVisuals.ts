@@ -391,6 +391,11 @@ export class SkaterVisuals {
     return new THREE.Vector3(x, y, z).normalize().transformDirection(this.boardGroup!.matrixWorld);
   }
 
+  /** ModelRoot-local direction -> world direction (unaffected by detached board motion). */
+  private modelDir(x: number, y: number, z: number): THREE.Vector3 {
+    return new THREE.Vector3(x, y, z).normalize().transformDirection(this.modelRoot!.matrixWorld);
+  }
+
   /** Pre-multiply a world-space rotation onto a bone, keeping its parent untouched. */
   private rotateBoneWorld(bone: THREE.Bone, q: THREE.Quaternion): void {
     const parentQ = bone.parent!.getWorldQuaternion(new THREE.Quaternion());
@@ -492,36 +497,67 @@ export class SkaterVisuals {
     const bodyLean = lean * 0.85; // whole body leans into the rail with the deck
 
     // Handle bailing / wipeout falling pose:
-    // Skater's hips collapse onto the pavement, body slides on stomach/knees, arms reach to brace
+    // Skater's hips smoothly drop into an athletic knee & palm slide on the concrete,
+    // protecting the head, with natural forward knee flexion and trailing legs.
     if (ctrl.isBailing) {
       const p = 1.0 - Math.max(0, ctrl.bailTimer / ctrl.bailDuration);
-      const fallCurve = p < 0.85 ? Math.min(1.0, p * 4.2) : Math.max(0, (1.0 - p) / 0.15);
+      // Smooth fall curve: quick natural drop in first 0.22s, steady slide until 0.75s, smooth recovery
+      const dropCurve = THREE.MathUtils.clamp(p / 0.22, 0, 1);
+      const easeDrop = 1.0 - Math.pow(1.0 - dropCurve, 2);
+      const recoverCurve = p > 0.75 ? Math.pow((p - 0.75) / 0.25, 2) : 0;
+      const fallCurve = easeDrop * (1.0 - recoverCurve);
 
-      const bailHips = new THREE.Vector3(
-        0.10 * fallCurve,
-        DECK_TOP - 0.05 * fallCurve,
-        -0.42 * fallCurve
-      );
-      const hipsWorld = board.localToWorld(bailHips);
+      // Model reference directions (stable root-relative frame, independent of sliding board)
+      const modelX = this.modelDir(1, 0, 0);
+      const modelY = this.modelDir(0, 1, 0);
+      const modelZ = this.modelDir(0, 0, 1);
+
+      // 1. Pelvis/Hips: drop from stance height down to knee-slide height
+      const restHipsY = this.hipsRestHeight - 0.1;
+      const slideHipsY = DECK_TOP + 0.14; // ~0.30m above concrete
+      const hipsY = THREE.MathUtils.lerp(restHipsY, slideHipsY, fallCurve);
+      const hipsZ = THREE.MathUtils.lerp(-0.02, -0.22, fallCurve); // slightly behind board
+      const hipsX = THREE.MathUtils.lerp(0.05, -0.03, fallCurve);
+
+      const bailHips = new THREE.Vector3(hipsX, hipsY, hipsZ);
+      const hipsWorld = this.modelRoot!.localToWorld(bailHips);
       b.Hips.position.copy(b.Hips.parent!.worldToLocal(hipsWorld));
       b.Hips.updateMatrixWorld(true);
 
-      this.rotateBoneAxis(b.Hips, boardX, -1.05 * fallCurve);
-      this.rotateBoneAxis(b.Hips, boardY, 0.25 * fallCurve);
-      this.rotateBoneAxis(b.Spine, boardX, -0.45 * fallCurve);
-      this.rotateBoneAxis(b.Spine1, boardX, -0.35 * fallCurve);
-      this.rotateBoneAxis(b.Neck, boardX, 0.65 * fallCurve);
-      this.rotateBoneAxis(b.Head, boardX, 0.45 * fallCurve);
+      // 2. Torso posture: flex forward in direction of slide (+Z), yaw slightly facing travel
+      this.rotateBoneAxis(b.Hips, modelX, 0.38 * fallCurve);
+      this.rotateBoneAxis(b.Hips, modelY, 0.18 * fallCurve);
+      this.rotateBoneAxis(b.Spine, modelX, 0.26 * fallCurve);
+      this.rotateBoneAxis(b.Spine1, modelX, 0.18 * fallCurve);
+      // Head & Neck lift UP to look ahead and protect face from concrete
+      this.rotateBoneAxis(b.Neck, modelX, -0.32 * fallCurve);
+      this.rotateBoneAxis(b.Head, modelX, -0.22 * fallCurve);
 
-      const lArmTarget = board.localToWorld(new THREE.Vector3(-0.35, DECK_TOP + 0.02, 0.35));
-      const rArmTarget = board.localToWorld(new THREE.Vector3(0.40, DECK_TOP + 0.02, 0.35));
-      this.solveArm('Left', lArmTarget, this.boardDir(-1, 0.5, 0));
-      this.solveArm('Right', rArmTarget, this.boardDir(1, 0.5, 0));
+      // 3. Arms: reach forward-down to brace against the pavement with hands
+      const lArmTarget = this.modelRoot!.localToWorld(new THREE.Vector3(-0.24, DECK_TOP - 0.08, 0.36));
+      const rArmTarget = this.modelRoot!.localToWorld(new THREE.Vector3(0.24, DECK_TOP - 0.08, 0.30));
+      // Elbows flare outward and back naturally to absorb slide
+      const lElbowPole = this.modelDir(-0.80, 0.40, -0.30);
+      const rElbowPole = this.modelDir(0.80, 0.40, -0.30);
+      this.solveArm('Left', lArmTarget, lElbowPole);
+      this.solveArm('Right', rArmTarget, rElbowPole);
 
-      const lLegTarget = board.localToWorld(new THREE.Vector3(-0.15, DECK_TOP - 0.02, -0.85));
-      const rLegTarget = board.localToWorld(new THREE.Vector3(0.18, DECK_TOP - 0.02, -0.95));
-      this.solveLeg('Left', lLegTarget, this.boardDir(0, 0.8, -0.5));
-      this.solveLeg('Right', rLegTarget, this.boardDir(0, 0.8, -0.5));
+      // 4. Legs: knees bend naturally forward/down, shins trail along concrete
+      const lLegTarget = this.modelRoot!.localToWorld(new THREE.Vector3(-0.16, DECK_TOP - 0.10, -0.38));
+      const rLegTarget = this.modelRoot!.localToWorld(new THREE.Vector3(0.16, DECK_TOP - 0.10, -0.58));
+      // Knee poles point forward (+Z) and slightly down/outward: anatomically correct knee flexion!
+      const lKneePole = this.modelDir(-0.40, -0.20, 0.85);
+      const rKneePole = this.modelDir(0.40, -0.20, 0.85);
+      this.solveLeg('Left', lLegTarget, lKneePole);
+      this.solveLeg('Right', rLegTarget, rKneePole);
+
+      // 5. Feet: lay flat along pavement trailing backward, toes pointing rearward
+      const modelQ = this.modelRoot!.getWorldQuaternion(new THREE.Quaternion());
+      const footSlideRot = new THREE.Quaternion()
+        .setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI * 0.35)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI * 0.38));
+      this.setBoneWorldQuat(b.LeftFoot, modelQ.clone().multiply(footSlideRot).multiply(this.footRestInDeck.Left));
+      this.setBoneWorldQuat(b.RightFoot, modelQ.clone().multiply(footSlideRot).multiply(this.footRestInDeck.Right));
       return;
     }
 
@@ -729,16 +765,19 @@ export class SkaterVisuals {
     if (this.boardGroup) {
       if (ctrl.isBailing) {
         const p = 1.0 - Math.max(0, ctrl.bailTimer / ctrl.bailDuration);
-        const slideOut = Math.min(1.8, p * 3.2);
+        // Board slides ahead on the concrete, then glides back under feet as skater recovers
+        const boardDisplace = p < 0.75
+          ? Math.min(1.35, p * 2.8)
+          : Math.max(0, 1.35 * (1.0 - (p - 0.75) / 0.25));
         this.boardGroup.position.set(
-          Math.sin(p * 3.0) * 0.25,
-          0.02,
-          slideOut
+          Math.sin(p * Math.PI) * 0.12,
+          0.01,
+          boardDisplace
         );
         this.boardGroup.rotation.set(
-          Math.sin(p * 2.0) * 0.1,
-          Math.sin(p * 2.5) * 0.3,
-          Math.min(1.1, p * 2.2)
+          0.04 * Math.sin(p * Math.PI),
+          0.10 * Math.sin(p * Math.PI),
+          0.26 * Math.sin(p * Math.PI)
         );
       } else {
         this.boardGroup.position.set(0, 0, 0);

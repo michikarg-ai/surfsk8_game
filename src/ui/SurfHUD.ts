@@ -14,6 +14,7 @@ export interface HUDCallbacks {
   onToggleMusic: () => void;
   onCycleQuality?: () => void;
   onToggleControlMode?: () => void;
+  onToggleTouchControls?: () => void;
 }
 
 export class SurfHUD {
@@ -62,6 +63,7 @@ export class SurfHUD {
   private btnMusicEl: HTMLButtonElement | null = null;
   private btnQualityEl: HTMLButtonElement | null = null;
   private btnFpsEl: HTMLButtonElement | null = null;
+  private btnTouchEl: HTMLButtonElement | null = null;
 
   // SNAP trick overlays
   private snapBannerEl: HTMLDivElement;
@@ -119,10 +121,14 @@ export class SurfHUD {
     this.btnMusicEl = document.getElementById('btn-music') as HTMLButtonElement | null;
     this.btnQualityEl = document.getElementById('btn-quality') as HTMLButtonElement | null;
     this.btnFpsEl = document.getElementById('btn-fps') as HTMLButtonElement | null;
+    this.btnTouchEl = document.getElementById('btn-touch') as HTMLButtonElement | null;
     const btnResetEl = document.getElementById('btn-reset') as HTMLButtonElement;
 
     if (this.btnControlsEl) {
       this.btnControlsEl.addEventListener('click', () => this.callbacks.onToggleControlMode?.());
+    }
+    if (this.btnTouchEl) {
+      this.btnTouchEl.addEventListener('click', () => this.callbacks.onToggleTouchControls?.());
     }
     this.btnAspectEl.addEventListener('click', () => this.callbacks.onToggleAspect());
     if (this.btnAtmosphereEl) {
@@ -530,6 +536,12 @@ export class SurfHUD {
     };
     this.btnQualityEl.textContent = labels[preset];
     this.btnQualityEl.classList.toggle('active-auto', preset === 'auto');
+  }
+
+  public updateTouchButton(enabled: boolean): void {
+    if (!this.btnTouchEl) return;
+    this.btnTouchEl.textContent = enabled ? '📱 Touch Controls: ON' : '📱 Touch Controls: OFF';
+    this.btnTouchEl.classList.toggle('active-auto', enabled);
   }
 
   public updateFPS(fps: number): void {

@@ -6,6 +6,7 @@ import { ImGefildeScene } from './world/ImGefildeScene';
 import { CameraStyle, SurfCamera } from './camera/SurfCamera';
 import { DriveControlMode, SurfHUD } from './ui/SurfHUD';
 import { LandingPage } from './ui/LandingPage';
+import { TouchControls } from './ui/TouchControls';
 import { SurfAudio } from './audio/SurfAudio';
 import { PretzelCollectibles } from './world/PretzelCollectibles';
 import { inject, track } from '@vercel/analytics';
@@ -27,6 +28,7 @@ class SurfskateMunichGame {
   public surfCamera: SurfCamera;
   public hud: SurfHUD;
   public landingPage: LandingPage;
+  public touchControls: TouchControls;
   public audio = new SurfAudio();
   public pretzels: PretzelCollectibles;
 
@@ -93,6 +95,11 @@ class SurfskateMunichGame {
     this.skaterVisuals = new SkaterVisuals(this.scene);
     this.surfCamera = new SurfCamera();
 
+    this.touchControls = new TouchControls({
+      frameElement: this.viewportContainer,
+      onPause: () => this.pauseGameAndOpenLanding(),
+    });
+
     this.hud = new SurfHUD({
       onToggleAspect: () => this.toggleAspectMode(),
       onToggleAtmosphere: () => this.toggleAtmosphereMode(),
@@ -103,6 +110,7 @@ class SurfskateMunichGame {
       onToggleMusic: () => this.toggleMusic(),
       onCycleQuality: () => this.cycleGraphicsQuality(),
       onToggleControlMode: () => this.toggleControlMode(),
+      onToggleTouchControls: () => this.toggleTouchControls(),
     });
     this.hud.setControlMode(this.controlMode);
     this.pretzels = new PretzelCollectibles(this.scene, this.hud, this.audio);
@@ -112,6 +120,8 @@ class SurfskateMunichGame {
         this.resetSession();
         this.audio.resume();
         this.lastTime = performance.now();
+        this.touchControls.setVisible(true);
+        this.syncHUDButtons();
         try {
           track('game_start', { skater: this.landingPage.getSelectedSkaterName() });
         } catch {}
@@ -312,12 +322,19 @@ class SurfskateMunichGame {
     this.syncHUDButtons();
   }
 
+  public toggleTouchControls(): void {
+    this.touchControls.toggleEnabled();
+    this.syncHUDButtons();
+  }
+
   public pauseGameAndOpenLanding(): void {
     if (this.landingPage.isVisible) return;
     this.keys.clear();
+    this.touchControls.setVisible(false);
     this.audio.pause();
     this.audio.playGarageMusic();
     this.slowMoTimer = 0;
+    this.syncHUDButtons();
     this.landingPage.show();
   }
 
@@ -376,6 +393,15 @@ class SurfskateMunichGame {
       `${current}/${total}`
     );
     this.hud.updateQualityButton(this.graphicsPreset, this.effectiveQuality);
+    this.hud.updateTouchButton(this.touchControls.isEnabled);
+    const keyLabel = document.getElementById('hud-garage-key-label');
+    if (keyLabel) {
+      keyLabel.textContent = this.touchControls.isEnabled ? '⏸' : 'ESC';
+    }
+    document.body.classList.toggle(
+      'has-touch-controls',
+      this.touchControls.isEnabled && this.touchControls.isVisible
+    );
     if (this.landingPage) {
       this.landingPage.updateQualityLabel(this.graphicsPreset, this.effectiveQuality);
     }
@@ -393,50 +419,70 @@ class SurfskateMunichGame {
   }
 
   public buildInputState(timeSec: number): InputState {
+    const touch = this.touchControls.getState();
+
+    // Any manual touch interaction immediately yields control from auto-flow
+    if (
+      touch.steerLeft ||
+      touch.steerRight ||
+      touch.forwardPush ||
+      touch.jumpOllie ||
+      (touch.analogSteer && Math.abs(touch.analogSteer) > 0.15)
+    ) {
+      if (this.autoFlowEnabled) {
+        this.autoFlowEnabled = false;
+        this.syncHUDButtons();
+      }
+    }
+
     if (this.autoFlowEnabled) {
       return this.computeAutoFlowInput(timeSec);
     }
 
-    if (this.controlMode === 'arrows') {
-      return {
-        steerLeft: this.keys.has('ArrowLeft'),
-        steerRight: this.keys.has('ArrowRight'),
-        forwardPush: this.keys.has('ArrowUp'),
-        compressCrouch:
-          this.keys.has('ArrowDown') ||
-          this.keys.has('ShiftLeft') ||
-          this.keys.has('ShiftRight'),
-        jumpOllie: this.keys.has('Space'),
-        grindSlash: false, // coping grinds are not part of the trick set
-        // Trick keys for Arrow driving mode: Q (Snap), W (Layback), A (Bertslide), S (Reverse 360)
-        snapTrick: this.keys.has('KeyQ') || this.keys.has('KeyF'),
-        laybackTrick: this.keys.has('KeyW') || this.keys.has('KeyG'),
-        snapSlide: this.keys.has('KeyA') || this.keys.has('KeyV'),
-        reverseTrick: this.keys.has('KeyS') || this.keys.has('KeyB'),
-        indyGrabTrick:
-          this.keys.has('KeyI') ||
-          (!this.controller.isGrounded && this.keys.has('Space')),
-      };
-    }
+    const isArrows = this.controlMode === 'arrows';
+    const kbSteerLeft = isArrows ? this.keys.has('ArrowLeft') : this.keys.has('KeyA');
+    const kbSteerRight = isArrows ? this.keys.has('ArrowRight') : this.keys.has('KeyD');
+    const kbPush = isArrows ? this.keys.has('ArrowUp') : this.keys.has('KeyW');
+    const kbCrouch = isArrows
+      ? this.keys.has('ArrowDown') || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')
+      : this.keys.has('KeyS') || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
+    const kbOllie = this.keys.has('Space');
+    const kbSnap = isArrows
+      ? this.keys.has('KeyQ') || this.keys.has('KeyF')
+      : this.keys.has('KeyO') || this.keys.has('KeyF');
+    const kbLayback = isArrows
+      ? this.keys.has('KeyW') || this.keys.has('KeyG')
+      : this.keys.has('KeyP') || this.keys.has('KeyG');
+    const kbSlide = isArrows
+      ? this.keys.has('KeyA') || this.keys.has('KeyV')
+      : this.keys.has('KeyK') || this.keys.has('KeyV');
+    const kbReverse = isArrows
+      ? this.keys.has('KeyS') || this.keys.has('KeyB')
+      : this.keys.has('KeyL') || this.keys.has('KeyB');
+    const kbIndy =
+      this.keys.has('KeyI') || (!this.controller.isGrounded && this.keys.has('Space'));
 
-    // WASD driving mode: O (Snap), P (Layback), K (Bertslide), L (Reverse 360)
+    const analogSteer =
+      touch.analogSteer !== undefined && Math.abs(touch.analogSteer) > 0.05
+        ? touch.analogSteer
+        : (kbSteerRight ? 1 : 0) - (kbSteerLeft ? 1 : 0);
+
     return {
-      steerLeft: this.keys.has('KeyA'),
-      steerRight: this.keys.has('KeyD'),
-      forwardPush: this.keys.has('KeyW'),
-      compressCrouch:
-        this.keys.has('KeyS') ||
-        this.keys.has('ShiftLeft') ||
-        this.keys.has('ShiftRight'),
-      jumpOllie: this.keys.has('Space'),
+      steerLeft: kbSteerLeft || touch.steerLeft,
+      steerRight: kbSteerRight || touch.steerRight,
+      forwardPush: kbPush || touch.forwardPush,
+      compressCrouch: kbCrouch || touch.compressCrouch,
+      jumpOllie: kbOllie || touch.jumpOllie,
       grindSlash: false,
-      snapTrick: this.keys.has('KeyO') || this.keys.has('KeyF'),
-      laybackTrick: this.keys.has('KeyP') || this.keys.has('KeyG'),
-      snapSlide: this.keys.has('KeyK') || this.keys.has('KeyV'),
-      reverseTrick: this.keys.has('KeyL') || this.keys.has('KeyB'),
+      snapTrick: kbSnap || touch.snapTrick,
+      laybackTrick: kbLayback || touch.laybackTrick,
+      snapSlide: kbSlide || touch.snapSlide,
+      reverseTrick: kbReverse || touch.reverseTrick,
       indyGrabTrick:
-        this.keys.has('KeyI') ||
-        (!this.controller.isGrounded && this.keys.has('Space')),
+        kbIndy ||
+        touch.indyGrabTrick ||
+        (!this.controller.isGrounded && (kbOllie || touch.jumpOllie)),
+      analogSteer,
     };
   }
 

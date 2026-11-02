@@ -104,14 +104,28 @@
         border: 3px solid var(--orange);
       }
       body.reel-mode .hud-layer {
-        padding: 18px 18px;
+        padding: 14px 14px;
+      }
+      body.reel-mode .hud-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 6px;
+      }
+      body.reel-mode .score-card {
+        flex: 1 1 auto;
+        min-width: 0;
       }
       body.reel-mode .stat-block {
-        padding: 6px 14px 7px;
-        min-width: 82px;
+        padding: 5px 6px 6px;
+        min-width: 0;
+        flex: 1 1 0;
+      }
+      body.reel-mode .stat-label {
+        font-size: 8.5px;
       }
       body.reel-mode .stat-value {
-        font-size: 24px;
+        font-size: 15px;
       }
       body.reel-mode #hud-speed {
         font-size: 64px;
@@ -121,7 +135,14 @@
       }
       body.reel-mode .dock-toggle .toggle-label,
       body.reel-mode .garage-toggle .toggle-label {
-        padding: 7px 12px;
+        padding: 6px 10px;
+        font-size: 11px;
+      }
+      body.reel-mode .garage-toggle {
+        flex: 0 0 auto;
+      }
+      body.reel-mode .garage-toggle .key-cap {
+        padding: 0 6px;
         font-size: 12px;
       }
 
@@ -1307,6 +1328,260 @@
       body.reel-mode .terms-title {
         font-size: 20px;
       }
+
+      /* =====================================================================
+         TOUCH CONTROLS LAYER (Smartphones & Touchscreens)
+         ===================================================================== */
+      #touch-controls-layer {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 35;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        transition: opacity 0.22s ease, visibility 0.22s ease;
+      }
+      #touch-controls-layer.touch-controls-hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      #touch-controls-layer.touch-controls-visible {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      /* Adjust HUD elements when touch controls are visible */
+      body.has-touch-controls .bottom-left-cluster {
+        margin-bottom: 124px;
+        transition: margin-bottom 0.2s ease;
+      }
+      body.has-touch-controls .dock {
+        margin-bottom: 154px;
+        transition: margin-bottom 0.2s ease;
+      }
+      body.reel-mode.has-touch-controls .bottom-left-cluster {
+        margin-bottom: 110px;
+        transform: scale(0.88);
+        transform-origin: bottom left;
+      }
+      body.reel-mode.has-touch-controls .dock {
+        margin-bottom: 140px;
+        transform: scale(0.85);
+        transform-origin: bottom right;
+      }
+
+      /* Left zone: Analog Carve & Pump Joystick */
+      #touch-joystick-zone {
+        position: absolute;
+        left: 20px;
+        bottom: 18px;
+        width: 120px;
+        height: 120px;
+        pointer-events: auto;
+        touch-action: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      #touch-joystick-base {
+        position: relative;
+        width: 92px;
+        height: 92px;
+        border-radius: 50%;
+        background: rgba(16, 18, 22, 0.52);
+        border: 2px solid rgba(255, 255, 255, 0.22);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), inset 0 0 16px rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: border-color 0.15s ease, background 0.15s ease;
+      }
+      #touch-joystick-base.active {
+        border-color: var(--orange);
+        background: rgba(24, 20, 18, 0.68);
+        box-shadow: 0 0 20px rgba(242, 85, 20, 0.35), inset 0 0 16px rgba(0, 0, 0, 0.4);
+      }
+      .joystick-axis-marker {
+        position: absolute;
+        background: rgba(255, 255, 255, 0.15);
+        pointer-events: none;
+      }
+      .joystick-axis-marker.h {
+        left: 14px;
+        right: 14px;
+        height: 1px;
+      }
+      .joystick-axis-marker.v {
+        top: 14px;
+        bottom: 14px;
+        width: 1px;
+      }
+      #touch-joystick-stick {
+        position: absolute;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #f25514, #faa41a);
+        border: 2px solid #ffffff;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        will-change: transform;
+        pointer-events: none;
+      }
+      .stick-core {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.85);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      }
+      .touch-zone-label {
+        font-family: var(--font-hud);
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        color: rgba(255, 255, 255, 0.65);
+        margin-top: 6px;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+        pointer-events: none;
+      }
+
+      /* Right zone: Action & Trick Cluster */
+      #touch-actions-zone {
+        position: absolute;
+        right: 20px;
+        bottom: 18px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+        pointer-events: auto;
+        touch-action: none;
+      }
+      .touch-tricks-cluster {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+      }
+      .touch-trick-btn {
+        width: 62px;
+        height: 38px;
+        border-radius: 4px;
+        background: rgba(18, 16, 14, 0.72);
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        color: #f5f4f0;
+        font-family: var(--font-hud);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transform: skewX(var(--skew));
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        transition: transform 0.1s ease, background 0.1s ease, border-color 0.1s ease;
+      }
+      .touch-trick-btn > span {
+        display: inline-block;
+        transform: skewX(calc(var(--skew) * -1));
+      }
+      .touch-trick-btn.active,
+      .touch-trick-btn:active {
+        background: rgba(242, 85, 20, 0.45);
+        border-color: var(--yellow);
+        color: var(--yellow);
+        box-shadow: 0 0 16px rgba(242, 204, 38, 0.7);
+        transform: skewX(var(--skew)) scale(0.94);
+      }
+
+      /* Large Primary Action Button: Ollie / Indy Grab */
+      .touch-action-primary {
+        width: 130px;
+        height: 52px;
+        border-radius: 6px;
+        background: linear-gradient(135deg, #f5f5f5, #e0e0e0);
+        color: #121212;
+        border: 2px solid #ffffff;
+        cursor: pointer;
+        transform: skewX(var(--skew));
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 10px;
+        transition: transform 0.1s ease, background 0.1s ease, box-shadow 0.1s ease;
+      }
+      .touch-action-primary .ollie-main {
+        font-family: var(--font-hud);
+        font-size: 21px;
+        font-weight: 900;
+        letter-spacing: 0.09em;
+        line-height: 1;
+        display: block;
+        transform: skewX(calc(var(--skew) * -1));
+      }
+      .touch-action-primary .ollie-sub {
+        font-family: var(--font-hud);
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        opacity: 0.82;
+        margin-top: 2px;
+        display: block;
+        transform: skewX(calc(var(--skew) * -1));
+      }
+      .touch-action-primary.active,
+      .touch-action-primary:active {
+        background: linear-gradient(135deg, #faa41a, #f25514);
+        color: #ffffff;
+        border-color: var(--yellow);
+        transform: skewX(var(--skew)) scale(0.95);
+        box-shadow: 0 0 22px rgba(242, 85, 20, 0.85);
+      }
+
+      /* Reel-mode (Vertical 9:16) sizing adjustments */
+      body.reel-mode #touch-joystick-zone {
+        left: 12px;
+        bottom: 14px;
+        width: 104px;
+        height: 104px;
+      }
+      body.reel-mode #touch-joystick-base {
+        width: 82px;
+        height: 82px;
+      }
+      body.reel-mode #touch-joystick-stick {
+        width: 38px;
+        height: 38px;
+      }
+      body.reel-mode #touch-actions-zone {
+        right: 12px;
+        bottom: 14px;
+        gap: 6px;
+      }
+      body.reel-mode .touch-action-primary {
+        width: 108px;
+        height: 46px;
+      }
+      body.reel-mode .touch-action-primary .ollie-main {
+        font-size: 18px;
+      }
+      body.reel-mode .touch-trick-btn {
+        width: 51px;
+        height: 34px;
+        font-size: 10.5px;
+      }
     </style>
   </head>
   <body>
@@ -1620,7 +1895,7 @@
           <div></div>
           <div class="hud-top-right">
             <button class="garage-toggle" id="btn-hud-garage" title="Back to Garage / Landing Page [ESC]">
-              <span class="key-cap"><span>ESC</span></span>
+              <span class="key-cap"><span id="hud-garage-key-label">ESC</span></span>
               <span class="toggle-label"><span>Garage</span></span>
             </button>
           </div>
@@ -1716,6 +1991,7 @@
                   <button class="hud-btn" id="btn-quality">⚡ Quality: AUTO [U]</button>
                   <button class="hud-btn" id="btn-fps" title="Live Framerate">📊 60 FPS</button>
                   <button class="hud-btn" id="btn-reset">↺ Respawn [X]</button>
+                  <button class="hud-btn" id="btn-touch">📱 Touch Controls: AUTO</button>
                   <button class="hud-btn" id="btn-garage">🏠 Garage Selector [ESC]</button>
                 </div>
               </div>

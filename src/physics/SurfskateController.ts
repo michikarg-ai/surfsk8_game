@@ -13,6 +13,7 @@ export interface InputState {
   laybackTrick: boolean; // G for the Layback (hold while carving fast)
   reverseTrick: boolean; // B for the FS Reverse 360
   indyGrabTrick: boolean; // Space (while in air) or I for Indy Grab
+  analogSteer?: number; // Optional analog steer [-1.0..1.0] for smooth mobile touch carving
 }
 
 /** The scoring tricks. Only these give points. */
@@ -319,7 +320,10 @@ export class SurfskateController {
     // -------------------------------------------------------------------------
     // 1. Steering & Dual-Axis Surf-Adapter Geometry
     // -------------------------------------------------------------------------
-    const rawSteer = (input.steerRight ? 1 : 0) - (input.steerLeft ? 1 : 0);
+    const rawSteer =
+      input.analogSteer !== undefined && Math.abs(input.analogSteer) > 0.05
+        ? input.analogSteer
+        : (input.steerRight ? 1 : 0) - (input.steerLeft ? 1 : 0);
 
     if (rawSteer !== 0) {
       if (rawSteer !== this.lastSteerDir) {
