@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SRFSK8 Munich — Level 1: Skatepark "Im Gefilde"</title>
+    <title>SRFSK8 — Level 1: Skatepark "Im Gefilde"</title>
     <style>
       /* =====================================================================
          SURFSKATE MUNICH HUD — Sleek Condensed Parallelogram Broadcast UI
@@ -716,8 +716,21 @@
         font-weight: 800;
         letter-spacing: 0.03em;
         line-height: 0.94;
-        color: #f7f6f2;
-        text-shadow: 0 6px 26px rgba(0, 0, 0, 0.82), 0 2px 6px rgba(0, 0, 0, 0.9);
+        background: linear-gradient(
+          180deg,
+          #0084d6 0%,
+          #30b6f6 32%,
+          #e0f4fe 44%,
+          #ffffff 46.5%,
+          #4a1502 48.5%,
+          #f25514 64%,
+          #faa41a 82%,
+          #ffea68 100%
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        filter: drop-shadow(1.5px 0 0 #0a0908) drop-shadow(-1.5px 0 0 #0a0908) drop-shadow(0 1.5px 0 #0a0908)
+          drop-shadow(0 -1.5px 0 #0a0908) drop-shadow(0 6px 18px rgba(0, 0, 0, 0.85));
         pointer-events: none;
       }
       .landing-select-board {
@@ -1060,12 +1073,12 @@
       }
 
       body.reel-mode .landing-title {
-        font-size: 46px;
-        margin-top: 16px;
+        font-size: 44px;
+        margin-top: 44px;
       }
       body.reel-mode .landing-select-board {
         left: 16px;
-        top: 86px;
+        top: 104px;
         width: clamp(280px, 86vw, 360px);
         padding: 16px 18px;
       }
@@ -1317,7 +1330,7 @@
           </button>
         </div>
 
-        <h1 class="landing-title">SRFSK8 Munich</h1>
+        <h1 class="landing-title">SRFSK8</h1>
 
         <div class="landing-select-board">
           <!-- 1. Select Player -->
