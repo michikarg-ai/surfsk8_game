@@ -1234,4 +1234,30 @@ export class SurfskateController {
   ): void {
     cb({ name, points, zone, isSpecial, quality });
   }
+
+  /** Whether the skater is currently eligible to perform a Bert Slide (speed & lean threshold). */
+  public canPerformBertSlide(): boolean {
+    const absLean = Math.abs(this.leanAngle);
+    return (
+      this.isGrounded &&
+      !this.isGrinding &&
+      !this.snapActive &&
+      !this.reverseActive &&
+      this.speed >= BERT_MIN_SPEED &&
+      absLean >= 0.34
+    );
+  }
+
+  /** Whether the skater is currently eligible to perform a Layback Carve (speed & lean threshold). */
+  public canPerformLayback(): boolean {
+    const absLean = Math.abs(this.leanAngle);
+    return (
+      this.isGrounded &&
+      !this.isGrinding &&
+      !this.snapActive &&
+      !this.reverseActive &&
+      this.speed >= LAYBACK_MIN_SPEED &&
+      absLean >= 0.42
+    );
+  }
 }

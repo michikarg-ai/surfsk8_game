@@ -4,6 +4,7 @@ export interface TouchControlsOptions {
   frameElement: HTMLElement;
   onPause?: () => void;
   onVibrate?: (ms: number) => void;
+  getSlideTricksEligibility?: () => { canBert: boolean; canLayback: boolean };
 }
 
 export class TouchControls {
@@ -19,7 +20,6 @@ export class TouchControls {
   private ollieBtn: HTMLButtonElement;
   private snapBtn: HTMLButtonElement;
   private slideBtn: HTMLButtonElement;
-  private laybackBtn: HTMLButtonElement;
   private revBtn: HTMLButtonElement;
 
   public isEnabled = false;
@@ -53,7 +53,7 @@ export class TouchControls {
 
     // Build the DOM
     this.container.innerHTML = `
-      <!-- Left zone: Ergonomic Dual-Paddle Carve Rocker & Push/Crouch Cluster -->
+      <!-- Left zone: Ergonomic 3-Button Carve Rocker & Push (Push + Left + Right) -->
       <div id="touch-carve-zone" class="touch-zone">
         <button id="touch-btn-push" class="touch-aux-pill touch-push-pill" type="button" title="Push Off / Forward Pump">
           <span>▲ PUSH</span>
@@ -71,27 +71,24 @@ export class TouchControls {
           </button>
         </div>
 
-        <button id="touch-btn-crouch" class="touch-aux-pill touch-crouch-pill" type="button" title="Crouch / Bowl Compression">
-          <span>▼ CROUCH</span>
-        </button>
-        <div class="touch-zone-label">CARVE &amp; PUMP · SLIDE ↓ CROUCH</div>
+        <div class="touch-zone-label">CARVE &amp; PUMP</div>
       </div>
 
       <!-- Right zone: Action & Trick Cluster -->
       <div id="touch-actions-zone" class="touch-zone">
-        <!-- Compact 4-Trick Arc -->
+        <!-- Compact 4-Button Cluster: SNAP, 360, SLIDE/LAYBACK, COMPRESS -->
         <div class="touch-tricks-cluster">
           <button id="touch-btn-snap" class="touch-trick-btn" type="button" title="Top-turn Snap">
             <span>SNAP</span>
           </button>
-          <button id="touch-btn-layback" class="touch-trick-btn" type="button" title="Layback Carve">
-            <span>LAYBACK</span>
-          </button>
-          <button id="touch-btn-slide" class="touch-trick-btn" type="button" title="Bertslide">
-            <span>SLIDE</span>
-          </button>
           <button id="touch-btn-rev" class="touch-trick-btn" type="button" title="Reverse 360">
             <span>360</span>
+          </button>
+          <button id="touch-btn-slide" class="touch-trick-btn touch-slide-btn" type="button" title="Bert Slide / Layback Carve">
+            <span>SLIDE</span>
+          </button>
+          <button id="touch-btn-crouch" class="touch-trick-btn touch-compress-btn" type="button" title="Compress / Crouch">
+            <span>COMPRESS</span>
           </button>
         </div>
 
@@ -110,13 +107,12 @@ export class TouchControls {
     this.paddleLeft = this.container.querySelector('#touch-btn-left')!;
     this.paddleRight = this.container.querySelector('#touch-btn-right')!;
     this.pushBtn = this.container.querySelector('#touch-btn-push')!;
-    this.crouchBtn = this.container.querySelector('#touch-btn-crouch')!;
 
     this.actionsZone = this.container.querySelector('#touch-actions-zone')!;
+    this.crouchBtn = this.container.querySelector('#touch-btn-crouch')!;
     this.ollieBtn = this.container.querySelector('#touch-btn-ollie')!;
     this.snapBtn = this.container.querySelector('#touch-btn-snap')!;
     this.slideBtn = this.container.querySelector('#touch-btn-slide')!;
-    this.laybackBtn = this.container.querySelector('#touch-btn-layback')!;
     this.revBtn = this.container.querySelector('#touch-btn-rev')!;
 
     this.bindEvents();
@@ -345,64 +341,8 @@ export class TouchControls {
       16
     );
 
-    // Dedicated crouch button also supports carving if sliding left/right while held
-    const handleCrouchDown = (e: PointerEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.activeCrouchPointerId = e.pointerId;
-      try {
-        this.crouchBtn.setPointerCapture?.(e.pointerId);
-      } catch (_) {}
-      this.isButtonCrouching = true;
-      this.updateCrouchState();
-      this.triggerHaptic(14);
-
-      const rect = this.carveRocker.getBoundingClientRect();
-      const midX = rect.left + rect.width * 0.5;
-      const deadzone = rect.width * 0.08;
-      if (e.clientX < midX - deadzone) {
-        this.setSteerDirection(-1);
-      } else if (e.clientX > midX + deadzone) {
-        this.setSteerDirection(1);
-      }
-    };
-
-    const handleCrouchMove = (e: PointerEvent) => {
-      if (this.activeCrouchPointerId !== e.pointerId) return;
-      e.preventDefault();
-      const rect = this.carveRocker.getBoundingClientRect();
-      const midX = rect.left + rect.width * 0.5;
-      const deadzone = rect.width * 0.08;
-      if (e.clientX < midX - deadzone) {
-        this.setSteerDirection(-1);
-      } else if (e.clientX > midX + deadzone) {
-        this.setSteerDirection(1);
-      } else {
-        this.setSteerDirection(0);
-      }
-    };
-
-    const handleCrouchUp = (e: PointerEvent) => {
-      if (this.activeCrouchPointerId !== e.pointerId) return;
-      e.preventDefault();
-      try {
-        this.crouchBtn.releasePointerCapture?.(e.pointerId);
-      } catch (_) {}
-      this.activeCrouchPointerId = null;
-      this.isButtonCrouching = false;
-      this.updateCrouchState();
-      if (this.activeRockerPointerId === null) {
-        this.setSteerDirection(0);
-      }
-    };
-
-    this.crouchBtn.addEventListener('pointerdown', handleCrouchDown, { passive: false });
-    this.crouchBtn.addEventListener('pointermove', handleCrouchMove, { passive: false });
-    this.crouchBtn.addEventListener('pointerup', handleCrouchUp, { passive: false });
-    this.crouchBtn.addEventListener('pointercancel', handleCrouchUp, { passive: false });
-
     // -------------------------------------------------------------------------
-    // 3. Primary Ollie / Indy Button & Trick Cluster (Right Thumb)
+    // 2. Action & Trick Cluster (Right Thumb): SNAP, 360, SLIDE/LAYBACK, COMPRESS
     // -------------------------------------------------------------------------
     bindPressButton(
       this.ollieBtn,
@@ -428,28 +368,6 @@ export class TouchControls {
     );
 
     bindPressButton(
-      this.slideBtn,
-      () => {
-        this.state.snapSlide = true;
-      },
-      () => {
-        this.state.snapSlide = false;
-      },
-      16
-    );
-
-    bindPressButton(
-      this.laybackBtn,
-      () => {
-        this.state.laybackTrick = true;
-      },
-      () => {
-        this.state.laybackTrick = false;
-      },
-      16
-    );
-
-    bindPressButton(
       this.revBtn,
       () => {
         this.state.reverseTrick = true;
@@ -458,6 +376,65 @@ export class TouchControls {
         this.state.reverseTrick = false;
       },
       16
+    );
+
+    // Merged Bert Slide & Layback Button:
+    // Triggers whichever trick is currently eligible.
+    // If both are possible at this moment, picks randomly (50% Bertslide, 50% Layback).
+    let activeSlideTrick: 'bert' | 'layback' | null = null;
+
+    bindPressButton(
+      this.slideBtn,
+      () => {
+        let canBert = false;
+        let canLayback = false;
+
+        if (this.options.getSlideTricksEligibility) {
+          const eligibility = this.options.getSlideTricksEligibility();
+          canBert = eligibility.canBert;
+          canLayback = eligibility.canLayback;
+        }
+
+        if (canBert && canLayback) {
+          // If both tricks are possible at this moment: pick randomly (50% / 50%)!
+          activeSlideTrick = Math.random() < 0.5 ? 'bert' : 'layback';
+        } else if (canLayback) {
+          activeSlideTrick = 'layback';
+        } else if (canBert) {
+          activeSlideTrick = 'bert';
+        } else {
+          // Neither meets full threshold right now: pick randomly so physics executes when carve deepens
+          activeSlideTrick = Math.random() < 0.5 ? 'bert' : 'layback';
+        }
+
+        if (activeSlideTrick === 'bert') {
+          this.state.snapSlide = true;
+          this.state.laybackTrick = false;
+        } else {
+          this.state.laybackTrick = true;
+          this.state.snapSlide = false;
+        }
+      },
+      () => {
+        activeSlideTrick = null;
+        this.state.snapSlide = false;
+        this.state.laybackTrick = false;
+      },
+      16
+    );
+
+    // Compress / Crouch Button on the Right:
+    bindPressButton(
+      this.crouchBtn,
+      () => {
+        this.isButtonCrouching = true;
+        this.updateCrouchState();
+      },
+      () => {
+        this.isButtonCrouching = false;
+        this.updateCrouchState();
+      },
+      14
     );
   }
 }

@@ -1701,20 +1701,20 @@
 
       /* Adjust HUD elements when touch controls are visible */
       body.has-touch-controls .bottom-left-cluster {
-        margin-bottom: 154px;
+        margin-bottom: 126px;
         transition: margin-bottom 0.2s ease;
       }
       body.has-touch-controls .dock {
-        margin-bottom: 154px;
+        margin-bottom: 126px;
         transition: margin-bottom 0.2s ease;
       }
       body.reel-mode.has-touch-controls .bottom-left-cluster {
-        margin-bottom: 135px;
+        margin-bottom: 108px;
         transform: scale(0.85);
         transform-origin: bottom left;
       }
       body.reel-mode.has-touch-controls .dock {
-        margin-bottom: 140px;
+        margin-bottom: 112px;
         transform: scale(0.85);
         transform-origin: bottom right;
       }
@@ -1898,6 +1898,15 @@
         color: var(--yellow);
         box-shadow: 0 0 16px rgba(242, 204, 38, 0.7);
         transform: skewX(var(--skew)) scale(0.94);
+      }
+      .touch-compress-btn {
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        border-color: rgba(250, 164, 26, 0.45);
+      }
+      body.reel-mode .touch-compress-btn {
+        font-size: 8.8px;
+        letter-spacing: 0.03em;
       }
 
       /* Large Primary Action Button: Ollie / Indy Grab */

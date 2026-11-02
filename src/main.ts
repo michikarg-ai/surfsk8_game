@@ -98,6 +98,10 @@ class SurfskateMunichGame {
     this.touchControls = new TouchControls({
       frameElement: this.viewportContainer,
       onPause: () => this.pauseGameAndOpenLanding(),
+      getSlideTricksEligibility: () => ({
+        canBert: this.controller.canPerformBertSlide(),
+        canLayback: this.controller.canPerformLayback(),
+      }),
     });
 
     this.hud = new SurfHUD({
