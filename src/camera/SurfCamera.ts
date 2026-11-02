@@ -204,9 +204,33 @@ export class SurfCamera {
 
       targetLook.copy(ctrl.position).add(new THREE.Vector3(0, 0.65, 0));
     } else {
-      // Sunset Palm-Tree Mural Showcase Angle (frames the skater with the East Sunset Palm Mural behind)
-      targetPos.set(11.8, 1.45, 3.8 + Math.sin(performance.now() * 0.0005) * 1.4);
-      targetLook.copy(ctrl.position).lerp(new THREE.Vector3(20.5, 1.55, 4.6), 0.38);
+      // 3. Sunset Palm-Tree Mural Showcase Angle
+      // Cinematic broadcast rail camera framing the skater with the East Sunset Palm Mural behind.
+      // Dynamic dolly & minimum distance buffer ensures the skater is NEVER lost or clipped through.
+      const railX = THREE.MathUtils.clamp(ctrl.position.x - 4.6, 6.0, 11.8);
+      const railZ = THREE.MathUtils.clamp(ctrl.position.z + 0.6 + Math.sin(performance.now() * 0.0004) * 0.8, -1.0, 8.5);
+      const baseHeight = Math.max(1.85, ctrl.position.y + (this.aspectMode === '9:16' ? 2.1 : 1.75));
+
+      targetPos.set(railX, baseHeight, railZ);
+
+      // Always focus cleanly on the skater's upper torso so they remain perfectly framed
+      targetLook.copy(ctrl.position).add(new THREE.Vector3(0, 0.78, 0));
+
+      // Enforce safe minimum distance buffer:
+      // If the skater skates directly toward or past the camera rail, smoothly dolly back & crane up
+      const toCam = targetPos.clone().sub(ctrl.position);
+      const horizDist = Math.hypot(toCam.x, toCam.z);
+      const minDist = this.aspectMode === '9:16' ? 4.4 : 3.8;
+
+      if (horizDist < minDist) {
+        const safeDir = horizDist > 0.01
+          ? new THREE.Vector2(toCam.x, toCam.z).normalize()
+          : new THREE.Vector2(-1, 0); // fallback: step back westward
+        targetPos.x = ctrl.position.x + safeDir.x * minDist;
+        targetPos.z = ctrl.position.z + safeDir.y * minDist;
+        // Crane up smoothly when close to give a clean overhead/downward view of the bowl
+        targetPos.y += (minDist - horizDist) * 0.55;
+      }
     }
 
     // Prevent camera from clipping below the concrete surface
