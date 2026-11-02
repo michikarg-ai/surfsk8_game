@@ -224,10 +224,38 @@ export class LandingPage {
       });
     }
 
+    // Terms & Privacy Modal
+    const termsBtn = document.getElementById('landing-terms-btn');
+    const termsModal = document.getElementById('terms-modal');
+    const termsCloseBtn = document.getElementById('terms-modal-close');
+    const termsOkBtn = document.getElementById('terms-modal-ok-btn');
+    const termsBackdrop = termsModal?.querySelector('.terms-modal-backdrop');
+
+    const openTerms = (e: Event) => {
+      e.stopPropagation();
+      termsModal?.classList.remove('hidden');
+    };
+    const closeTerms = (e?: Event) => {
+      e?.stopPropagation();
+      termsModal?.classList.add('hidden');
+    };
+
+    termsBtn?.addEventListener('click', openTerms);
+    termsCloseBtn?.addEventListener('click', closeTerms);
+    termsOkBtn?.addEventListener('click', closeTerms);
+    termsBackdrop?.addEventListener('click', closeTerms);
+
     this.updateActiveSectionVisuals();
   }
 
   public handleKeyDown(code: string): void {
+    if (code === 'Escape') {
+      const termsModal = document.getElementById('terms-modal');
+      if (termsModal && !termsModal.classList.contains('hidden')) {
+        termsModal.classList.add('hidden');
+        return;
+      }
+    }
     if (code === 'KeyQ') {
       this.onCycleQuality?.();
       return;
@@ -362,12 +390,18 @@ export class LandingPage {
 
   public startGame(): void {
     if (!this.isVisible) return;
+    const termsModal = document.getElementById('terms-modal');
+    termsModal?.classList.add('hidden');
     this.isVisible = false;
     this.overlayEl.classList.add('hidden');
     if (this.onSelectSkater) {
       this.onSelectSkater(SKATER_CHARACTERS[this.currentSkaterIndex].modelUrl);
     }
     this.onStartGame();
+  }
+
+  public getSelectedSkaterName(): string {
+    return SKATER_CHARACTERS[this.currentSkaterIndex]?.name || 'LUKAS';
   }
 
   public show(): void {

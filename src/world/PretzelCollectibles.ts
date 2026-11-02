@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { SurfHUD } from '../ui/SurfHUD';
 import { SurfAudio } from '../audio/SurfAudio';
+import { track } from '@vercel/analytics';
 
 export interface PretzelConfig {
   id: number;
@@ -239,8 +240,11 @@ export class PretzelCollectibles {
     item.popping = true;
     item.popTimer = 0;
     this.collectedCount++;
-
     const isAllCollected = this.collectedCount === this.totalCount;
+
+    try {
+      track('pretzel_collect', { count: this.collectedCount, all: isAllCollected });
+    } catch {}
 
     // Spawn golden collection sparkles
     this.emitCollectBurst(item.container.position);

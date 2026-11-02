@@ -8,6 +8,10 @@ import { DriveControlMode, SurfHUD } from './ui/SurfHUD';
 import { LandingPage } from './ui/LandingPage';
 import { SurfAudio } from './audio/SurfAudio';
 import { PretzelCollectibles } from './world/PretzelCollectibles';
+import { inject, track } from '@vercel/analytics';
+
+// Initialize Vercel Web Analytics
+inject();
 
 export type GraphicsPreset = 'auto' | 'high' | 'medium' | 'low';
 export type EffectiveQuality = 'high' | 'medium' | 'low';
@@ -81,6 +85,9 @@ class SurfskateMunichGame {
       this.audio.playBailSound();
       this.surfCamera.triggerBailShake(0.38, 0.24);
       this.hud.showBailBanner('WIPEOUT!');
+      try {
+        track('wipeout', { reason });
+      } catch {}
     };
     this.worldScene = new ImGefildeScene(this.scene, this.renderer);
     this.skaterVisuals = new SkaterVisuals(this.scene);
@@ -105,6 +112,9 @@ class SurfskateMunichGame {
         this.resetSession();
         this.audio.resume();
         this.lastTime = performance.now();
+        try {
+          track('game_start', { skater: this.landingPage.getSelectedSkaterName() });
+        } catch {}
       },
       (modelUrl) => {
         void this.skaterVisuals.load(modelUrl);
@@ -500,6 +510,9 @@ class SurfskateMunichGame {
           this.surfCamera.triggerIndyOrbit(this.slowMoDuration + 0.35);
         }
         this.hud.showTrickBanner(ev.name, perfect);
+        try {
+          track('trick', { trick: ev.trick, quality: ev.quality, points: ev.points });
+        } catch {}
       }
     });
     this.worldScene.update(timeSec);

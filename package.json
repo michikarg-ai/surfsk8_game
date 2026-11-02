@@ -12,6 +12,7 @@
     "build:assets": "npm run build:park && npm run build:skater"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "cannon-es": "^0.20.0",
     "three": "^0.170.0"
   },

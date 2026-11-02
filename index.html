@@ -1083,11 +1083,22 @@
         font-size: 24px;
         white-space: nowrap;
       }
-      .landing-aux-pill {
+      .landing-top-bar {
         position: absolute;
         top: 22px;
         right: 28px;
         z-index: 5;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      body.reel-mode .landing-top-bar {
+        top: 14px;
+        right: 16px;
+        gap: 6px;
+      }
+      .landing-aux-pill {
+        position: relative;
         background: rgba(18, 16, 14, 0.72);
         border: 1px solid rgba(255, 255, 255, 0.28);
         color: #f5f4f0;
@@ -1110,10 +1121,178 @@
         transform: skewX(var(--skew)) scale(1.05);
       }
       body.reel-mode .landing-aux-pill {
-        top: 14px;
-        right: 16px;
+        font-size: 11px;
+        padding: 5px 8px;
+      }
+
+      /* =====================================================================
+         TERMS & PRIVACY MODAL
+         ===================================================================== */
+      .terms-modal-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+      }
+      .terms-modal-overlay.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .terms-modal-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(8, 7, 6, 0.82);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+      .terms-modal-card {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        max-width: 640px;
+        max-height: 85vh;
+        display: flex;
+        flex-direction: column;
+        background: linear-gradient(145deg, rgba(26, 23, 20, 0.98), rgba(16, 14, 12, 0.98));
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-top: 2px solid var(--orange);
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(0, 0, 0, 0.6);
+        border-radius: 6px;
+        color: #f3f2ee;
+        overflow: hidden;
+      }
+      .terms-header {
+        padding: 22px 24px 14px 24px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      .terms-badge {
+        display: inline-block;
+        font-family: var(--font-hud);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        color: var(--yellow);
+        text-transform: uppercase;
+        margin-bottom: 4px;
+      }
+      .terms-title {
+        font-family: var(--font-hud);
+        font-size: 26px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        line-height: 1.1;
+        margin: 0;
+        color: #ffffff;
+        text-transform: uppercase;
+      }
+      .terms-close-btn {
+        position: absolute;
+        top: 16px;
+        right: 18px;
+        background: transparent;
+        border: none;
+        color: #9ca3af;
+        font-size: 28px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 4px 8px;
+        transition: color 0.15s ease;
+      }
+      .terms-close-btn:hover {
+        color: #ffffff;
+      }
+      .terms-content {
+        padding: 20px 24px;
+        overflow-y: auto;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: #d1d5db;
+      }
+      .terms-section {
+        margin-bottom: 20px;
+      }
+      .terms-section:last-child {
+        margin-bottom: 0;
+      }
+      .terms-section-title {
+        font-family: var(--font-hud);
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        color: var(--orange);
+        text-transform: uppercase;
+        margin: 0 0 8px 0;
+      }
+      .terms-content p {
+        margin: 0 0 10px 0;
+      }
+      .terms-content p:last-child {
+        margin-bottom: 0;
+      }
+      .terms-list {
+        margin: 6px 0 10px 0;
+        padding-left: 20px;
+      }
+      .terms-list li {
+        margin-bottom: 8px;
+      }
+      .terms-code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         font-size: 12px;
-        padding: 5px 10px;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 2px 5px;
+        border-radius: 3px;
+        color: #fef08a;
+      }
+      .terms-link {
+        color: var(--yellow);
+        text-decoration: underline;
+        font-weight: 600;
+      }
+      .terms-link:hover {
+        color: #ffffff;
+      }
+      .terms-footer {
+        padding: 14px 24px;
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+        display: flex;
+        justify-content: flex-end;
+        background: rgba(14, 12, 10, 0.7);
+      }
+      .terms-ok-btn {
+        background: linear-gradient(135deg, #f2741f, #c2410c);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        color: #ffffff;
+        font-family: var(--font-hud);
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 8px 22px;
+        border-radius: 4px;
+        cursor: pointer;
+        transform: skewX(var(--skew));
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+        transition: all 0.16s ease;
+      }
+      .terms-ok-btn:hover {
+        background: linear-gradient(135deg, #ff8c3b, #d94b11);
+        transform: skewX(var(--skew)) scale(1.04);
+      }
+      body.reel-mode .terms-modal-card {
+        max-width: 92vw;
+        max-height: 80vh;
+      }
+      body.reel-mode .terms-title {
+        font-size: 20px;
       }
     </style>
   </head>
@@ -1129,9 +1308,14 @@
       <!-- Landing Page (Garage Selector Overlay) -->
       <div id="landing-overlay">
         <canvas id="landing-skater-canvas"></canvas>
-        <button id="landing-quality-btn" type="button" class="landing-aux-pill" title="Toggle Graphics Quality [Q]">
-          ⚡ QUALITY: AUTO
-        </button>
+        <div class="landing-top-bar">
+          <button id="landing-terms-btn" type="button" class="landing-aux-pill" title="Terms &amp; Privacy Policy">
+            📜 TERMS &amp; PRIVACY
+          </button>
+          <button id="landing-quality-btn" type="button" class="landing-aux-pill" title="Toggle Graphics Quality [Q]">
+            ⚡ QUALITY: AUTO
+          </button>
+        </div>
 
         <h1 class="landing-title">SRFSK8 Munich</h1>
 
@@ -1331,6 +1515,71 @@
         <button id="landing-start-btn" type="button">
           PRESS <span class="enter-key">ENTER</span> TO START
         </button>
+
+        <!-- Terms & Privacy Policy Modal -->
+        <div id="terms-modal" class="terms-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="terms-modal-title">
+          <div class="terms-modal-backdrop"></div>
+          <div class="terms-modal-card">
+            <button id="terms-modal-close" class="terms-close-btn" aria-label="Close Terms">&times;</button>
+            
+            <div class="terms-header">
+              <span class="terms-badge">LEGAL &amp; PRIVACY</span>
+              <h2 id="terms-modal-title" class="terms-title">SRFSK8 MUNICH — TERMS &amp; PRIVACY</h2>
+            </div>
+
+            <div class="terms-content">
+              <section class="terms-section">
+                <h3 class="terms-section-title">1. Terms of Use &amp; Disclaimer</h3>
+                <p>
+                  <strong>SRFSK8 Munich</strong> is an independent, non-commercial 3D web game and interactive simulation
+                  created as a creative tribute to surfskate culture and the concrete flow bowl <em>"Im Gefilde"</em> in Munich, Germany.
+                </p>
+                <p>
+                  All gameplay mechanics, speeds, air times, and maneuvers are simulated for virtual entertainment.
+                  Real-world skateboarding and surfskating involve inherent physical hazards.
+                  Always wear proper protective equipment (certified helmet, knee/elbow pads, wrist guards) and follow local skatepark safety rules in the real world.
+                </p>
+              </section>
+
+              <section class="terms-section">
+                <h3 class="terms-section-title">2. Privacy Policy &amp; Vercel Web Analytics</h3>
+                <p>
+                  We value your privacy and believe in data minimalism:
+                </p>
+                <ul class="terms-list">
+                  <li>
+                    <strong>Privacy-Friendly Analytics:</strong> This site uses <strong>Vercel Web Analytics</strong> to monitor anonymized visitor metrics (e.g. page views, country, device type) and track virtual game maneuvers to improve performance and gameplay balance.
+                  </li>
+                  <li>
+                    <strong>No Tracking Cookies:</strong> Vercel Web Analytics does not use cookies, does not store persistent identifiers across websites, and does not collect personally identifiable information (PII). It complies fully with GDPR, CCPA, and PECR.
+                  </li>
+                  <li>
+                    <strong>No Account Required:</strong> No registration, login, email address, or payment data is required to play.
+                  </li>
+                  <li>
+                    <strong>Local Storage:</strong> Your control preferences (Arrow Keys vs WASD) and graphics quality setting are saved strictly in your local browser (<code class="terms-code">localStorage</code>) and are never transmitted to external servers.
+                  </li>
+                </ul>
+              </section>
+
+              <section class="terms-section">
+                <h3 class="terms-section-title">3. Credits, Assets &amp; Intellectual Property</h3>
+                <p>
+                  Skatepark terrain geometry is reconstructed from public LiDAR elevation data and drone photogrammetry of Skatepark <em>"Im Gefilde"</em>, Munich.
+                  Original soundtrack and audio clips are used with artist permission or under royalty-free creative licenses for non-commercial web use.
+                </p>
+                <p>
+                  Feedback, trick suggestions, or skatepark requests are welcome on Instagram:
+                  <a href="https://www.instagram.com/surfskate_munich/" target="_blank" rel="noopener noreferrer" class="terms-link">@surfskate_munich</a>.
+                </p>
+              </section>
+            </div>
+
+            <div class="terms-footer">
+              <button id="terms-modal-ok-btn" type="button" class="terms-ok-btn">GOT IT &amp; CLOSE</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="hud-layer">
