@@ -77,6 +77,11 @@ class SurfskateMunichGame {
     this.scene = new THREE.Scene();
     this.parkSurface = new ParkSurface();
     this.controller = new SurfskateController(this.parkSurface);
+    this.controller.onBail = (reason: string) => {
+      this.audio.playBailSound();
+      this.surfCamera.triggerBailShake(0.38, 0.24);
+      this.hud.showBailBanner('WIPEOUT!');
+    };
     this.worldScene = new ImGefildeScene(this.scene, this.renderer);
     this.skaterVisuals = new SkaterVisuals(this.scene);
     this.surfCamera = new SurfCamera();

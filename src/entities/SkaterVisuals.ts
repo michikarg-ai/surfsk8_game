@@ -491,6 +491,40 @@ export class SkaterVisuals {
     const boardZ = this.boardDir(0, 0, 1); // nose
     const bodyLean = lean * 0.85; // whole body leans into the rail with the deck
 
+    // Handle bailing / wipeout falling pose:
+    // Skater's hips collapse onto the pavement, body slides on stomach/knees, arms reach to brace
+    if (ctrl.isBailing) {
+      const p = 1.0 - Math.max(0, ctrl.bailTimer / ctrl.bailDuration);
+      const fallCurve = p < 0.85 ? Math.min(1.0, p * 4.2) : Math.max(0, (1.0 - p) / 0.15);
+
+      const bailHips = new THREE.Vector3(
+        0.10 * fallCurve,
+        DECK_TOP - 0.05 * fallCurve,
+        -0.42 * fallCurve
+      );
+      const hipsWorld = board.localToWorld(bailHips);
+      b.Hips.position.copy(b.Hips.parent!.worldToLocal(hipsWorld));
+      b.Hips.updateMatrixWorld(true);
+
+      this.rotateBoneAxis(b.Hips, boardX, -1.05 * fallCurve);
+      this.rotateBoneAxis(b.Hips, boardY, 0.25 * fallCurve);
+      this.rotateBoneAxis(b.Spine, boardX, -0.45 * fallCurve);
+      this.rotateBoneAxis(b.Spine1, boardX, -0.35 * fallCurve);
+      this.rotateBoneAxis(b.Neck, boardX, 0.65 * fallCurve);
+      this.rotateBoneAxis(b.Head, boardX, 0.45 * fallCurve);
+
+      const lArmTarget = board.localToWorld(new THREE.Vector3(-0.35, DECK_TOP + 0.02, 0.35));
+      const rArmTarget = board.localToWorld(new THREE.Vector3(0.40, DECK_TOP + 0.02, 0.35));
+      this.solveArm('Left', lArmTarget, this.boardDir(-1, 0.5, 0));
+      this.solveArm('Right', rArmTarget, this.boardDir(1, 0.5, 0));
+
+      const lLegTarget = board.localToWorld(new THREE.Vector3(-0.15, DECK_TOP - 0.02, -0.85));
+      const rLegTarget = board.localToWorld(new THREE.Vector3(0.18, DECK_TOP - 0.02, -0.95));
+      this.solveLeg('Left', lLegTarget, this.boardDir(0, 0.8, -0.5));
+      this.solveLeg('Right', rLegTarget, this.boardDir(0, 0.8, -0.5));
+      return;
+    }
+
     // 2. Pelvis: lowered by knee bend, centred between the feet, rolled into the carve.
     //    During a Bertslide (`bert`), drop the hips low and sling them toward the tail (-Z) and inside rail.
     //    During an Indy grab (`indy`), tuck hips low toward the deck so knees compress tightly to chest.
@@ -691,8 +725,28 @@ export class SkaterVisuals {
     const rotMatrix = new THREE.Matrix4().makeBasis(right, up, orthoForward.clone().negate());
     this.root.quaternion.setFromRotationMatrix(rotMatrix);
 
-    // 2. Deck Lean (`DeckMesh`)
-    if (this.deckMesh) {
+    // 2. Deck Lean (`DeckMesh`) and board separation during bail
+    if (this.boardGroup) {
+      if (ctrl.isBailing) {
+        const p = 1.0 - Math.max(0, ctrl.bailTimer / ctrl.bailDuration);
+        const slideOut = Math.min(1.8, p * 3.2);
+        this.boardGroup.position.set(
+          Math.sin(p * 3.0) * 0.25,
+          0.02,
+          slideOut
+        );
+        this.boardGroup.rotation.set(
+          Math.sin(p * 2.0) * 0.1,
+          Math.sin(p * 2.5) * 0.3,
+          Math.min(1.1, p * 2.2)
+        );
+      } else {
+        this.boardGroup.position.set(0, 0, 0);
+        this.boardGroup.rotation.set(0, 0, 0);
+      }
+    }
+
+    if (this.deckMesh && !ctrl.isBailing) {
       const b = ctrl.bertSlideAmount;
       const indy = ctrl.indyGrabAmount;
       const deckRoll = ctrl.leanAngle * (1 - b) * (1 - indy) - 0.34 * b - 0.36 * indy;

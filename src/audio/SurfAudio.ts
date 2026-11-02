@@ -573,6 +573,50 @@ export class SurfAudio {
    * Single pretzel: bright rising bell chime (D5 -> A5).
    * All 5 collected: triumphant Bavarian victory arpeggio fanfare (C5 -> E5 -> G5 -> C6).
    */
+  /**
+   * Sound of wiping out / falling off the skateboard:
+   * Low concrete impact thud + harsh wheel bite / slide screech.
+   */
+  public playBailSound(): void {
+    this.duckMusic(1.1);
+    if (!this.ctx || !this.whiteNoise || this.isMuted || this.isPaused || !this.masterGain) return;
+    const ctx = this.ctx;
+    const master = this.masterGain;
+    const now = ctx.currentTime;
+
+    // 1. Heavy low impact "THUD" (falling onto ground)
+    const osc = ctx.createOscillator();
+    const oscGain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(130, now);
+    osc.frequency.exponentialRampToValueAtTime(36, now + 0.28);
+    oscGain.gain.setValueAtTime(0.42, now);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+    osc.connect(oscGain);
+    oscGain.connect(master);
+    osc.start(now);
+    osc.stop(now + 0.33);
+
+    // 2. Concrete slide & wheel-bite scrape (white noise through resonant bandpass)
+    const src = ctx.createBufferSource();
+    src.buffer = this.whiteNoise;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 2.5;
+    bp.frequency.setValueAtTime(1400, now);
+    bp.frequency.exponentialRampToValueAtTime(420, now + 0.42);
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.35, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.48);
+
+    src.connect(bp);
+    bp.connect(noiseGain);
+    noiseGain.connect(master);
+    src.start(now);
+    src.stop(now + 0.49);
+  }
+
   public playPretzelPickup(isAllCollected = false): void {
     if (!this.ctx || this.isMuted || this.isPaused || !this.masterGain) return;
     const now = this.ctx.currentTime;

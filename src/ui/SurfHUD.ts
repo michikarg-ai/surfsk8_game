@@ -243,7 +243,10 @@ export class SurfHUD {
     }
 
     // 5. Coaching hints: push-off from standstill, then how to pump
-    if (ctrl.coachHint) {
+    if (ctrl.isBailing) {
+      this.coachHintEl.textContent = `WIPEOUT: ${ctrl.bailReason || 'Lande gerade in Fahrtrichtung!'}`;
+      this.coachHintEl.className = 'visible bail';
+    } else if (ctrl.coachHint) {
       this.coachHintEl.textContent = ctrl.coachHint;
       this.coachHintEl.className = 'visible';
     } else if (ctrl.isGrounded && ctrl.speed < 0.4) {
@@ -270,6 +273,30 @@ export class SurfHUD {
     }, 1500);
   }
 
+  /** Big red banner when the player wipes out / bails. */
+  public showBailBanner(reason = 'WIPEOUT!'): void {
+    this.breakCombo();
+    this.snapBannerEl.textContent = reason;
+    this.snapBannerEl.className = '';
+    void this.snapBannerEl.offsetWidth;
+    const long = reason.length > 10 ? ' long' : '';
+    this.snapBannerEl.className = 'show bail' + long;
+    if (this.snapBannerTimeout !== null) window.clearTimeout(this.snapBannerTimeout);
+    this.snapBannerTimeout = window.setTimeout(() => {
+      this.snapBannerEl.className = '';
+      this.snapBannerTimeout = null;
+    }, 1500);
+  }
+
+  /** Wipe out the active combo without banking it to the session score. */
+  public breakCombo(): void {
+    this.activeComboBase = 0;
+    this.comboMultiplier = 0;
+    this.comboManeuvers = [];
+    this.comboTimeout = 0;
+    this.comboContainerEl.classList.remove('active');
+  }
+
   /** Backwards-compatible wrapper for the SNAP banner. */
   public showSnapBanner(perfect: boolean): void {
     this.showTrickBanner(perfect ? 'PERFECT SNAP!' : 'SNAP!', perfect);
@@ -293,6 +320,10 @@ export class SurfHUD {
         color: #f2cc26;
         text-shadow: 0 10px 36px rgba(242, 204, 38, 0.55), 0 6px 20px rgba(0, 0, 0, 0.8);
       }
+      #hud-snap-banner.bail {
+        color: #ff3344;
+        text-shadow: 0 10px 36px rgba(255, 51, 68, 0.7), 0 6px 20px rgba(0, 0, 0, 0.85);
+      }
       #hud-snap-banner.show { animation: snapPop 1.45s cubic-bezier(0.2, 1.4, 0.4, 1) forwards; }
       #hud-snap-banner.long { font-size: clamp(44px, 8.5vw, 116px); }
       @keyframes snapPop {
@@ -312,6 +343,7 @@ export class SurfHUD {
       }
       #hud-coach-hint.visible { opacity: 1; }
       #hud-coach-hint.idle { color: #f5f5f5; }
+      #hud-coach-hint.bail { color: #ff4d4d; border: 1px solid rgba(255, 77, 77, 0.45); }
       #hud-snap-hint {
         position: absolute; left: 50%; bottom: 20%; transform: translateX(-50%) skewX(-11deg);
         font: 800 16px 'Barlow Condensed', sans-serif; letter-spacing: 0.08em; text-transform: uppercase;

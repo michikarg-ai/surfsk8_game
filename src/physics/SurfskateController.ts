@@ -128,6 +128,15 @@ export class SurfskateController {
   public airRotation = 0;
   public maxAirHeight = 0;
 
+  // Bail / Wipeout state (triggered when landing not aligned or holding grab)
+  public isBailing = false;
+  public bailTimer = 0;
+  public readonly bailDuration = 1.35;
+  public bailImpactPos = new THREE.Vector3();
+  public bailImpactHeading = 0;
+  public bailReason = '';
+  public onBail?: (reason: string) => void;
+
   // Flow & Pump rhythm state
   public flowMeter = 35;
   public pumpSyncQuality: 'IDLE' | 'PERFECT PUMP!' | 'FLOW PUMP' | 'SCRUB' = 'IDLE';
@@ -246,6 +255,8 @@ export class SurfskateController {
     this.indyGrabHold = 0;
     this.indyGrabScored = false;
     this.airLaunchedFromWall = false;
+    this.isBailing = false;
+    this.bailTimer = 0;
     this.lastPumpDir = 0;
     this.timeSincePumpSwitch = 99;
   }
@@ -254,6 +265,36 @@ export class SurfskateController {
     const clampedDt = Math.min(dt, 0.033);
     // Translational simulation step (gameplay runs at TIME_SCALE of real time)
     const simDt = clampedDt * TIME_SCALE;
+
+    // While bailing: skater is sliding/falling on the ground, then respawns right at impact point
+    if (this.isBailing) {
+      this.bailTimer -= clampedDt;
+      this.speed = 0;
+      this.velocity.set(0, 0, 0);
+      this.position.copy(this.bailImpactPos);
+      this.currentSurface = this.park.sample(this.position.x, this.position.z);
+      this.position.y = this.currentSurface.height;
+      this.leanAngle = 0;
+      this.frontTruckYaw = 0;
+      this.rearTruckYaw = 0;
+      this.sprayIntensity = Math.max(0, this.sprayIntensity - clampedDt * 2.5);
+
+      if (this.bailTimer <= 0) {
+        // Respawn exactly where the player landed!
+        this.isBailing = false;
+        this.position.copy(this.bailImpactPos);
+        this.currentSurface = this.park.sample(this.position.x, this.position.z);
+        this.position.y = this.currentSurface.height;
+        this.heading = this.bailImpactHeading;
+        this.boardYawOffset = 0;
+        this.speed = 0;
+        this.velocity.set(0, 0, 0);
+        this.compression = 0.15;
+        this.coachHint = 'Aligned landings: point your board in travel direction!';
+        this.coachHintTimer = 2.5;
+      }
+      return;
+    }
 
     for (const key of Object.keys(this.maneuverCooldowns)) {
       this.maneuverCooldowns[key] = Math.max(0, this.maneuverCooldowns[key] - clampedDt);
@@ -599,6 +640,50 @@ export class SurfskateController {
         this.position.y = this.currentSurface.height;
         this.isGrounded = true;
 
+        // Keep only the velocity component tangent to the landing surface
+        const n = this.currentSurface.normal;
+        const vDotN = this.velocity.dot(n);
+        const tangentVel = this.velocity.clone().addScaledVector(n, -vDotN);
+        const horizSpeed = Math.hypot(tangentVel.x, tangentVel.z);
+
+        // Check whether landing is straight enough or if the skater bailed
+        const hadSignificantAir =
+          this.airTime >= 0.18 || this.maxAirHeight >= 0.25 || this.airLaunchedFromWall;
+        const grabActiveOnImpact = this.indyGrabActive;
+
+        let shouldBail = false;
+        let bailReason = '';
+
+        if (grabActiveOnImpact) {
+          shouldBail = true;
+          bailReason = 'LET GO OF GRAB BEFORE IMPACT!';
+        } else if (hadSignificantAir && horizSpeed >= 0.8) {
+          const travelHeading = Math.atan2(-tangentVel.x, -tangentVel.z);
+          const currentBoardHeading = this.heading + this.boardYawOffset;
+          let alignDiff = currentBoardHeading - travelHeading;
+          while (alignDiff > Math.PI) alignDiff -= Math.PI * 2;
+          while (alignDiff < -Math.PI) alignDiff += Math.PI * 2;
+          const alignError = Math.abs(alignDiff);
+
+          // Allowed landing angle: ~40° (0.70 rad)
+          const MAX_LANDING_ANGLE = 0.70;
+          if (alignError > MAX_LANDING_ANGLE) {
+            shouldBail = true;
+            if (alignError > 2.0) {
+              bailReason = 'LANDED BACKWARDS!';
+            } else {
+              bailReason = 'NOT ALIGNED WITH TRAVEL!';
+            }
+          }
+        }
+
+        if (shouldBail) {
+          const travelHeading =
+            horizSpeed >= 0.5 ? Math.atan2(-tangentVel.x, -tangentVel.z) : this.heading;
+          this.triggerBail(bailReason, travelHeading, onManeuver);
+          return;
+        }
+
         if (this.indyGrabActive && !this.indyGrabScored) {
           this.trickFail('INDY GRAB: Let go before landing or get more air!');
         } else if (this.indyGrabScored) {
@@ -608,10 +693,6 @@ export class SurfskateController {
         this.indyGrabAmount = 0;
         this.indyGrabReady = false;
 
-        // Keep only the velocity component tangent to the landing surface
-        const n = this.currentSurface.normal;
-        const vDotN = this.velocity.dot(n);
-        const tangentVel = this.velocity.clone().addScaledVector(n, -vDotN);
         this.speed = Math.min(MAX_SPEED, tangentVel.length());
         if (Math.hypot(tangentVel.x, tangentVel.z) > 0.2) {
           this.heading = Math.atan2(-tangentVel.x, -tangentVel.z);
@@ -823,6 +904,42 @@ export class SurfskateController {
     this.bertHold = 0;
     this.reverseActive = false;
     this.boardYawOffset = 0;
+  }
+
+  public triggerBail(
+    reason: string,
+    travelHeading: number,
+    onManeuver?: (ev: ManeuverEvent) => void
+  ): void {
+    this.isBailing = true;
+    this.bailTimer = this.bailDuration;
+    this.bailReason = reason;
+    this.bailImpactPos.copy(this.position);
+    this.bailImpactHeading = travelHeading;
+    this.speed = 0;
+    this.velocity.set(0, 0, 0);
+    this.isGrounded = true;
+    this.airTime = 0;
+    this.maxAirHeight = 0;
+    this.airLaunchedFromWall = false;
+    this.indyGrabActive = false;
+    this.indyGrabReady = false;
+    this.indyGrabAmount = 0;
+    this.flowMeter = 0;
+    this.sprayIntensity = 0.95;
+
+    this.onBail?.(reason);
+
+    if (onManeuver) {
+      this.triggerManeuver(
+        onManeuver,
+        `WIPEOUT! (${reason})`,
+        0,
+        this.currentSurface.zoneName,
+        false,
+        'SCRUB'
+      );
+    }
   }
 
   private trickFail(text: string): void {

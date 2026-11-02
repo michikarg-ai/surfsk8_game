@@ -17,6 +17,11 @@ export class SurfCamera {
   private snapZoom = 0;
   private snapZoomTimer = 0;
 
+  /** Camera shake trauma timer & intensity for wipeouts / bails */
+  private bailShakeTimer = 0;
+  private bailShakeDuration = 0;
+  private bailShakeIntensity = 0;
+
   constructor() {
     this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 250);
     this.camera.position.copy(this.currentPos);
@@ -25,6 +30,13 @@ export class SurfCamera {
   /** Punch the camera in toward the skater for a SNAP. */
   public triggerSnapZoom(duration = 1.3): void {
     this.snapZoomTimer = duration;
+  }
+
+  /** Trigger an impactful camera shake when wiping out / bailing. */
+  public triggerBailShake(duration = 0.38, intensity = 0.22): void {
+    this.bailShakeDuration = duration;
+    this.bailShakeTimer = duration;
+    this.bailShakeIntensity = intensity;
   }
 
   public setAspectRatio(width: number, height: number): void {
@@ -130,6 +142,18 @@ export class SurfCamera {
     const lookLerpRate = this.cameraStyle === 'follow' ? 10.0 : 18.0;
     this.currentPos.lerp(targetPos, Math.min(1, posLerpRate * clampedDt));
     this.currentLookAt.lerp(targetLook, Math.min(1, lookLerpRate * clampedDt));
+
+    // Wipeout impact camera shake
+    if (this.bailShakeTimer > 0) {
+      this.bailShakeTimer = Math.max(0, this.bailShakeTimer - clampedDt);
+      const shakeFactor = this.bailShakeTimer / Math.max(0.01, this.bailShakeDuration);
+      const s = this.bailShakeIntensity * shakeFactor;
+      const shakeX = (Math.random() - 0.5) * s * 2;
+      const shakeY = (Math.random() - 0.5) * s * 1.5;
+      const shakeZ = (Math.random() - 0.5) * s * 2;
+      this.currentPos.add(new THREE.Vector3(shakeX, shakeY, shakeZ));
+      this.currentLookAt.add(new THREE.Vector3(shakeX * 0.5, shakeY * 0.5, shakeZ * 0.5));
+    }
 
     this.camera.position.copy(this.currentPos);
     this.camera.lookAt(this.currentLookAt);
