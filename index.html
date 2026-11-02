@@ -965,6 +965,36 @@
         object-position: center 58%;
         display: block;
       }
+      .landing-park-actions {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .landing-inspect-btn {
+        background: rgba(56, 189, 248, 0.16);
+        border: 1.5px solid rgba(56, 189, 248, 0.55);
+        color: #38bdf8;
+        border-radius: 8px;
+        padding: 5px 12px;
+        font-family: var(--font-hud);
+        font-size: clamp(12px, 0.95vw, 14px);
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.18s ease;
+      }
+      .landing-inspect-btn:hover {
+        background: rgba(56, 189, 248, 0.32);
+        border-color: #38bdf8;
+        box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
+        transform: translateY(-1px);
+      }
       .board-icon-wrap {
         width: 100%;
         height: 100%;
@@ -1354,7 +1384,7 @@
 
       /* Adjust HUD elements when touch controls are visible */
       body.has-touch-controls .bottom-left-cluster {
-        margin-bottom: 124px;
+        margin-bottom: 154px;
         transition: margin-bottom 0.2s ease;
       }
       body.has-touch-controls .dock {
@@ -1362,8 +1392,8 @@
         transition: margin-bottom 0.2s ease;
       }
       body.reel-mode.has-touch-controls .bottom-left-cluster {
-        margin-bottom: 110px;
-        transform: scale(0.88);
+        margin-bottom: 135px;
+        transform: scale(0.85);
         transform-origin: bottom left;
       }
       body.reel-mode.has-touch-controls .dock {
@@ -1372,83 +1402,124 @@
         transform-origin: bottom right;
       }
 
-      /* Left zone: Analog Carve & Pump Joystick */
-      #touch-joystick-zone {
+      /* Left zone: Ergonomic Dual-Paddle Carve Rocker & Push/Crouch */
+      #touch-carve-zone {
         position: absolute;
         left: 20px;
-        bottom: 18px;
-        width: 120px;
-        height: 120px;
+        bottom: 16px;
+        width: 172px;
         pointer-events: auto;
         touch-action: none;
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
+        gap: 6px;
       }
-      #touch-joystick-base {
+      .touch-carve-rocker {
         position: relative;
-        width: 92px;
-        height: 92px;
-        border-radius: 50%;
-        background: rgba(16, 18, 22, 0.52);
-        border: 2px solid rgba(255, 255, 255, 0.22);
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), inset 0 0 16px rgba(0, 0, 0, 0.4);
+        width: 100%;
+        height: 60px;
+        display: flex;
+        align-items: stretch;
+        border-radius: 8px;
+        overflow: hidden;
+        background: rgba(16, 18, 22, 0.65);
+        border: 2px solid rgba(255, 255, 255, 0.26);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+        transform: skewX(var(--skew));
+        touch-action: none;
+      }
+      .rocker-divider {
+        width: 2px;
+        background: rgba(255, 255, 255, 0.2);
+        box-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+      }
+      .touch-carve-paddle {
+        flex: 1 1 50%;
+        background: transparent;
+        border: none;
+        color: #f7f6f2;
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: border-color 0.15s ease, background 0.15s ease;
+        gap: 6px;
+        padding: 0 10px;
+        cursor: pointer;
+        touch-action: none;
+        user-select: none;
+        transition: background 0.1s ease, color 0.1s ease;
       }
-      #touch-joystick-base.active {
-        border-color: var(--orange);
-        background: rgba(24, 20, 18, 0.68);
-        box-shadow: 0 0 20px rgba(242, 85, 20, 0.35), inset 0 0 16px rgba(0, 0, 0, 0.4);
+      .touch-carve-paddle > * {
+        transform: skewX(calc(var(--skew) * -1));
       }
-      .joystick-axis-marker {
-        position: absolute;
-        background: rgba(255, 255, 255, 0.15);
-        pointer-events: none;
+      .paddle-arrow {
+        font-size: 18px;
+        color: var(--yellow);
+        line-height: 1;
       }
-      .joystick-axis-marker.h {
-        left: 14px;
-        right: 14px;
-        height: 1px;
+      .paddle-label {
+        font-family: var(--font-hud);
+        font-size: 15px;
+        font-weight: 900;
+        letter-spacing: 0.12em;
+        line-height: 1;
       }
-      .joystick-axis-marker.v {
-        top: 14px;
-        bottom: 14px;
-        width: 1px;
+      .touch-carve-paddle.active {
+        background: linear-gradient(135deg, rgba(242, 85, 20, 0.85), rgba(250, 164, 26, 0.85));
+        color: #ffffff;
+        box-shadow: inset 0 0 14px rgba(255, 255, 255, 0.4);
       }
-      #touch-joystick-stick {
-        position: absolute;
-        width: 44px;
-        height: 44px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #f25514, #faa41a);
-        border: 2px solid #ffffff;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.4);
+      .touch-carve-paddle.active .paddle-arrow {
+        color: #ffffff;
+        transform: skewX(calc(var(--skew) * -1)) scale(1.18);
+      }
+
+      /* Push & Crouch Aux Pills */
+      .touch-aux-pill {
+        width: 112px;
+        height: 28px;
+        border-radius: 4px;
+        background: rgba(18, 16, 14, 0.72);
+        border: 1px solid rgba(255, 255, 255, 0.24);
+        color: #f5f4f0;
+        font-family: var(--font-hud);
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.1em;
+        transform: skewX(var(--skew));
+        cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        will-change: transform;
-        pointer-events: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+        transition: all 0.1s ease;
       }
-      .stick-core {
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.85);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      .touch-aux-pill > span {
+        display: inline-block;
+        transform: skewX(calc(var(--skew) * -1));
       }
+      .touch-aux-pill.active {
+        background: rgba(242, 85, 20, 0.6);
+        border-color: var(--yellow);
+        color: var(--yellow);
+        transform: skewX(var(--skew)) scale(0.96);
+      }
+      .touch-push-pill {
+        border-color: rgba(250, 164, 26, 0.45);
+      }
+      .touch-crouch-pill {
+        border-color: rgba(48, 182, 246, 0.45);
+      }
+
       .touch-zone-label {
         font-family: var(--font-hud);
         font-size: 10px;
         font-weight: 800;
         letter-spacing: 0.14em;
         color: rgba(255, 255, 255, 0.65);
-        margin-top: 6px;
+        margin-top: 2px;
         text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
         pointer-events: none;
       }
@@ -1551,35 +1622,40 @@
       }
 
       /* Reel-mode (Vertical 9:16) sizing adjustments */
-      body.reel-mode #touch-joystick-zone {
-        left: 12px;
-        bottom: 14px;
-        width: 104px;
-        height: 104px;
+      body.reel-mode #touch-carve-zone {
+        left: 10px;
+        bottom: 12px;
+        width: 146px;
+        gap: 5px;
       }
-      body.reel-mode #touch-joystick-base {
-        width: 82px;
-        height: 82px;
+      body.reel-mode .touch-carve-rocker {
+        height: 52px;
       }
-      body.reel-mode #touch-joystick-stick {
-        width: 38px;
-        height: 38px;
+      body.reel-mode .paddle-label {
+        font-size: 11px;
+      }
+      body.reel-mode .paddle-arrow {
+        font-size: 15px;
+      }
+      body.reel-mode .touch-aux-pill {
+        height: 25px;
+        font-size: 10.5px;
       }
       body.reel-mode #touch-actions-zone {
-        right: 12px;
-        bottom: 14px;
-        gap: 6px;
+        right: 10px;
+        bottom: 12px;
+        gap: 5px;
       }
       body.reel-mode .touch-action-primary {
-        width: 108px;
-        height: 46px;
+        width: 112px;
+        height: 48px;
       }
       body.reel-mode .touch-action-primary .ollie-main {
         font-size: 18px;
       }
       body.reel-mode .touch-trick-btn {
-        width: 51px;
-        height: 34px;
+        width: 53px;
+        height: 35px;
         font-size: 10.5px;
       }
     </style>
@@ -1630,12 +1706,12 @@
           <!-- 2. Select Skatepark -->
           <div class="sel-section" id="sel-section-skatepark">
             <div class="sel-heading">SELECT SKATEPARK</div>
-            <div class="sel-subtitle">IM GEFILDE - MUNICH</div>
+            <div class="sel-subtitle" id="landing-park-subtitle">IM GEFILDE - MUNICH</div>
             <div class="sel-picker">
               <button class="sel-arrow" data-kind="skatepark" data-dir="-1" aria-label="Previous skatepark">&#10094;</button>
               <div class="slot-display-wrap park-slot-wrap" id="park-slot-wrap">
                 <div class="slot-view slot-thumb-view active" id="park-thumb-view">
-                  <img src="/textures/im_gefilde_thumb.png" alt="Im Gefilde - Munich" class="park-thumb" />
+                  <img id="landing-park-thumb" src="/textures/im_gefilde_thumb.png" alt="Im Gefilde - Munich" class="park-thumb" />
                 </div>
                 <div class="slot-view slot-notice-view" id="park-notice-view">
                   <div class="notice-badge">
@@ -1974,7 +2050,7 @@
                   <div class="ctrl-row"><span class="key">←</span><span class="key">→</span> carve — alternate in rhythm to pump</div>
                   <div class="ctrl-row"><span class="key">↓</span><span class="key">⇧</span> compress on a wall drop = stronger pump</div>
                   <div class="ctrl-row"><span class="key">␣</span> ollie</div>
-                  <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span> camera positions</div>
+                  <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4/O</span> camera positions & 3D orbit</div>
                   <div class="ctrl-row"><span class="key">Tab</span> switch to WASD driving</div>
                   <div class="ctrl-row"><span class="key">M</span> mute music / <span class="key">N</span> next song</div>
                 </div>
@@ -1992,6 +2068,7 @@
                   <button class="hud-btn" id="btn-fps" title="Live Framerate">📊 60 FPS</button>
                   <button class="hud-btn" id="btn-reset">↺ Respawn [X]</button>
                   <button class="hud-btn" id="btn-touch">📱 Touch Controls: AUTO</button>
+                  <a class="hud-btn" id="btn-viewer" href="/viewer.html" target="_blank" style="text-decoration:none;display:flex;align-items:center;justify-content:center;color:inherit;">🔍 3D Photogrammetry Viewer</a>
                   <button class="hud-btn" id="btn-garage">🏠 Garage Selector [ESC]</button>
                 </div>
               </div>

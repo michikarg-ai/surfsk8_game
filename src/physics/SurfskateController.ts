@@ -55,13 +55,13 @@ const STANDSTILL_SPEED = 0.4;
 
 // ---- Flat-ground pumping (alternating ← → carves with the right rhythm) ----
 /** Time between two direction switches (real seconds) that still counts as a pump. */
-const PUMP_MIN_INTERVAL = 0.20;
-const PUMP_MAX_INTERVAL = 1.0;
+const PUMP_MIN_INTERVAL = 0.15;
+const PUMP_MAX_INTERVAL = 1.15;
 /** Sweet spot of the rhythm: ~1 full left-right cycle per second. */
-const PUMP_PERFECT_MIN = 0.32;
-const PUMP_PERFECT_MAX = 0.65;
-const PUMP_GAIN_PERFECT = 1.15;
-const PUMP_GAIN_GOOD = 0.62;
+const PUMP_PERFECT_MIN = 0.25;
+const PUMP_PERFECT_MAX = 0.70;
+const PUMP_GAIN_PERFECT = 1.25;
+const PUMP_GAIN_GOOD = 0.70;
 /** Pumping on flat ground tapers off towards this speed. */
 const MAX_PUMP_SPEED = 5.4;
 
@@ -852,12 +852,15 @@ export class SurfskateController {
    * too hectic scrubs speed, too lazy gives nothing, the right rhythm accelerates.
    */
   private updateRhythmPump(rawSteer: number, _onManeuver: (ev: ManeuverEvent) => void): void {
-    if (rawSteer === 0) return;
-    if (rawSteer === this.lastPumpDir) return;
+    // Only detect a pump switch when steering direction actually reverses between Left and Right.
+    // Require a clear steer intention (|rawSteer| >= 0.20) so analog stick wiggles don't falsely scrub speed.
+    if (Math.abs(rawSteer) < 0.20) return;
+    const currentDir = rawSteer > 0 ? 1 : -1;
+    if (currentDir === this.lastPumpDir) return;
 
     const interval = this.timeSincePumpSwitch;
     const firstSwitch = this.lastPumpDir === 0;
-    this.lastPumpDir = rawSteer;
+    this.lastPumpDir = currentDir;
     this.timeSincePumpSwitch = 0;
     if (firstSwitch) return;
 

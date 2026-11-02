@@ -8,9 +8,12 @@ export interface TouchControlsOptions {
 
 export class TouchControls {
   private container: HTMLDivElement;
-  private joystickZone: HTMLDivElement;
-  private joystickBase: HTMLDivElement;
-  private joystickStick: HTMLDivElement;
+  private carveZone: HTMLDivElement;
+  private carveRocker: HTMLDivElement;
+  private paddleLeft: HTMLButtonElement;
+  private paddleRight: HTMLButtonElement;
+  private pushBtn: HTMLButtonElement;
+  private crouchBtn: HTMLButtonElement;
 
   private actionsZone: HTMLDivElement;
   private ollieBtn: HTMLButtonElement;
@@ -22,9 +25,8 @@ export class TouchControls {
   public isEnabled = false;
   public isVisible = false;
 
-  private activeJoystickPointerId: number | null = null;
-  private joystickOrigin = { x: 0, y: 0 };
-  private readonly maxRadius = 46;
+  private activeRockerPointerId: number | null = null;
+  private currentSteerDir: -1 | 0 | 1 = 0;
 
   private state: InputState = {
     steerLeft: false,
@@ -48,15 +50,27 @@ export class TouchControls {
 
     // Build the DOM
     this.container.innerHTML = `
-      <!-- Left zone: Analog Carve & Pump Joystick -->
-      <div id="touch-joystick-zone" class="touch-zone">
-        <div id="touch-joystick-base">
-          <div class="joystick-axis-marker h"></div>
-          <div class="joystick-axis-marker v"></div>
-          <div id="touch-joystick-stick">
-            <div class="stick-core"></div>
-          </div>
+      <!-- Left zone: Ergonomic Dual-Paddle Carve Rocker & Push/Crouch Cluster -->
+      <div id="touch-carve-zone" class="touch-zone">
+        <button id="touch-btn-push" class="touch-aux-pill touch-push-pill" type="button" title="Push Off / Forward Pump">
+          <span>▲ PUSH</span>
+        </button>
+
+        <div id="touch-carve-rocker" class="touch-carve-rocker" role="group" aria-label="Steering & Carve Pump">
+          <button id="touch-btn-left" class="touch-carve-paddle paddle-left" type="button" title="Carve Left">
+            <span class="paddle-arrow">◄</span>
+            <span class="paddle-label">LEFT</span>
+          </button>
+          <div class="rocker-divider"></div>
+          <button id="touch-btn-right" class="touch-carve-paddle paddle-right" type="button" title="Carve Right">
+            <span class="paddle-label">RIGHT</span>
+            <span class="paddle-arrow">►</span>
+          </button>
         </div>
+
+        <button id="touch-btn-crouch" class="touch-aux-pill touch-crouch-pill" type="button" title="Crouch / Bowl Compression">
+          <span>▼ CROUCH</span>
+        </button>
         <div class="touch-zone-label">CARVE &amp; PUMP</div>
       </div>
 
@@ -88,9 +102,12 @@ export class TouchControls {
 
     this.options.frameElement.appendChild(this.container);
 
-    this.joystickZone = this.container.querySelector('#touch-joystick-zone')!;
-    this.joystickBase = this.container.querySelector('#touch-joystick-base')!;
-    this.joystickStick = this.container.querySelector('#touch-joystick-stick')!;
+    this.carveZone = this.container.querySelector('#touch-carve-zone')!;
+    this.carveRocker = this.container.querySelector('#touch-carve-rocker')!;
+    this.paddleLeft = this.container.querySelector('#touch-btn-left')!;
+    this.paddleRight = this.container.querySelector('#touch-btn-right')!;
+    this.pushBtn = this.container.querySelector('#touch-btn-push')!;
+    this.crouchBtn = this.container.querySelector('#touch-btn-crouch')!;
 
     this.actionsZone = this.container.querySelector('#touch-actions-zone')!;
     this.ollieBtn = this.container.querySelector('#touch-btn-ollie')!;
@@ -101,7 +118,6 @@ export class TouchControls {
 
     this.bindEvents();
 
-    // Auto-enable if touch device detected or URL override ?touch=1
     const shouldEnable = TouchControls.isTouchDevice();
     this.setEnabled(shouldEnable);
   }
@@ -156,12 +172,15 @@ export class TouchControls {
     this.state.indyGrabTrick = false;
     this.state.analogSteer = 0;
 
-    this.activeJoystickPointerId = null;
-    this.joystickStick.style.transform = 'translate3d(0px, 0px, 0px)';
-    this.joystickBase.classList.remove('active');
+    this.activeRockerPointerId = null;
+    this.currentSteerDir = 0;
+    this.paddleLeft.classList.remove('active');
+    this.paddleRight.classList.remove('active');
+    this.pushBtn.classList.remove('active');
+    this.crouchBtn.classList.remove('active');
   }
 
-  private triggerHaptic(ms = 15): void {
+  private triggerHaptic(ms = 12): void {
     if (this.options.onVibrate) {
       this.options.onVibrate(ms);
     } else if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -171,82 +190,100 @@ export class TouchControls {
     }
   }
 
+  private setSteerDirection(dir: -1 | 0 | 1): void {
+    if (this.currentSteerDir === dir) return;
+
+    this.currentSteerDir = dir;
+    this.state.steerLeft = dir === -1;
+    this.state.steerRight = dir === 1;
+    this.state.analogSteer = dir;
+
+    this.paddleLeft.classList.toggle('active', dir === -1);
+    this.paddleRight.classList.toggle('active', dir === 1);
+
+    if (dir !== 0) {
+      this.triggerHaptic(12);
+    }
+  }
+
   private bindEvents(): void {
     // -------------------------------------------------------------------------
-    // 1. Virtual Joystick (Left Thumb)
+    // 1. Dual-Paddle Carve Rocker (Left Thumb)
+    // Supports both direct tapping on Left/Right and continuous sliding across
     // -------------------------------------------------------------------------
-    const handleJoystickDown = (e: PointerEvent) => {
+    const updateRockerFromClientX = (clientX: number) => {
+      const rect = this.carveRocker.getBoundingClientRect();
+      const midX = rect.left + rect.width * 0.5;
+      const deadzone = rect.width * 0.05;
+
+      if (clientX < midX - deadzone) {
+        this.setSteerDirection(-1);
+      } else if (clientX > midX + deadzone) {
+        this.setSteerDirection(1);
+      }
+    };
+
+    const handleRockerDown = (e: PointerEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      this.activeJoystickPointerId = e.pointerId;
-      this.joystickZone.setPointerCapture?.(e.pointerId);
-
-      const rect = this.joystickBase.getBoundingClientRect();
-      this.joystickOrigin = {
-        x: rect.left + rect.width * 0.5,
-        y: rect.top + rect.height * 0.5,
-      };
-
-      this.joystickBase.classList.add('active');
-      this.processJoystickMove(e.clientX, e.clientY);
+      this.activeRockerPointerId = e.pointerId;
+      try {
+        this.carveRocker.setPointerCapture?.(e.pointerId);
+      } catch (_) {}
+      updateRockerFromClientX(e.clientX);
     };
 
-    const handleJoystickMove = (e: PointerEvent) => {
-      if (this.activeJoystickPointerId !== e.pointerId) return;
+    const handleRockerMove = (e: PointerEvent) => {
+      if (this.activeRockerPointerId !== e.pointerId) return;
       e.preventDefault();
-      this.processJoystickMove(e.clientX, e.clientY);
+      updateRockerFromClientX(e.clientX);
     };
 
-    const handleJoystickUp = (e: PointerEvent) => {
-      if (this.activeJoystickPointerId !== e.pointerId) return;
+    const handleRockerUp = (e: PointerEvent) => {
+      if (this.activeRockerPointerId !== e.pointerId) return;
       e.preventDefault();
       try {
-        this.joystickZone.releasePointerCapture?.(e.pointerId);
+        this.carveRocker.releasePointerCapture?.(e.pointerId);
       } catch (_) {}
-      this.activeJoystickPointerId = null;
-      this.state.steerLeft = false;
-      this.state.steerRight = false;
-      this.state.forwardPush = false;
-      this.state.compressCrouch = false;
-      this.state.analogSteer = 0;
-
-      this.joystickStick.style.transform = 'translate3d(0px, 0px, 0px)';
-      this.joystickBase.classList.remove('active');
+      this.activeRockerPointerId = null;
+      this.setSteerDirection(0);
     };
 
-    this.joystickZone.addEventListener('pointerdown', handleJoystickDown, { passive: false });
-    this.joystickZone.addEventListener('pointermove', handleJoystickMove, { passive: false });
-    this.joystickZone.addEventListener('pointerup', handleJoystickUp, { passive: false });
-    this.joystickZone.addEventListener('pointercancel', handleJoystickUp, { passive: false });
+    this.carveRocker.addEventListener('pointerdown', handleRockerDown, { passive: false });
+    this.carveRocker.addEventListener('pointermove', handleRockerMove, { passive: false });
+    this.carveRocker.addEventListener('pointerup', handleRockerUp, { passive: false });
+    this.carveRocker.addEventListener('pointercancel', handleRockerUp, { passive: false });
 
     // -------------------------------------------------------------------------
-    // 2. Primary Ollie / Indy Button (Right Thumb)
+    // 2. Push & Crouch Aux Buttons (separated vertically, no slipping)
     // -------------------------------------------------------------------------
-    const bindButton = (
+    const bindPressButton = (
       btn: HTMLButtonElement,
       onDown: () => void,
       onUp: () => void,
       hapticMs = 15
     ) => {
-      let activePointerId: number | null = null;
+      let pointerId: number | null = null;
 
       const down = (e: PointerEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        activePointerId = e.pointerId;
+        pointerId = e.pointerId;
         btn.classList.add('active');
-        btn.setPointerCapture?.(e.pointerId);
+        try {
+          btn.setPointerCapture?.(e.pointerId);
+        } catch (_) {}
         onDown();
         this.triggerHaptic(hapticMs);
       };
 
       const up = (e: PointerEvent) => {
-        if (activePointerId !== e.pointerId) return;
+        if (pointerId !== e.pointerId) return;
         e.preventDefault();
         try {
           btn.releasePointerCapture?.(e.pointerId);
         } catch (_) {}
-        activePointerId = null;
+        pointerId = null;
         btn.classList.remove('active');
         onUp();
       };
@@ -256,7 +293,32 @@ export class TouchControls {
       btn.addEventListener('pointercancel', up, { passive: false });
     };
 
-    bindButton(
+    bindPressButton(
+      this.pushBtn,
+      () => {
+        this.state.forwardPush = true;
+      },
+      () => {
+        this.state.forwardPush = false;
+      },
+      16
+    );
+
+    bindPressButton(
+      this.crouchBtn,
+      () => {
+        this.state.compressCrouch = true;
+      },
+      () => {
+        this.state.compressCrouch = false;
+      },
+      14
+    );
+
+    // -------------------------------------------------------------------------
+    // 3. Primary Ollie / Indy Button & Trick Cluster (Right Thumb)
+    // -------------------------------------------------------------------------
+    bindPressButton(
       this.ollieBtn,
       () => {
         this.state.jumpOllie = true;
@@ -268,7 +330,7 @@ export class TouchControls {
       22
     );
 
-    bindButton(
+    bindPressButton(
       this.snapBtn,
       () => {
         this.state.snapTrick = true;
@@ -276,10 +338,10 @@ export class TouchControls {
       () => {
         this.state.snapTrick = false;
       },
-      18
+      16
     );
 
-    bindButton(
+    bindPressButton(
       this.slideBtn,
       () => {
         this.state.snapSlide = true;
@@ -287,10 +349,10 @@ export class TouchControls {
       () => {
         this.state.snapSlide = false;
       },
-      18
+      16
     );
 
-    bindButton(
+    bindPressButton(
       this.laybackBtn,
       () => {
         this.state.laybackTrick = true;
@@ -298,10 +360,10 @@ export class TouchControls {
       () => {
         this.state.laybackTrick = false;
       },
-      18
+      16
     );
 
-    bindButton(
+    bindPressButton(
       this.revBtn,
       () => {
         this.state.reverseTrick = true;
@@ -309,39 +371,7 @@ export class TouchControls {
       () => {
         this.state.reverseTrick = false;
       },
-      18
+      16
     );
-  }
-
-  private processJoystickMove(clientX: number, clientY: number): void {
-    const rawDx = clientX - this.joystickOrigin.x;
-    const rawDy = clientY - this.joystickOrigin.y;
-    const dist = Math.hypot(rawDx, rawDy);
-
-    const clampedDist = Math.min(this.maxRadius, dist);
-    const angle = Math.atan2(rawDy, rawDx);
-
-    const stickX = Math.cos(angle) * clampedDist;
-    const stickY = Math.sin(angle) * clampedDist;
-
-    this.joystickStick.style.transform = `translate3d(${stickX.toFixed(1)}px, ${stickY.toFixed(1)}px, 0px)`;
-
-    const normX = stickX / this.maxRadius; // -1 (left) .. +1 (right)
-    const normY = stickY / this.maxRadius; // -1 (up/push) .. +1 (down/crouch)
-
-    // Smooth continuous analog steering with deadzone
-    if (Math.abs(normX) > 0.12) {
-      this.state.analogSteer = normX;
-      this.state.steerLeft = normX < -0.18;
-      this.state.steerRight = normX > 0.18;
-    } else {
-      this.state.analogSteer = 0;
-      this.state.steerLeft = false;
-      this.state.steerRight = false;
-    }
-
-    // Vertical push / crouch
-    this.state.forwardPush = normY < -0.32;
-    this.state.compressCrouch = normY > 0.32;
   }
 }
