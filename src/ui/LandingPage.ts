@@ -11,9 +11,32 @@ export interface SkaterCharacter {
   modelUrl: string;
 }
 
+export interface SkateparkLocation {
+  id: string;
+  name: string;
+  subtitle: string;
+  thumbUrl: string;
+  modelUrl: string;
+  colliderUrl?: string;
+  lidarUrl?: string;
+  viewerUrl?: string;
+}
+
 export const SKATER_CHARACTERS: SkaterCharacter[] = [
   { id: 'male', name: 'LUKAS', modelUrl: '/models/skater.glb' },
   { id: 'female', name: 'SOPHIE', modelUrl: '/models/skater_female.glb' },
+];
+
+export const SKATEPARK_LOCATIONS: SkateparkLocation[] = [
+  {
+    id: 'im_gefilde',
+    name: 'IM GEFILDE',
+    subtitle: 'IM GEFILDE - MUNICH',
+    thumbUrl: '/textures/im_gefilde_thumb.png',
+    modelUrl: '/models/skatepark_multi.glb',
+    lidarUrl: '/models/im_gefilde_lidar.json',
+    viewerUrl: '/viewer.html?model=/models/skatepark_multi.glb',
+  },
 ];
 
 export const SELECTOR_CATEGORIES: SelectorCategory[] = ['skater', 'skatepark', 'board'];
@@ -41,8 +64,12 @@ export class LandingPage {
     const s = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('skater') : null;
     return s === 'female' || s === 'sophie' || s === '1' ? 1 : 0;
   })();
+  public currentParkIndex = 0;
 
   // In-slot notice views for skatepark & board selection
+  private parkSubtitleEl: HTMLElement | null = null;
+  private parkThumbImgEl: HTMLImageElement | null = null;
+  private parkInspectBtnEl: HTMLElement | null = null;
   private parkThumbView: HTMLElement | null = null;
   private parkNoticeView: HTMLElement | null = null;
   private boardIconView: HTMLElement | null = null;
@@ -56,7 +83,9 @@ export class LandingPage {
   constructor(
     parkSurface: ParkSurface,
     private onStartGame: () => void,
-    private onSelectSkater?: (modelUrl: string) => void
+    private onSelectSkater?: (modelUrl: string) => void,
+    private onSelectPark?: (park: SkateparkLocation) => void,
+    private onInspectPark?: (park: SkateparkLocation) => void
   ) {
     this.overlayEl = document.getElementById('landing-overlay')!;
     this.canvasEl = document.getElementById('landing-skater-canvas') as HTMLCanvasElement;
@@ -64,6 +93,9 @@ export class LandingPage {
     this.noteTextEl = document.getElementById('landing-ig-note-text')!;
     this.startBtnEl = document.getElementById('landing-start-btn')!;
     this.playerNameEl = document.getElementById('landing-player-name') || this.overlayEl.querySelector('.sel-player-name');
+    this.parkSubtitleEl = document.getElementById('landing-park-subtitle') || this.overlayEl.querySelector('#sel-section-skatepark .sel-subtitle');
+    this.parkThumbImgEl = document.getElementById('landing-park-thumb') as HTMLImageElement || this.overlayEl.querySelector('.park-thumb');
+    this.parkInspectBtnEl = document.getElementById('landing-park-inspect-btn');
 
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvasEl,
@@ -135,7 +167,23 @@ export class LandingPage {
     if (this.playerNameEl) {
       this.playerNameEl.textContent = currentSkater.name;
     }
+    this.updateParkDisplay();
     await this.skaterVisuals.load(currentSkater.modelUrl);
+  }
+
+  public updateParkDisplay(): void {
+    const park = SKATEPARK_LOCATIONS[this.currentParkIndex];
+    if (this.parkSubtitleEl) {
+      this.parkSubtitleEl.textContent = park.subtitle;
+    }
+    if (this.parkThumbImgEl) {
+      this.parkThumbImgEl.src = park.thumbUrl;
+      this.parkThumbImgEl.alt = park.name;
+    }
+  }
+
+  public getSelectedPark(): SkateparkLocation {
+    return SKATEPARK_LOCATIONS[this.currentParkIndex];
   }
 
   public getSelectedSkaterModel(): string {
@@ -198,6 +246,18 @@ export class LandingPage {
       });
     }
 
+    if (this.parkInspectBtnEl) {
+      this.parkInspectBtnEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const park = SKATEPARK_LOCATIONS[this.currentParkIndex];
+        if (this.onInspectPark) {
+          this.onInspectPark(park);
+        } else {
+          window.open(park.viewerUrl || '/viewer.html', '_blank');
+        }
+      });
+    }
+
     if (this.parkThumbView) {
       this.parkThumbView.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -212,9 +272,13 @@ export class LandingPage {
       });
     }
 
-    this.startBtnEl.addEventListener('click', () => {
+    const triggerStart = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
       this.startGame();
-    });
+    };
+    this.startBtnEl.addEventListener('click', triggerStart);
+    this.startBtnEl.addEventListener('touchend', triggerStart, { passive: false });
 
     this.qualityBtnEl = document.getElementById('landing-quality-btn');
     if (this.qualityBtnEl) {
@@ -417,6 +481,27 @@ export class LandingPage {
     const h = Math.max(1, rect.height || window.innerHeight);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
+
+    const isPortrait = w < h;
+    if (isPortrait) {
+      // In portrait mode (smartphones & vertical reel mode), the selector card and start button
+      // occupy the bottom ~38% of the screen. We frame the entire 3D skater proudly in the upper half.
+      // Skater is at X ~0.14, board at Y=0, head at Y=1.7.
+      this.camera.fov = 43;
+      this.camera.position.set(0.14, 0.95, 4.8);
+      this.camera.lookAt(0.14, 0.72, 0.0);
+    } else if (h < 520) {
+      // Mobile landscape (e.g. 844x390):
+      // Height is short, selector card is on the left.
+      this.camera.fov = 34;
+      this.camera.position.set(0.16, 1.10, 4.1);
+      this.camera.lookAt(0.08, 0.92, 0.0);
+    } else {
+      // Standard desktop landscape
+      this.camera.fov = 34;
+      this.camera.position.set(0.0, 1.15, 4.15);
+      this.camera.lookAt(-0.08, 0.94, 0.0);
+    }
     this.camera.updateProjectionMatrix();
   }
 

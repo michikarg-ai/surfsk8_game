@@ -5,7 +5,7 @@ import { SkaterVisuals } from './entities/SkaterVisuals';
 import { ImGefildeScene } from './world/ImGefildeScene';
 import { CameraStyle, SurfCamera } from './camera/SurfCamera';
 import { DriveControlMode, SurfHUD } from './ui/SurfHUD';
-import { LandingPage } from './ui/LandingPage';
+import { LandingPage, SkateparkLocation } from './ui/LandingPage';
 import { TouchControls } from './ui/TouchControls';
 import { SurfAudio } from './audio/SurfAudio';
 import { PretzelCollectibles } from './world/PretzelCollectibles';
@@ -93,7 +93,7 @@ class SurfskateMunichGame {
     };
     this.worldScene = new ImGefildeScene(this.scene, this.renderer);
     this.skaterVisuals = new SkaterVisuals(this.scene);
-    this.surfCamera = new SurfCamera();
+    this.surfCamera = new SurfCamera(this.renderer.domElement);
 
     this.touchControls = new TouchControls({
       frameElement: this.viewportContainer,
@@ -128,6 +128,12 @@ class SurfskateMunichGame {
       },
       (modelUrl) => {
         void this.skaterVisuals.load(modelUrl);
+      },
+      (park) => {
+        void this.switchPark(park);
+      },
+      (park) => {
+        this.inspectPark(park);
       }
     );
     this.landingPage.onCycleQuality = () => this.cycleGraphicsQuality();
@@ -148,8 +154,8 @@ class SurfskateMunichGame {
     try {
       const initialModel = this.landingPage.getSelectedSkaterModel();
       await Promise.all([
-        this.parkSurface.loadLidarGrid(),
-        this.worldScene.load(),
+        this.parkSurface.loadLidarGrid('/models/im_gefilde_lidar.json'),
+        this.worldScene.load('im_gefilde'),
         this.skaterVisuals.load(initialModel),
         this.landingPage.load(),
       ]);
@@ -245,6 +251,8 @@ class SurfskateMunichGame {
         this.setCameraStyle('filmer');
       } else if (code === 'Digit3' || code === 'Numpad3') {
         this.setCameraStyle('mural');
+      } else if (code === 'Digit4' || code === 'Numpad4' || code === 'KeyO') {
+        this.setCameraStyle(this.surfCamera.cameraStyle === 'orbit' ? 'follow' : 'orbit');
       } else if (code === 'KeyC') {
         this.cycleCameraStyle();
       } else if (code === 'KeyR') {
@@ -269,7 +277,10 @@ class SurfskateMunichGame {
     });
   }
 
+  private userSelectedAspect = false;
+
   public toggleAspectMode(): void {
+    this.userSelectedAspect = true;
     this.surfCamera.aspectMode = this.surfCamera.aspectMode === '16:9' ? '9:16' : '16:9';
     document.body.classList.toggle('reel-mode', this.surfCamera.aspectMode === '9:16');
     this.handleResize();
@@ -282,13 +293,35 @@ class SurfskateMunichGame {
   }
 
   public setCameraStyle(style: CameraStyle): void {
-    this.surfCamera.setCameraStyle(style);
+    this.surfCamera.setCameraStyle(style, this.controller.position);
     this.syncHUDButtons();
   }
 
   public cycleCameraStyle(): void {
-    this.surfCamera.cycleCameraStyle();
+    this.surfCamera.cycleCameraStyle(this.controller.position);
     this.syncHUDButtons();
+  }
+
+  public async switchPark(park: SkateparkLocation): Promise<void> {
+    try {
+      await Promise.all([
+        this.worldScene.load(park.id),
+        this.parkSurface.loadLidarGrid(park.lidarUrl || '/models/im_gefilde_lidar.json'),
+      ]);
+      this.controller.position.set(16.0, 0.0, 5.0);
+      this.controller.velocity.set(0, 0, 0);
+      this.controller.speed = 0;
+      this.surfCamera.reset(this.controller);
+    } catch (e) {
+      console.error('Error switching skatepark:', e);
+    }
+  }
+
+  public inspectPark(_park?: SkateparkLocation): void {
+    this.landingPage.isVisible = false;
+    document.getElementById('landing-overlay')?.classList.add('hidden');
+    this.setCameraStyle('orbit');
+    this.hud.setDockOpen(true);
   }
 
   public toggleControlMode(): void {
@@ -411,6 +444,13 @@ class SurfskateMunichGame {
     const rect = this.viewportContainer.getBoundingClientRect();
     const w = Math.max(320, rect.width);
     const h = Math.max(320, rect.height);
+
+    if (!this.userSelectedAspect) {
+      const isPortrait = window.innerWidth < window.innerHeight;
+      this.surfCamera.aspectMode = isPortrait ? '9:16' : '16:9';
+      document.body.classList.toggle('reel-mode', isPortrait);
+    }
+
     this.renderer.setSize(w, h, false);
     this.surfCamera.setAspectRatio(w, h);
     if (this.landingPage) {
