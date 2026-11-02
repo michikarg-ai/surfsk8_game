@@ -22,6 +22,12 @@ export class SurfCamera {
   private bailShakeDuration = 0;
   private bailShakeIntensity = 0;
 
+  /** Indy Grab cinematic side-orbit camera state */
+  private indyOrbitBlend = 0;
+  private indyOrbitAngle = 0;
+  private indyOrbitTimer = 0;
+  private indyOrbitDuration = 0;
+
   constructor() {
     this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 250);
     this.camera.position.copy(this.currentPos);
@@ -30,6 +36,12 @@ export class SurfCamera {
   /** Punch the camera in toward the skater for a SNAP. */
   public triggerSnapZoom(duration = 1.3): void {
     this.snapZoomTimer = duration;
+  }
+
+  /** Trigger cinematic side-orbit camera sweep for Indy Grab in mid-air. */
+  public triggerIndyOrbit(duration = 1.5): void {
+    this.indyOrbitDuration = duration;
+    this.indyOrbitTimer = duration;
   }
 
   /** Trigger an impactful camera shake when wiping out / bailing. */
@@ -60,6 +72,12 @@ export class SurfCamera {
 
   /** Snap camera to a clean starting orientation behind the skater on reset. */
   public reset(ctrl: SurfskateController): void {
+    this.snapZoom = 0;
+    this.snapZoomTimer = 0;
+    this.bailShakeTimer = 0;
+    this.indyOrbitBlend = 0;
+    this.indyOrbitAngle = 0;
+    this.indyOrbitTimer = 0;
     this.smoothHeading = ctrl.heading;
     const forward = new THREE.Vector3(-Math.sin(this.smoothHeading), 0, -Math.cos(this.smoothHeading));
     const dist = this.aspectMode === '9:16' ? 4.3 : 3.85;
@@ -78,6 +96,46 @@ export class SurfCamera {
     const zoomTarget = this.snapZoomTimer > 0.35 ? 1 : this.snapZoomTimer / 0.35;
     this.snapZoom += (zoomTarget - this.snapZoom) * Math.min(1, (zoomTarget > this.snapZoom ? 10 : 4) * clampedDt);
     const zoomDistScale = 1 - 0.38 * this.snapZoom;
+
+    // Indy Grab cinematic side-orbit camera envelope
+    // Active both BEFORE the trick scores (while skater is airborne and initiating the grab)
+    // and DURING slow motion (when INDYGRAB scores and slowMoTimer holds)
+    if (this.indyOrbitTimer > 0) {
+      this.indyOrbitTimer = Math.max(0, this.indyOrbitTimer - clampedDt);
+    }
+
+    const isAirGrabbing = !ctrl.isGrounded && (ctrl.indyGrabActive || ctrl.indyGrabAmount > 0.05);
+    const isIndyActive = isAirGrabbing || this.indyOrbitTimer > 0;
+
+    let targetBlend = 0;
+    let targetAngle = 0;
+
+    if (!ctrl.isGrounded && isIndyActive) {
+      if (this.indyOrbitTimer > 0) {
+        // During slow-mo: hold full blend, continue smooth orbit sweep through the side profile
+        targetBlend = 1.0;
+        const slowMoProgress = 1.0 - this.indyOrbitTimer / Math.max(0.01, this.indyOrbitDuration);
+        // Sweeps dynamically from ~45 deg (0.78 rad) up to ~65 deg (1.13 rad) during slow motion
+        targetAngle = 0.78 + Math.min(1.0, slowMoProgress * 1.1) * 0.35;
+      } else {
+        // Before slow-mo (during airborne grab wind-up / hold):
+        // Sweep camera smoothly into position as skater tucks and reaches for the rail
+        targetBlend = Math.min(1.0, ctrl.indyGrabAmount * 1.1);
+        const holdProgress = Math.min(1.0, (ctrl.indyGrabHold || 0) / 0.26);
+        targetAngle = Math.max(0.35, holdProgress * 0.78);
+      }
+    } else {
+      // Skater touched down or not grabbing: smoothly return camera behind the board
+      targetBlend = 0;
+      targetAngle = 0;
+      this.indyOrbitTimer = 0;
+    }
+
+    const blendRate = targetBlend > this.indyOrbitBlend ? 9.0 : 7.0;
+    this.indyOrbitBlend += (targetBlend - this.indyOrbitBlend) * Math.min(1, blendRate * clampedDt);
+
+    const angleRate = targetAngle > this.indyOrbitAngle ? 8.0 : 9.0;
+    this.indyOrbitAngle += (targetAngle - this.indyOrbitAngle) * Math.min(1, angleRate * clampedDt);
 
     // Shortest-angle interpolation for heading
     // Stable tracking during pumping: filter out high-frequency left-right wiggles,
@@ -104,29 +162,47 @@ export class SurfCamera {
       // Dynamic THPS / Surf Flow Chase Cam
       // Stable during pumping: no lateral sway offset from rapid deck lean,
       // letting the skater carve and pump fluidly inside the frame while camera stays steady.
-      const dist = (this.aspectMode === '9:16' ? 4.3 : 3.85) * zoomDistScale;
-      const height = (this.aspectMode === '9:16' ? 1.95 : 1.75) * (1 - 0.25 * this.snapZoom);
+      const orbitAngle = this.indyOrbitAngle * this.indyOrbitBlend;
+      const dist =
+        (this.aspectMode === '9:16' ? 4.3 : 3.85) * zoomDistScale * (1 - 0.16 * this.indyOrbitBlend);
+      const height =
+        (this.aspectMode === '9:16' ? 1.95 : 1.75) *
+        (1 - 0.25 * this.snapZoom) *
+        (1 - 0.32 * this.indyOrbitBlend) +
+        Math.max(0, ctrl.position.y * (0.2 * (1 - 0.75 * this.indyOrbitBlend)));
+
+      // Rotate camera offset from -forward towards +right (toe-side / frontside)
+      // At orbitAngle = 0: exactly -forward (standard THPS rear chase cam)
+      // At orbitAngle > 0: orbits around the skater toward their frontside / side profile
+      const horizDir = forward
+        .clone()
+        .multiplyScalar(-Math.cos(orbitAngle))
+        .addScaledVector(right, Math.sin(orbitAngle));
 
       targetPos
         .copy(ctrl.position)
-        .addScaledVector(forward, -dist)
-        .add(new THREE.Vector3(0, height + Math.max(0, ctrl.position.y * 0.2), 0));
+        .addScaledVector(horizDir, dist)
+        .add(new THREE.Vector3(0, height, 0));
+
+      // Lock look-at target onto skater's chest & grabbed board during the orbit
+      const lookDist = 1.8 * (1 - 0.82 * this.indyOrbitBlend);
+      const lookHeight = 0.85 * (1 - 0.18 * this.indyOrbitBlend);
 
       targetLook
         .copy(ctrl.position)
-        .addScaledVector(forward, 1.8)
-        .add(new THREE.Vector3(0, 0.85, 0));
+        .addScaledVector(forward, lookDist)
+        .add(new THREE.Vector3(0, lookHeight, 0));
     } else if (this.cameraStyle === 'filmer') {
       // Low-angle Fisheye Instagram Filmer Cam riding along the pocket
-      const dist = (this.aspectMode === '9:16' ? 2.65 : 2.35) * zoomDistScale;
-      const side = Math.cos(performance.now() * 0.0004) * 1.15 + 0.55;
+      const dist = (this.aspectMode === '9:16' ? 2.65 : 2.35) * zoomDistScale * (1 - 0.15 * this.indyOrbitBlend);
+      const side = Math.cos(performance.now() * 0.0004) * 1.15 + 0.55 - 0.9 * this.indyOrbitBlend;
       targetPos
         .copy(ctrl.position)
         .addScaledVector(forward, -dist)
         .addScaledVector(right, side)
-        .add(new THREE.Vector3(0, 0.72, 0));
+        .add(new THREE.Vector3(0, 0.72 * (1 - 0.25 * this.indyOrbitBlend), 0));
 
-      targetLook.copy(ctrl.position).add(new THREE.Vector3(0, 0.72, 0));
+      targetLook.copy(ctrl.position).add(new THREE.Vector3(0, 0.65, 0));
     } else {
       // Sunset Palm-Tree Mural Showcase Angle (frames the skater with the East Sunset Palm Mural behind)
       targetPos.set(11.8, 1.45, 3.8 + Math.sin(performance.now() * 0.0005) * 1.4);
@@ -138,8 +214,8 @@ export class SurfCamera {
     if (targetPos.y < groundY) targetPos.y = groundY;
 
     // Smooth position & look-at lerp for steady chase cam feel
-    const posLerpRate = this.cameraStyle === 'follow' ? 8.5 : 14.0;
-    const lookLerpRate = this.cameraStyle === 'follow' ? 10.0 : 18.0;
+    const posLerpRate = this.indyOrbitBlend > 0.05 ? 12.0 : this.cameraStyle === 'follow' ? 8.5 : 14.0;
+    const lookLerpRate = this.indyOrbitBlend > 0.05 ? 14.0 : this.cameraStyle === 'follow' ? 10.0 : 18.0;
     this.currentPos.lerp(targetPos, Math.min(1, posLerpRate * clampedDt));
     this.currentLookAt.lerp(targetLook, Math.min(1, lookLerpRate * clampedDt));
 

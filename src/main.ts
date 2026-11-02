@@ -496,6 +496,9 @@ class SurfskateMunichGame {
         this.audio.playTrickSwoosh(ev.trick, perfect);
         this.slowMoTimer = this.slowMoDuration;
         this.surfCamera.triggerSnapZoom(this.slowMoDuration + 0.2);
+        if (ev.trick === 'INDYGRAB') {
+          this.surfCamera.triggerIndyOrbit(this.slowMoDuration + 0.35);
+        }
         this.hud.showTrickBanner(ev.name, perfect);
       }
     });

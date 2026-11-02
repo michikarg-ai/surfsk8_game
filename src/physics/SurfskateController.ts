@@ -189,8 +189,8 @@ export class SurfskateController {
   /** Smoothed 0..1 amount of the airborne Indy grab tuck and board tweak. */
   public indyGrabAmount = 0;
   public indyGrabReady = false;
-  private indyGrabHold = 0;
-  private indyGrabScored = false;
+  public indyGrabHold = 0;
+  public indyGrabScored = false;
   private airLaunchedFromWall = false;
   private airLaunchHeight = 0;
   private airLaunchSpeed = 0;
