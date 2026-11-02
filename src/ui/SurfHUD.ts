@@ -2,6 +2,8 @@ import { ManeuverEvent, SurfskateController, TruckFeelPreset } from '../physics/
 import { AspectMode, CameraStyle } from '../camera/SurfCamera';
 import { AtmosphereMode } from '../world/ImGefildeScene';
 
+export type DriveControlMode = 'arrows' | 'wasd';
+
 export interface HUDCallbacks {
   onToggleAspect: () => void;
   onToggleAtmosphere: () => void;
@@ -11,6 +13,7 @@ export interface HUDCallbacks {
   onResetSession: () => void;
   onToggleMusic: () => void;
   onCycleQuality?: () => void;
+  onToggleControlMode?: () => void;
 }
 
 export class SurfHUD {
@@ -46,8 +49,13 @@ export class SurfHUD {
   private truckDialFrontEl: HTMLElement;
   private leanReadoutEl: HTMLElement;
 
+  public controlMode: DriveControlMode = 'arrows';
+  private btnControlsEl: HTMLButtonElement | null = null;
+  private tricksListEl: HTMLElement | null = null;
+  private ridingListEl: HTMLElement | null = null;
+
   private btnAspectEl: HTMLButtonElement;
-  private btnAtmosphereEl: HTMLButtonElement;
+  private btnAtmosphereEl: HTMLButtonElement | null = null;
   private btnCameraEl: HTMLButtonElement;
   private btnTruckFeelEl: HTMLButtonElement;
   private btnAutoFlowEl: HTMLButtonElement;
@@ -100,8 +108,11 @@ export class SurfHUD {
     this.truckDialFrontEl = document.getElementById('hud-truck-front')!;
     this.leanReadoutEl = document.getElementById('hud-lean-deg')!;
 
+    this.tricksListEl = document.getElementById('dock-tricks-list');
+    this.ridingListEl = document.getElementById('dock-riding-list');
+    this.btnControlsEl = document.getElementById('btn-controls') as HTMLButtonElement | null;
     this.btnAspectEl = document.getElementById('btn-aspect') as HTMLButtonElement;
-    this.btnAtmosphereEl = document.getElementById('btn-atmosphere') as HTMLButtonElement;
+    this.btnAtmosphereEl = document.getElementById('btn-atmosphere') as HTMLButtonElement | null;
     this.btnCameraEl = document.getElementById('btn-camera') as HTMLButtonElement;
     this.btnTruckFeelEl = document.getElementById('btn-truckfeel') as HTMLButtonElement;
     this.btnAutoFlowEl = document.getElementById('btn-autoflow') as HTMLButtonElement;
@@ -110,8 +121,13 @@ export class SurfHUD {
     this.btnFpsEl = document.getElementById('btn-fps') as HTMLButtonElement | null;
     const btnResetEl = document.getElementById('btn-reset') as HTMLButtonElement;
 
+    if (this.btnControlsEl) {
+      this.btnControlsEl.addEventListener('click', () => this.callbacks.onToggleControlMode?.());
+    }
     this.btnAspectEl.addEventListener('click', () => this.callbacks.onToggleAspect());
-    this.btnAtmosphereEl.addEventListener('click', () => this.callbacks.onToggleAtmosphere());
+    if (this.btnAtmosphereEl) {
+      this.btnAtmosphereEl.addEventListener('click', () => this.callbacks.onToggleAtmosphere());
+    }
     this.btnCameraEl.addEventListener('click', () => this.callbacks.onCycleCamera());
     this.btnTruckFeelEl.addEventListener('click', () => this.callbacks.onCycleTruckFeel());
     this.btnAutoFlowEl.addEventListener('click', () => this.callbacks.onToggleAutoFlow());
@@ -213,7 +229,8 @@ export class SurfHUD {
       this.snapHintEl.textContent = 'TWEAK THE INDY!';
       this.snapHintEl.className = 'visible ready';
     } else if (ctrl.snapWindow === 'READY' && !ctrl.snapActive) {
-      this.snapHintEl.textContent = 'SNAP READY — press F';
+      const snapKey = this.controlMode === 'arrows' ? 'Q' : 'O';
+      this.snapHintEl.textContent = `SNAP READY — press ${snapKey}`;
       this.snapHintEl.className = 'visible ready';
     } else if (ctrl.snapWindow === 'TOO_SLOW') {
       this.snapHintEl.textContent = 'Too slow to snap';
@@ -230,7 +247,8 @@ export class SurfHUD {
       this.coachHintEl.textContent = ctrl.coachHint;
       this.coachHintEl.className = 'visible';
     } else if (ctrl.isGrounded && ctrl.speed < 0.4) {
-      this.coachHintEl.textContent = 'Press ↑ / W once to push off';
+      const pushKey = this.controlMode === 'arrows' ? '↑' : 'W';
+      this.coachHintEl.textContent = `Press ${pushKey} once to push off`;
       this.coachHintEl.className = 'visible idle';
     } else {
       this.coachHintEl.className = '';
@@ -363,6 +381,62 @@ export class SurfHUD {
     this.updatePretzelCount(0, 5);
   }
 
+  public setControlMode(mode: DriveControlMode): void {
+    this.controlMode = mode;
+    if (this.btnControlsEl) {
+      this.btnControlsEl.textContent =
+        mode === 'arrows' ? '🎮 Steuerung: Pfeiltasten [Tab]' : '🎮 Steuerung: WASD [Tab]';
+      this.btnControlsEl.classList.toggle('active-auto', mode === 'wasd');
+    }
+    this.renderDockCheatSheet();
+  }
+
+  public renderDockCheatSheet(): void {
+    if (this.tricksListEl) {
+      if (this.controlMode === 'arrows') {
+        this.tricksListEl.innerHTML = `
+          <div class="trick-row"><span class="key">Q</span><span class="trick-name">Snap</span><span class="trick-how">top of a wall, right speed</span></div>
+          <div class="trick-row"><span class="key">W</span><span class="trick-name">Layback</span><span class="trick-how">hold in a fast, deep turn</span></div>
+          <div class="trick-row"><span class="key">A</span><span class="trick-name">Bertslide</span><span class="trick-how">hold while leaning into a turn</span></div>
+          <div class="trick-row"><span class="key">S</span><span class="trick-name">FS Reverse 360</span><span class="trick-how">while carving → with speed</span></div>
+          <div class="trick-row"><span class="key">␣</span> / <span class="key">I</span><span class="trick-name">Indy Grab</span><span class="trick-how">ollie off a wall, hold in air</span></div>
+        `.trim();
+      } else {
+        this.tricksListEl.innerHTML = `
+          <div class="trick-row"><span class="key">O</span><span class="trick-name">Snap</span><span class="trick-how">top of a wall, right speed</span></div>
+          <div class="trick-row"><span class="key">P</span><span class="trick-name">Layback</span><span class="trick-how">hold in a fast, deep turn</span></div>
+          <div class="trick-row"><span class="key">K</span><span class="trick-name">Bertslide</span><span class="trick-how">hold while leaning into a turn</span></div>
+          <div class="trick-row"><span class="key">L</span><span class="trick-name">FS Reverse 360</span><span class="trick-how">while carving → with speed</span></div>
+          <div class="trick-row"><span class="key">␣</span> / <span class="key">I</span><span class="trick-name">Indy Grab</span><span class="trick-how">ollie off a wall, hold in air</span></div>
+        `.trim();
+      }
+    }
+
+    if (this.ridingListEl) {
+      if (this.controlMode === 'arrows') {
+        this.ridingListEl.innerHTML = `
+          <div class="ctrl-row"><span class="key">↑</span> one push-off from a standstill</div>
+          <div class="ctrl-row"><span class="key">←</span><span class="key">→</span> carve — alternate in rhythm to pump</div>
+          <div class="ctrl-row"><span class="key">↓</span><span class="key">⇧</span> compress on a wall drop = stronger pump</div>
+          <div class="ctrl-row"><span class="key">␣</span> ollie</div>
+          <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span> camera positions</div>
+          <div class="ctrl-row"><span class="key">Tab</span> switch to WASD driving</div>
+          <div class="ctrl-row"><span class="key">M</span> mute music / <span class="key">N</span> next song</div>
+        `.trim();
+      } else {
+        this.ridingListEl.innerHTML = `
+          <div class="ctrl-row"><span class="key">W</span> one push-off from a standstill</div>
+          <div class="ctrl-row"><span class="key">A</span><span class="key">D</span> carve — alternate in rhythm to pump</div>
+          <div class="ctrl-row"><span class="key">S</span><span class="key">⇧</span> compress on a wall drop = stronger pump</div>
+          <div class="ctrl-row"><span class="key">␣</span> ollie</div>
+          <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span> camera positions</div>
+          <div class="ctrl-row"><span class="key">Tab</span> switch to Pfeiltasten driving</div>
+          <div class="ctrl-row"><span class="key">M</span> mute music / <span class="key">N</span> next song</div>
+        `.trim();
+      }
+    }
+  }
+
   public updateButtons(
     aspect: AspectMode,
     _atmosphere: AtmosphereMode,
@@ -376,14 +450,22 @@ export class SurfHUD {
       aspect === '9:16' ? '📱 9:16 IG Reel Mode [R]' : '🖥️ 16:9 Desktop [R]';
     this.btnAspectEl.classList.toggle('active-reel', aspect === '9:16');
 
-    this.btnAtmosphereEl.textContent = '🌙 Floodlit Munich Night';
+    if (this.btnAtmosphereEl) {
+      this.btnAtmosphereEl.textContent = '🌙 Floodlit Munich Night';
+    }
 
     const camLabels: Record<CameraStyle, string> = {
-      follow: '🎥 Follow Cam [C]',
-      filmer: '📹 Filmer Cam [C]',
-      mural: '🌴 Palm Mural Cam [C]',
+      follow: '🎥 Follow Cam [1]',
+      filmer: '📹 Filmer Cam [2]',
+      mural: '🌴 Palm Mural Cam [3]',
     };
     this.btnCameraEl.textContent = camLabels[cameraStyle];
+
+    if (this.btnControlsEl) {
+      this.btnControlsEl.textContent =
+        this.controlMode === 'arrows' ? '🎮 Steuerung: Pfeiltasten [Tab]' : '🎮 Steuerung: WASD [Tab]';
+      this.btnControlsEl.classList.toggle('active-auto', this.controlMode === 'wasd');
+    }
 
     const truckLabels: Record<TruckFeelPreset, string> = {
       smooth: '🛹 Truck: Smooth [T]',
@@ -392,7 +474,7 @@ export class SurfHUD {
     };
     this.btnTruckFeelEl.textContent = truckLabels[truckPreset];
 
-    this.btnAutoFlowEl.textContent = autoFlow ? '🤖 Auto-Shred: ON [P]' : '🎮 Manual Control [P]';
+    this.btnAutoFlowEl.textContent = autoFlow ? '🤖 Auto-Shred: ON [J]' : '🎮 Manual Control [J]';
     this.btnAutoFlowEl.classList.toggle('active-auto', autoFlow);
 
     if (this.btnMusicEl) {
@@ -409,10 +491,10 @@ export class SurfHUD {
   ): void {
     if (!this.btnQualityEl) return;
     const labels = {
-      auto: `⚡ Quality: AUTO (${effective.toUpperCase()}) [Q]`,
-      high: '⚡ Quality: HIGH [Q]',
-      medium: '⚡ Quality: MEDIUM [Q]',
-      low: '⚡ Quality: PERFORMANCE [Q]',
+      auto: `⚡ Quality: AUTO (${effective.toUpperCase()}) [U]`,
+      high: '⚡ Quality: HIGH [U]',
+      medium: '⚡ Quality: MEDIUM [U]',
+      low: '⚡ Quality: PERFORMANCE [U]',
     };
     this.btnQualityEl.textContent = labels[preset];
     this.btnQualityEl.classList.toggle('active-auto', preset === 'auto');

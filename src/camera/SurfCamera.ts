@@ -35,11 +35,27 @@ export class SurfCamera {
     this.camera.updateProjectionMatrix();
   }
 
+  public setCameraStyle(style: CameraStyle): void {
+    this.cameraStyle = style;
+  }
+
   public cycleCameraStyle(): CameraStyle {
     const order: CameraStyle[] = ['follow', 'filmer', 'mural'];
     const idx = (order.indexOf(this.cameraStyle) + 1) % order.length;
     this.cameraStyle = order[idx];
     return this.cameraStyle;
+  }
+
+  /** Snap camera to a clean starting orientation behind the skater on reset. */
+  public reset(ctrl: SurfskateController): void {
+    this.smoothHeading = ctrl.heading;
+    const forward = new THREE.Vector3(-Math.sin(this.smoothHeading), 0, -Math.cos(this.smoothHeading));
+    const dist = this.aspectMode === '9:16' ? 4.3 : 3.85;
+    const height = this.aspectMode === '9:16' ? 1.95 : 1.75;
+    this.currentPos.copy(ctrl.position).addScaledVector(forward, -dist).add(new THREE.Vector3(0, height, 0));
+    this.currentLookAt.copy(ctrl.position).addScaledVector(forward, 1.8).add(new THREE.Vector3(0, 0.85, 0));
+    this.camera.position.copy(this.currentPos);
+    this.camera.lookAt(this.currentLookAt);
   }
 
   public update(dt: number, ctrl: SurfskateController): void {
@@ -51,11 +67,20 @@ export class SurfCamera {
     this.snapZoom += (zoomTarget - this.snapZoom) * Math.min(1, (zoomTarget > this.snapZoom ? 10 : 4) * clampedDt);
     const zoomDistScale = 1 - 0.38 * this.snapZoom;
 
-    // Shortest-angle interpolation for heading (snappy tracking so turns feel immediate!)
+    // Shortest-angle interpolation for heading
+    // Stable tracking during pumping: filter out high-frequency left-right wiggles,
+    // but catch up quickly during SNAP tricks or sharp 180 kick turns.
     let diff = ctrl.heading - this.smoothHeading;
     while (diff > Math.PI) diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
-    this.smoothHeading += diff * Math.min(1, 11.5 * clampedDt);
+
+    let headingRate = 2.8;
+    if (ctrl.snapActive) {
+      headingRate = 8.0;
+    } else if (Math.abs(diff) > 1.2) {
+      headingRate = Math.min(9.5, 2.8 + (Math.abs(diff) - 1.2) * 4.5);
+    }
+    this.smoothHeading += diff * Math.min(1, headingRate * clampedDt);
 
     const forward = new THREE.Vector3(-Math.sin(this.smoothHeading), 0, -Math.cos(this.smoothHeading));
     const right = new THREE.Vector3(Math.cos(this.smoothHeading), 0, -Math.sin(this.smoothHeading));
@@ -65,19 +90,19 @@ export class SurfCamera {
 
     if (this.cameraStyle === 'follow') {
       // Dynamic THPS / Surf Flow Chase Cam
+      // Stable during pumping: no lateral sway offset from rapid deck lean,
+      // letting the skater carve and pump fluidly inside the frame while camera stays steady.
       const dist = (this.aspectMode === '9:16' ? 4.3 : 3.85) * zoomDistScale;
       const height = (this.aspectMode === '9:16' ? 1.95 : 1.75) * (1 - 0.25 * this.snapZoom);
-      const carveSideOffset = Math.sin(ctrl.leanAngle) * 0.65;
 
       targetPos
         .copy(ctrl.position)
         .addScaledVector(forward, -dist)
-        .addScaledVector(right, carveSideOffset)
         .add(new THREE.Vector3(0, height + Math.max(0, ctrl.position.y * 0.2), 0));
 
       targetLook
         .copy(ctrl.position)
-        .addScaledVector(forward, 2.2)
+        .addScaledVector(forward, 1.8)
         .add(new THREE.Vector3(0, 0.85, 0));
     } else if (this.cameraStyle === 'filmer') {
       // Low-angle Fisheye Instagram Filmer Cam riding along the pocket
@@ -100,8 +125,11 @@ export class SurfCamera {
     const groundY = ctrl.currentSurface.height + 0.42;
     if (targetPos.y < groundY) targetPos.y = groundY;
 
-    this.currentPos.lerp(targetPos, Math.min(1, 14.0 * clampedDt));
-    this.currentLookAt.lerp(targetLook, Math.min(1, 18.0 * clampedDt));
+    // Smooth position & look-at lerp for steady chase cam feel
+    const posLerpRate = this.cameraStyle === 'follow' ? 8.5 : 14.0;
+    const lookLerpRate = this.cameraStyle === 'follow' ? 10.0 : 18.0;
+    this.currentPos.lerp(targetPos, Math.min(1, posLerpRate * clampedDt));
+    this.currentLookAt.lerp(targetLook, Math.min(1, lookLerpRate * clampedDt));
 
     this.camera.position.copy(this.currentPos);
     this.camera.lookAt(this.currentLookAt);

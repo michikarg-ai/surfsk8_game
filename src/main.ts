@@ -3,8 +3,8 @@ import { ParkSurface } from './physics/ParkSurface';
 import { InputState, SurfskateController } from './physics/SurfskateController';
 import { SkaterVisuals } from './entities/SkaterVisuals';
 import { ImGefildeScene } from './world/ImGefildeScene';
-import { SurfCamera } from './camera/SurfCamera';
-import { SurfHUD } from './ui/SurfHUD';
+import { CameraStyle, SurfCamera } from './camera/SurfCamera';
+import { DriveControlMode, SurfHUD } from './ui/SurfHUD';
 import { LandingPage } from './ui/LandingPage';
 import { SurfAudio } from './audio/SurfAudio';
 import { PretzelCollectibles } from './world/PretzelCollectibles';
@@ -16,17 +16,19 @@ class SurfskateMunichGame {
   private renderer: THREE.WebGLRenderer;
   private scene: THREE.Scene;
   private viewportContainer: HTMLElement;
-  private parkSurface: ParkSurface;
-  private controller: SurfskateController;
-  private skaterVisuals: SkaterVisuals;
-  private worldScene: ImGefildeScene;
-  private surfCamera: SurfCamera;
-  private hud: SurfHUD;
-  private landingPage: LandingPage;
-  private audio = new SurfAudio();
-  private pretzels: PretzelCollectibles;
+  public parkSurface: ParkSurface;
+  public controller: SurfskateController;
+  public skaterVisuals: SkaterVisuals;
+  public worldScene: ImGefildeScene;
+  public surfCamera: SurfCamera;
+  public hud: SurfHUD;
+  public landingPage: LandingPage;
+  public audio = new SurfAudio();
+  public pretzels: PretzelCollectibles;
 
-  private keys = new Set<string>();
+  public controlMode: DriveControlMode =
+    (localStorage.getItem('surfsk8.controlMode') as DriveControlMode) || 'arrows';
+  public keys = new Set<string>();
   private autoFlowEnabled = false;
   private lastTime = performance.now();
 
@@ -88,7 +90,9 @@ class SurfskateMunichGame {
       onResetSession: () => this.resetSession(),
       onToggleMusic: () => this.toggleMusic(),
       onCycleQuality: () => this.cycleGraphicsQuality(),
+      onToggleControlMode: () => this.toggleControlMode(),
     });
+    this.hud.setControlMode(this.controlMode);
     this.pretzels = new PretzelCollectibles(this.scene, this.hud, this.audio);
     this.landingPage = new LandingPage(
       this.parkSurface,
@@ -180,11 +184,14 @@ class SurfskateMunichGame {
         ) {
           e.preventDefault();
           this.landingPage.handleKeyDown(code);
+        } else if (code === 'Tab') {
+          e.preventDefault();
+          this.toggleControlMode();
         } else if (code === 'KeyR') {
           this.toggleAspectMode();
         } else if (code === 'KeyM') {
           this.toggleMusic();
-        } else if (code === 'KeyQ') {
+        } else if (code === 'KeyU' || code === 'KeyQ') {
           this.cycleGraphicsQuality();
         }
         return;
@@ -204,21 +211,28 @@ class SurfskateMunichGame {
         }
       }
 
-      if (code === 'KeyR') {
-        this.toggleAspectMode();
-      } else if (code === 'KeyL') {
-        this.toggleAtmosphereMode();
+      if (code === 'Tab') {
+        e.preventDefault();
+        this.toggleControlMode();
+      } else if (code === 'Digit1' || code === 'Numpad1') {
+        this.setCameraStyle('follow');
+      } else if (code === 'Digit2' || code === 'Numpad2') {
+        this.setCameraStyle('filmer');
+      } else if (code === 'Digit3' || code === 'Numpad3') {
+        this.setCameraStyle('mural');
       } else if (code === 'KeyC') {
         this.cycleCameraStyle();
+      } else if (code === 'KeyR') {
+        this.toggleAspectMode();
       } else if (code === 'KeyT') {
         this.cycleTruckFeel();
-      } else if (code === 'KeyP') {
+      } else if (code === 'KeyJ') {
         this.toggleAutoFlow();
       } else if (code === 'KeyM') {
         this.toggleMusic();
       } else if (code === 'KeyN') {
         this.nextTrack();
-      } else if (code === 'KeyQ') {
+      } else if (code === 'KeyU') {
         this.cycleGraphicsQuality();
       } else if (code === 'Backspace' || code === 'KeyX') {
         this.resetSession();
@@ -242,8 +256,24 @@ class SurfskateMunichGame {
     this.syncHUDButtons();
   }
 
+  public setCameraStyle(style: CameraStyle): void {
+    this.surfCamera.setCameraStyle(style);
+    this.syncHUDButtons();
+  }
+
   public cycleCameraStyle(): void {
     this.surfCamera.cycleCameraStyle();
+    this.syncHUDButtons();
+  }
+
+  public toggleControlMode(): void {
+    this.setControlMode(this.controlMode === 'arrows' ? 'wasd' : 'arrows');
+  }
+
+  public setControlMode(mode: DriveControlMode): void {
+    this.controlMode = mode;
+    localStorage.setItem('surfsk8.controlMode', mode);
+    this.hud.setControlMode(mode);
     this.syncHUDButtons();
   }
 
@@ -314,6 +344,7 @@ class SurfskateMunichGame {
 
   public resetSession(): void {
     this.controller.resetToSpawn();
+    this.surfCamera.reset(this.controller);
     this.hud.resetSession();
     this.pretzels.reset();
   }
@@ -346,26 +377,48 @@ class SurfskateMunichGame {
     }
   }
 
-  private buildInputState(timeSec: number): InputState {
+  public buildInputState(timeSec: number): InputState {
     if (this.autoFlowEnabled) {
       return this.computeAutoFlowInput(timeSec);
     }
 
+    if (this.controlMode === 'arrows') {
+      return {
+        steerLeft: this.keys.has('ArrowLeft'),
+        steerRight: this.keys.has('ArrowRight'),
+        forwardPush: this.keys.has('ArrowUp'),
+        compressCrouch:
+          this.keys.has('ArrowDown') ||
+          this.keys.has('ShiftLeft') ||
+          this.keys.has('ShiftRight'),
+        jumpOllie: this.keys.has('Space'),
+        grindSlash: false, // coping grinds are not part of the trick set
+        // Trick keys for Arrow driving mode: Q (Snap), W (Layback), A (Bertslide), S (Reverse 360)
+        snapTrick: this.keys.has('KeyQ') || this.keys.has('KeyF'),
+        laybackTrick: this.keys.has('KeyW') || this.keys.has('KeyG'),
+        snapSlide: this.keys.has('KeyA') || this.keys.has('KeyV'),
+        reverseTrick: this.keys.has('KeyS') || this.keys.has('KeyB'),
+        indyGrabTrick:
+          this.keys.has('KeyI') ||
+          (!this.controller.isGrounded && this.keys.has('Space')),
+      };
+    }
+
+    // WASD driving mode: O (Snap), P (Layback), K (Bertslide), L (Reverse 360)
     return {
-      steerLeft: this.keys.has('KeyA') || this.keys.has('ArrowLeft'),
-      steerRight: this.keys.has('KeyD') || this.keys.has('ArrowRight'),
-      forwardPush: this.keys.has('KeyW') || this.keys.has('ArrowUp'),
+      steerLeft: this.keys.has('KeyA'),
+      steerRight: this.keys.has('KeyD'),
+      forwardPush: this.keys.has('KeyW'),
       compressCrouch:
         this.keys.has('KeyS') ||
-        this.keys.has('ArrowDown') ||
         this.keys.has('ShiftLeft') ||
         this.keys.has('ShiftRight'),
       jumpOllie: this.keys.has('Space'),
-      grindSlash: false, // coping grinds are not part of the trick set
-      snapTrick: this.keys.has('KeyF'),
-      laybackTrick: this.keys.has('KeyG'),
-      snapSlide: this.keys.has('KeyV'),
-      reverseTrick: this.keys.has('KeyB'),
+      grindSlash: false,
+      snapTrick: this.keys.has('KeyO') || this.keys.has('KeyF'),
+      laybackTrick: this.keys.has('KeyP') || this.keys.has('KeyG'),
+      snapSlide: this.keys.has('KeyK') || this.keys.has('KeyV'),
+      reverseTrick: this.keys.has('KeyL') || this.keys.has('KeyB'),
       indyGrabTrick:
         this.keys.has('KeyI') ||
         (!this.controller.isGrounded && this.keys.has('Space')),
