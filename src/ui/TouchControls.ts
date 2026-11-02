@@ -26,7 +26,10 @@ export class TouchControls {
   public isVisible = false;
 
   private activeRockerPointerId: number | null = null;
+  private activeCrouchPointerId: number | null = null;
   private currentSteerDir: -1 | 0 | 1 = 0;
+  private isRockerCrouching = false;
+  private isButtonCrouching = false;
 
   private state: InputState = {
     steerLeft: false,
@@ -71,7 +74,7 @@ export class TouchControls {
         <button id="touch-btn-crouch" class="touch-aux-pill touch-crouch-pill" type="button" title="Crouch / Bowl Compression">
           <span>▼ CROUCH</span>
         </button>
-        <div class="touch-zone-label">CARVE &amp; PUMP</div>
+        <div class="touch-zone-label">CARVE &amp; PUMP · SLIDE ↓ CROUCH</div>
       </div>
 
       <!-- Right zone: Action & Trick Cluster -->
@@ -173,7 +176,11 @@ export class TouchControls {
     this.state.analogSteer = 0;
 
     this.activeRockerPointerId = null;
+    this.activeCrouchPointerId = null;
     this.currentSteerDir = 0;
+    this.isRockerCrouching = false;
+    this.isButtonCrouching = false;
+    this.carveRocker.classList.remove('crouching');
     this.paddleLeft.classList.remove('active');
     this.paddleRight.classList.remove('active');
     this.pushBtn.classList.remove('active');
@@ -206,20 +213,53 @@ export class TouchControls {
     }
   }
 
+  private setCrouchFromRocker(active: boolean): void {
+    if (this.isRockerCrouching === active) return;
+    this.isRockerCrouching = active;
+    this.updateCrouchState();
+    if (active) {
+      this.triggerHaptic(14);
+    }
+  }
+
+  private updateCrouchState(): void {
+    const isCrouching = this.isRockerCrouching || this.isButtonCrouching;
+    this.state.compressCrouch = isCrouching;
+    this.crouchBtn.classList.toggle('active', isCrouching);
+    this.carveRocker.classList.toggle('crouching', this.isRockerCrouching);
+  }
+
   private bindEvents(): void {
     // -------------------------------------------------------------------------
     // 1. Dual-Paddle Carve Rocker (Left Thumb)
-    // Supports both direct tapping on Left/Right and continuous sliding across
+    // Supports:
+    // - Direct tapping Left / Right
+    // - Continuous sliding left / right across the rocker to carve & pump
+    // - Sliding DOWN from the left/right buttons to compress/crouch
     // -------------------------------------------------------------------------
-    const updateRockerFromClientX = (clientX: number) => {
+    const updateRockerPointer = (clientX: number, clientY: number) => {
       const rect = this.carveRocker.getBoundingClientRect();
       const midX = rect.left + rect.width * 0.5;
       const deadzone = rect.width * 0.05;
 
+      // Horizontal carve steering
       if (clientX < midX - deadzone) {
         this.setSteerDirection(-1);
       } else if (clientX > midX + deadzone) {
         this.setSteerDirection(1);
+      }
+
+      // Vertical slide detection:
+      // When sliding down toward/past the bottom edge of the rocker into the crouch area,
+      // engage crouch/compression.
+      // Disengage with hysteresis when thumb moves back up toward center.
+      const crouchEngageY = rect.top + rect.height * 0.78;
+      const crouchDisengageY = rect.top + rect.height * 0.58;
+
+      if (!this.isRockerCrouching && clientY > crouchEngageY) {
+        this.setCrouchFromRocker(true);
+      } else if (this.isRockerCrouching && clientY < crouchDisengageY) {
+        this.setCrouchFromRocker(false);
       }
     };
 
@@ -230,13 +270,13 @@ export class TouchControls {
       try {
         this.carveRocker.setPointerCapture?.(e.pointerId);
       } catch (_) {}
-      updateRockerFromClientX(e.clientX);
+      updateRockerPointer(e.clientX, e.clientY);
     };
 
     const handleRockerMove = (e: PointerEvent) => {
       if (this.activeRockerPointerId !== e.pointerId) return;
       e.preventDefault();
-      updateRockerFromClientX(e.clientX);
+      updateRockerPointer(e.clientX, e.clientY);
     };
 
     const handleRockerUp = (e: PointerEvent) => {
@@ -247,6 +287,7 @@ export class TouchControls {
       } catch (_) {}
       this.activeRockerPointerId = null;
       this.setSteerDirection(0);
+      this.setCrouchFromRocker(false);
     };
 
     this.carveRocker.addEventListener('pointerdown', handleRockerDown, { passive: false });
@@ -304,16 +345,61 @@ export class TouchControls {
       16
     );
 
-    bindPressButton(
-      this.crouchBtn,
-      () => {
-        this.state.compressCrouch = true;
-      },
-      () => {
-        this.state.compressCrouch = false;
-      },
-      14
-    );
+    // Dedicated crouch button also supports carving if sliding left/right while held
+    const handleCrouchDown = (e: PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.activeCrouchPointerId = e.pointerId;
+      try {
+        this.crouchBtn.setPointerCapture?.(e.pointerId);
+      } catch (_) {}
+      this.isButtonCrouching = true;
+      this.updateCrouchState();
+      this.triggerHaptic(14);
+
+      const rect = this.carveRocker.getBoundingClientRect();
+      const midX = rect.left + rect.width * 0.5;
+      const deadzone = rect.width * 0.08;
+      if (e.clientX < midX - deadzone) {
+        this.setSteerDirection(-1);
+      } else if (e.clientX > midX + deadzone) {
+        this.setSteerDirection(1);
+      }
+    };
+
+    const handleCrouchMove = (e: PointerEvent) => {
+      if (this.activeCrouchPointerId !== e.pointerId) return;
+      e.preventDefault();
+      const rect = this.carveRocker.getBoundingClientRect();
+      const midX = rect.left + rect.width * 0.5;
+      const deadzone = rect.width * 0.08;
+      if (e.clientX < midX - deadzone) {
+        this.setSteerDirection(-1);
+      } else if (e.clientX > midX + deadzone) {
+        this.setSteerDirection(1);
+      } else {
+        this.setSteerDirection(0);
+      }
+    };
+
+    const handleCrouchUp = (e: PointerEvent) => {
+      if (this.activeCrouchPointerId !== e.pointerId) return;
+      e.preventDefault();
+      try {
+        this.crouchBtn.releasePointerCapture?.(e.pointerId);
+      } catch (_) {}
+      this.activeCrouchPointerId = null;
+      this.isButtonCrouching = false;
+      this.updateCrouchState();
+      if (this.activeRockerPointerId === null) {
+        this.setSteerDirection(0);
+      }
+    };
+
+    this.crouchBtn.addEventListener('pointerdown', handleCrouchDown, { passive: false });
+    this.crouchBtn.addEventListener('pointermove', handleCrouchMove, { passive: false });
+    this.crouchBtn.addEventListener('pointerup', handleCrouchUp, { passive: false });
+    this.crouchBtn.addEventListener('pointercancel', handleCrouchUp, { passive: false });
 
     // -------------------------------------------------------------------------
     // 3. Primary Ollie / Indy Button & Trick Cluster (Right Thumb)
