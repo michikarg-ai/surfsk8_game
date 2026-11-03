@@ -76,7 +76,7 @@ export class TouchControls {
 
       <!-- Right zone: Action & Trick Cluster -->
       <div id="touch-actions-zone" class="touch-zone">
-        <!-- Compact 4-Button Cluster: SNAP, 360, SLIDE/LAYBACK, COMPRESS -->
+        <!-- Compact 4-Button Cluster: SNAP, 360, SLIDE/LAYBACK, OLLIE -->
         <div class="touch-tricks-cluster">
           <button id="touch-btn-snap" class="touch-trick-btn" type="button" title="Top-turn Snap">
             <span>SNAP</span>
@@ -87,15 +87,15 @@ export class TouchControls {
           <button id="touch-btn-slide" class="touch-trick-btn touch-slide-btn" type="button" title="Bert Slide / Layback Carve">
             <span>SLIDE</span>
           </button>
-          <button id="touch-btn-crouch" class="touch-trick-btn touch-compress-btn" type="button" title="Compress / Crouch">
-            <span>COMPRESS</span>
+          <button id="touch-btn-ollie" class="touch-trick-btn touch-ollie-btn" type="button" title="Ollie / Hold for Indy Grab">
+            <span>OLLIE</span>
           </button>
         </div>
 
-        <!-- Large Primary Action Button: Ollie & Air Grab -->
-        <button id="touch-btn-ollie" class="touch-action-primary" type="button" title="Ollie / Indy Grab in air">
-          <span class="ollie-main">OLLIE</span>
-          <span class="ollie-sub">HOLD: INDY</span>
+        <!-- Large Primary Action Button: Compress / Bowl Pump -->
+        <button id="touch-btn-crouch" class="touch-action-primary touch-compress-primary" type="button" title="Compress / Crouch / Bowl Pump">
+          <span class="primary-main">COMPRESS</span>
+          <span class="primary-sub">CROUCH &amp; PUMP</span>
         </button>
       </div>
     `;
