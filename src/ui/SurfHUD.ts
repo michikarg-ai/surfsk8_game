@@ -73,6 +73,7 @@ export class SurfHUD {
   private snapHintEl: HTMLDivElement;
   private coachHintEl: HTMLDivElement;
   private snapBannerTimeout: number | null = null;
+  private flowLineHint: string | null = null;
 
   constructor(private callbacks: HUDCallbacks) {
     this.injectSnapStyles();
@@ -270,6 +271,9 @@ export class SurfHUD {
     if (ctrl.isBailing) {
       this.coachHintEl.textContent = `WIPEOUT: ${ctrl.bailReason || 'Lande gerade in Fahrtrichtung!'}`;
       this.coachHintEl.className = 'visible bail';
+    } else if (this.flowLineHint) {
+      this.coachHintEl.textContent = this.flowLineHint;
+      this.coachHintEl.className = 'visible ready';
     } else if (ctrl.coachHint) {
       this.coachHintEl.textContent = ctrl.coachHint;
       this.coachHintEl.className = 'visible';
@@ -414,6 +418,15 @@ export class SurfHUD {
     }, 400);
   }
 
+  public awardBonusPoints(points: number, label: string): void {
+    this.addBonusScore(points);
+    this.showTrickBanner(label, true);
+  }
+
+  public setFlowLineHint(hint: string | null): void {
+    this.flowLineHint = hint;
+  }
+
   public updatePretzelCount(collected: number, total: number): void {
     if (this.pretzelCountEl) {
       this.pretzelCountEl.textContent = `🥨 ${collected}/${total}`;
@@ -436,6 +449,7 @@ export class SurfHUD {
     this.comboTimeout = 0;
     this.sessionTimeRemaining = 120.0;
     this.sessionEnded = false;
+    this.flowLineHint = null;
     this.scoreEl.textContent = '0';
     this.bestComboEl.textContent = '0';
     this.comboContainerEl.classList.remove('active');

@@ -5,6 +5,12 @@ export interface TouchControlsOptions {
   onPause?: () => void;
   onVibrate?: (ms: number) => void;
   getSlideTricksEligibility?: () => { canBert: boolean; canLayback: boolean };
+  getSurfTricksEligibility?: () => {
+    canSnap: boolean;
+    canBert: boolean;
+    canLayback: boolean;
+    canReverse: boolean;
+  };
 }
 
 export class TouchControls {
@@ -17,10 +23,8 @@ export class TouchControls {
   private crouchBtn: HTMLButtonElement;
 
   private actionsZone: HTMLDivElement;
+  private trickBtn: HTMLButtonElement;
   private ollieBtn: HTMLButtonElement;
-  private snapBtn: HTMLButtonElement;
-  private slideBtn: HTMLButtonElement;
-  private revBtn: HTMLButtonElement;
 
   public isEnabled = false;
   public isVisible = false;
@@ -76,19 +80,15 @@ export class TouchControls {
 
       <!-- Right zone: Action & Trick Cluster -->
       <div id="touch-actions-zone" class="touch-zone">
-        <!-- Compact 4-Button Cluster: SNAP, 360, SLIDE/LAYBACK, OLLIE -->
+        <!-- Ergonomic 2-Button Cluster: TRICK (SURF / 360) and OLLIE (AIR / GRAB) -->
         <div class="touch-tricks-cluster">
-          <button id="touch-btn-snap" class="touch-trick-btn" type="button" title="Top-turn Snap">
-            <span>SNAP</span>
-          </button>
-          <button id="touch-btn-rev" class="touch-trick-btn" type="button" title="Reverse 360">
-            <span>360</span>
-          </button>
-          <button id="touch-btn-slide" class="touch-trick-btn touch-slide-btn" type="button" title="Bert Slide / Layback Carve">
-            <span>SLIDE</span>
+          <button id="touch-btn-trick" class="touch-trick-btn touch-surf-trick-btn" type="button" title="Surf Trick (Snap, Bert Slide, Layback, Reverse 360)">
+            <span class="trick-main">TRICK</span>
+            <span class="trick-sub">SURF / 360</span>
           </button>
           <button id="touch-btn-ollie" class="touch-trick-btn touch-ollie-btn" type="button" title="Ollie / Hold for Indy Grab">
-            <span>OLLIE</span>
+            <span class="trick-main">OLLIE</span>
+            <span class="trick-sub">AIR / GRAB</span>
           </button>
         </div>
 
@@ -110,10 +110,8 @@ export class TouchControls {
 
     this.actionsZone = this.container.querySelector('#touch-actions-zone')!;
     this.crouchBtn = this.container.querySelector('#touch-btn-crouch')!;
+    this.trickBtn = this.container.querySelector('#touch-btn-trick')!;
     this.ollieBtn = this.container.querySelector('#touch-btn-ollie')!;
-    this.snapBtn = this.container.querySelector('#touch-btn-snap')!;
-    this.slideBtn = this.container.querySelector('#touch-btn-slide')!;
-    this.revBtn = this.container.querySelector('#touch-btn-rev')!;
 
     this.bindEvents();
 
@@ -181,6 +179,8 @@ export class TouchControls {
     this.paddleRight.classList.remove('active');
     this.pushBtn.classList.remove('active');
     this.crouchBtn.classList.remove('active');
+    this.trickBtn?.classList.remove('active');
+    this.ollieBtn?.classList.remove('active');
   }
 
   private triggerHaptic(ms = 12): void {
@@ -342,7 +342,7 @@ export class TouchControls {
     );
 
     // -------------------------------------------------------------------------
-    // 2. Action & Trick Cluster (Right Thumb): SNAP, 360, SLIDE/LAYBACK, COMPRESS
+    // 3. Action & Trick Cluster (Right Thumb): TRICK, OLLIE, COMPRESS
     // -------------------------------------------------------------------------
     bindPressButton(
       this.ollieBtn,
@@ -356,71 +356,51 @@ export class TouchControls {
       22
     );
 
+    // Multi-Surf-Trick Button (Snap, Bert Slide, Layback, Reverse 360):
+    // Queries the physics engine for currently eligible tricks and picks one.
+    // If multiple are eligible at this moment, picks randomly among them.
+    // If none are eligible yet (e.g. player is still building speed or mid-carve before threshold),
+    // picks randomly between 'bert' and 'layback' so holding the button as the carve deepens still triggers a slide/layback!
+    let activeSurfTrick: ('snap' | 'bert' | 'layback' | 'reverse') | null = null;
+
     bindPressButton(
-      this.snapBtn,
+      this.trickBtn,
       () => {
-        this.state.snapTrick = true;
+        const eligible: ('snap' | 'bert' | 'layback' | 'reverse')[] = [];
+
+        if (this.options.getSurfTricksEligibility) {
+          const el = this.options.getSurfTricksEligibility();
+          if (el.canSnap) eligible.push('snap');
+          if (el.canBert) eligible.push('bert');
+          if (el.canLayback) eligible.push('layback');
+          if (el.canReverse) eligible.push('reverse');
+        } else if (this.options.getSlideTricksEligibility) {
+          const el = this.options.getSlideTricksEligibility();
+          if (el.canBert) eligible.push('bert');
+          if (el.canLayback) eligible.push('layback');
+        }
+
+        if (eligible.length > 0) {
+          activeSurfTrick = eligible[Math.floor(Math.random() * eligible.length)];
+        } else {
+          // If eligible list is empty (e.g. player building speed or mid-carve before threshold),
+          // pick randomly between 'bert' and 'layback' so holding the button as the carve deepens still triggers a slide/layback!
+          activeSurfTrick = Math.random() < 0.5 ? 'bert' : 'layback';
+        }
+
+        this.state.snapTrick = activeSurfTrick === 'snap';
+        this.state.snapSlide = activeSurfTrick === 'bert';
+        this.state.laybackTrick = activeSurfTrick === 'layback';
+        this.state.reverseTrick = activeSurfTrick === 'reverse';
       },
       () => {
+        activeSurfTrick = null;
         this.state.snapTrick = false;
-      },
-      16
-    );
-
-    bindPressButton(
-      this.revBtn,
-      () => {
-        this.state.reverseTrick = true;
-      },
-      () => {
-        this.state.reverseTrick = false;
-      },
-      16
-    );
-
-    // Merged Bert Slide & Layback Button:
-    // Triggers whichever trick is currently eligible.
-    // If both are possible at this moment, picks randomly (50% Bertslide, 50% Layback).
-    let activeSlideTrick: 'bert' | 'layback' | null = null;
-
-    bindPressButton(
-      this.slideBtn,
-      () => {
-        let canBert = false;
-        let canLayback = false;
-
-        if (this.options.getSlideTricksEligibility) {
-          const eligibility = this.options.getSlideTricksEligibility();
-          canBert = eligibility.canBert;
-          canLayback = eligibility.canLayback;
-        }
-
-        if (canBert && canLayback) {
-          // If both tricks are possible at this moment: pick randomly (50% / 50%)!
-          activeSlideTrick = Math.random() < 0.5 ? 'bert' : 'layback';
-        } else if (canLayback) {
-          activeSlideTrick = 'layback';
-        } else if (canBert) {
-          activeSlideTrick = 'bert';
-        } else {
-          // Neither meets full threshold right now: pick randomly so physics executes when carve deepens
-          activeSlideTrick = Math.random() < 0.5 ? 'bert' : 'layback';
-        }
-
-        if (activeSlideTrick === 'bert') {
-          this.state.snapSlide = true;
-          this.state.laybackTrick = false;
-        } else {
-          this.state.laybackTrick = true;
-          this.state.snapSlide = false;
-        }
-      },
-      () => {
-        activeSlideTrick = null;
         this.state.snapSlide = false;
         this.state.laybackTrick = false;
+        this.state.reverseTrick = false;
       },
-      16
+      18
     );
 
     // Compress / Crouch Button on the Right:

@@ -9,6 +9,7 @@ import { LandingPage, SkateparkLocation } from './ui/LandingPage';
 import { TouchControls } from './ui/TouchControls';
 import { SurfAudio } from './audio/SurfAudio';
 import { PretzelCollectibles } from './world/PretzelCollectibles';
+import { FlowLineChallenge } from './world/FlowLineChallenge';
 import { inject, track } from '@vercel/analytics';
 
 // Initialize Vercel Web Analytics
@@ -31,6 +32,7 @@ class SurfskateMunichGame {
   public touchControls: TouchControls;
   public audio = new SurfAudio();
   public pretzels: PretzelCollectibles;
+  public flowLine: FlowLineChallenge;
 
   public controlMode: DriveControlMode =
     (localStorage.getItem('surfsk8.controlMode') as DriveControlMode) || 'arrows';
@@ -98,9 +100,16 @@ class SurfskateMunichGame {
     this.touchControls = new TouchControls({
       frameElement: this.viewportContainer,
       onPause: () => this.pauseGameAndOpenLanding(),
-      getSlideTricksEligibility: () => ({
+      getSurfTricksEligibility: () => ({
+        canSnap: this.controller.snapWindow === 'READY',
         canBert: this.controller.canPerformBertSlide(),
         canLayback: this.controller.canPerformLayback(),
+        canReverse:
+          this.controller.isGrounded &&
+          !this.controller.isGrinding &&
+          !this.controller.snapActive &&
+          !this.controller.reverseActive &&
+          this.controller.speed >= 2.4,
       }),
     });
 
@@ -119,6 +128,7 @@ class SurfskateMunichGame {
     });
     this.hud.setControlMode(this.controlMode);
     this.pretzels = new PretzelCollectibles(this.scene, this.hud, this.audio);
+    this.flowLine = new FlowLineChallenge(this.scene, this.parkSurface, this.hud, this.audio);
     this.landingPage = new LandingPage(
       this.parkSurface,
       () => {
@@ -168,6 +178,7 @@ class SurfskateMunichGame {
         this.skaterVisuals.load(initialModel),
         this.landingPage.load(),
       ]);
+      this.flowLine.refreshSurfaceHeights();
     } catch (err) {
       console.error('Error loading GLB/LiDAR assets:', err);
     }
@@ -371,6 +382,7 @@ class SurfskateMunichGame {
         this.worldScene.load(park.id),
         this.parkSurface.loadLidarGrid(park.lidarUrl || '/models/im_gefilde_lidar.json'),
       ]);
+      this.flowLine.refreshSurfaceHeights();
       this.controller.position.set(16.0, 0.0, 5.0);
       this.controller.velocity.set(0, 0, 0);
       this.controller.speed = 0;
@@ -475,6 +487,7 @@ class SurfskateMunichGame {
     this.surfCamera.reset(this.controller);
     this.hud.resetSession();
     this.pretzels.reset();
+    this.flowLine.reset();
   }
 
   private syncHUDButtons(): void {
@@ -667,6 +680,7 @@ class SurfskateMunichGame {
     this.worldScene.update(timeSec);
     this.skaterVisuals.update(dt, this.controller);
     this.pretzels.update(dt, this.controller.position);
+    this.flowLine.update(dt, timeSec, this.controller);
     this.surfCamera.update(realDt, this.controller);
     this.hud.update(dt, this.controller);
     this.audio.update(this.controller);
