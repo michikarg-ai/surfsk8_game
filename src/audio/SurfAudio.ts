@@ -21,7 +21,7 @@ export class SurfAudio {
     'audio/surfskate_anthem_2.mp3',
     'audio/surfskate_anthem_3.mp3',
   ];
-  private currentTrackIndex = 0;
+  private currentTrackIndex = Math.floor(Math.random() * 3);
   private music: HTMLAudioElement | null = null;
   private garageMusic: HTMLAudioElement | null = null;
   private isGarageMode = true; // Starts in garage mode (LandingPage)
@@ -203,8 +203,17 @@ export class SurfAudio {
 
   public resume(): void {
     this.isPaused = false;
+    const startingFromGarage = this.isGarageMode;
     this.stopGarageMusic();
     this.initOnFirstGesture();
+    if (startingFromGarage) {
+      this.currentTrackIndex = Math.floor(Math.random() * this.playlist.length);
+      if (this.music) {
+        this.music.src = this.getTrackUrl(this.currentTrackIndex);
+        this.music.currentTime = 0;
+      }
+      this.onTrackChange?.(this.currentTrackIndex);
+    }
     if (this.masterGain && this.ctx) {
       const now = this.ctx.currentTime;
       this.masterGain.gain.cancelScheduledValues(now);
