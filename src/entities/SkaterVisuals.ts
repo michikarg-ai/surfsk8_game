@@ -497,7 +497,7 @@ export class SkaterVisuals {
     const bodyLean = lean * 0.85; // whole body leans into the rail with the deck
 
     // Handle bailing / wipeout falling pose:
-    // Skater's hips smoothly drop into an athletic knee & palm slide on the concrete,
+    // Skater's hips smoothly drop into a natural, athletic knee & palm slide on the concrete,
     // protecting the head, with natural forward knee flexion and trailing legs.
     if (ctrl.isBailing) {
       const p = 1.0 - Math.max(0, ctrl.bailTimer / ctrl.bailDuration);
@@ -512,52 +512,66 @@ export class SkaterVisuals {
       const modelY = this.modelDir(0, 1, 0);
       const modelZ = this.modelDir(0, 0, 1);
 
-      // 1. Pelvis/Hips: drop from stance height down to knee-slide height
-      const restHipsY = this.hipsRestHeight - 0.1;
-      const slideHipsY = DECK_TOP + 0.14; // ~0.30m above concrete
-      const hipsY = THREE.MathUtils.lerp(restHipsY, slideHipsY, fallCurve);
-      const hipsZ = THREE.MathUtils.lerp(-0.02, -0.22, fallCurve); // slightly behind board
-      const hipsX = THREE.MathUtils.lerp(0.05, -0.03, fallCurve);
+      // 1. Pelvis/Hips: drop smoothly into a low athletic knee/hip slide
+      const hipsX = THREE.MathUtils.lerp(0.05, 0.14, fallCurve);
+      const hipsY = THREE.MathUtils.lerp(this.hipsRestHeight - 0.1, 0.32, fallCurve);
+      const hipsZ = THREE.MathUtils.lerp(-0.02, -0.14, fallCurve);
 
       const bailHips = new THREE.Vector3(hipsX, hipsY, hipsZ);
       const hipsWorld = this.modelRoot!.localToWorld(bailHips);
       b.Hips.position.copy(b.Hips.parent!.worldToLocal(hipsWorld));
       b.Hips.updateMatrixWorld(true);
 
-      // 2. Torso posture: flex forward in direction of slide (+Z), yaw slightly facing travel
-      this.rotateBoneAxis(b.Hips, modelX, 0.38 * fallCurve);
-      this.rotateBoneAxis(b.Hips, modelY, 0.18 * fallCurve);
-      this.rotateBoneAxis(b.Spine, modelX, 0.26 * fallCurve);
-      this.rotateBoneAxis(b.Spine1, modelX, 0.18 * fallCurve);
-      // Head & Neck lift UP to look ahead and protect face from concrete
-      this.rotateBoneAxis(b.Neck, modelX, -0.32 * fallCurve);
-      this.rotateBoneAxis(b.Head, modelX, -0.22 * fallCurve);
+      // 2. Torso & Head posture: forward waist bend over toes, slight tilt toward tail, head up looking forward
+      this.rotateBoneAxis(b.Hips, modelY, 0.18 + 0.15 * fallCurve);
+      this.rotateBoneAxis(b.Hips, modelZ, 0.36 * fallCurve);
+      this.rotateBoneAxis(b.Hips, modelX, -0.24 * fallCurve);
 
-      // 3. Arms: reach forward-down to brace against the pavement with hands
-      const lArmTarget = this.modelRoot!.localToWorld(new THREE.Vector3(-0.24, DECK_TOP - 0.08, 0.36));
-      const rArmTarget = this.modelRoot!.localToWorld(new THREE.Vector3(0.24, DECK_TOP - 0.08, 0.30));
-      // Elbows flare outward and back naturally to absorb slide
-      const lElbowPole = this.modelDir(-0.80, 0.40, -0.30);
-      const rElbowPole = this.modelDir(0.80, 0.40, -0.30);
-      this.solveArm('Left', lArmTarget, lElbowPole);
-      this.solveArm('Right', rArmTarget, rElbowPole);
+      this.rotateBoneAxis(b.Spine, modelZ, 0.06 + 0.28 * fallCurve);
+      this.rotateBoneAxis(b.Spine, modelX, -0.12 * fallCurve);
 
-      // 4. Legs: knees bend naturally forward/down, shins trail along concrete
-      const lLegTarget = this.modelRoot!.localToWorld(new THREE.Vector3(-0.16, DECK_TOP - 0.10, -0.38));
-      const rLegTarget = this.modelRoot!.localToWorld(new THREE.Vector3(0.16, DECK_TOP - 0.10, -0.58));
-      // Knee poles point forward (+Z) and slightly down/outward: anatomically correct knee flexion!
-      const lKneePole = this.modelDir(-0.40, -0.20, 0.85);
-      const rKneePole = this.modelDir(0.40, -0.20, 0.85);
+      this.rotateBoneAxis(b.Spine1, modelZ, 0.18 * fallCurve);
+      this.rotateBoneAxis(b.Spine1, modelX, -0.10 * fallCurve);
+
+      this.rotateBoneAxis(b.Spine2, modelY, 0.22 + 0.12 * fallCurve);
+
+      this.rotateBoneAxis(b.Neck, modelZ, -0.28 * fallCurve);
+      this.rotateBoneAxis(b.Neck, modelY, 0.28);
+
+      this.rotateBoneAxis(b.Head, modelZ, -0.28 * fallCurve);
+      this.rotateBoneAxis(b.Head, modelY, 0.28);
+
+      // 3. Arms: brace naturally with hands protecting torso and knees
+      const targetLArm = this.modelDir(-0.3, -0.62, 0.72).lerp(this.modelDir(-0.58, -0.64, 0.50), fallCurve);
+      const targetLFore = this.modelDir(-0.45, -0.25, 0.85).lerp(this.modelDir(-0.74, -0.32, 0.58), fallCurve);
+      this.aimBone(b.LeftArm, b.LeftForeArm, targetLArm);
+      this.aimBone(b.LeftForeArm, b.LeftHand, targetLFore);
+
+      const targetRArm = this.modelDir(-0.2, -0.82, -0.5).lerp(this.modelDir(-0.32, -0.86, -0.38), fallCurve);
+      const targetRFore = this.modelDir(-0.5, -0.55, -0.45).lerp(this.modelDir(-0.56, -0.72, -0.40), fallCurve);
+      this.aimBone(b.RightArm, b.RightForeArm, targetRArm);
+      this.aimBone(b.RightForeArm, b.RightHand, targetRFore);
+
+      // 4. Legs: knees bend naturally forward/toe-side (-X), feet stay cleanly uncrossed
+      const lLegLocal = this.ankleTargets.Left.clone().lerp(new THREE.Vector3(-0.08, 0.11, 0.22), fallCurve);
+      const rLegLocal = this.ankleTargets.Right.clone().lerp(new THREE.Vector3(0.06, 0.10, -0.34), fallCurve);
+      const lLegTarget = this.modelRoot!.localToWorld(lLegLocal);
+      const rLegTarget = this.modelRoot!.localToWorld(rLegLocal);
+
+      const lKneePole = this.modelDir(-0.92, 0.25, 0.32);
+      const rKneePole = this.modelDir(-0.92, 0.18, -0.22);
       this.solveLeg('Left', lLegTarget, lKneePole);
       this.solveLeg('Right', rLegTarget, rKneePole);
 
-      // 5. Feet: lay flat along pavement trailing backward, toes pointing rearward
+      // 5. Feet: maintain clean anatomical alignment with skater's body
       const modelQ = this.modelRoot!.getWorldQuaternion(new THREE.Quaternion());
-      const footSlideRot = new THREE.Quaternion()
-        .setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI * 0.35)
-        .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI * 0.38));
-      this.setBoneWorldQuat(b.LeftFoot, modelQ.clone().multiply(footSlideRot).multiply(this.footRestInDeck.Left));
-      this.setBoneWorldQuat(b.RightFoot, modelQ.clone().multiply(footSlideRot).multiply(this.footRestInDeck.Right));
+      for (const side of ['Left', 'Right'] as Side[]) {
+        const yaw = new THREE.Quaternion().setFromAxisAngle(AXIS_Y, TOE_YAW[side]);
+        this.setBoneWorldQuat(
+          b[`${side}Foot`],
+          modelQ.clone().multiply(yaw).multiply(this.footRestInDeck[side])
+        );
+      }
       return;
     }
 
