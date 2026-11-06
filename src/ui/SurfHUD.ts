@@ -15,6 +15,7 @@ export interface HUDCallbacks {
   onCycleQuality?: () => void;
   onToggleControlMode?: () => void;
   onToggleTouchControls?: () => void;
+  onToggleFullscreen?: () => void;
 }
 
 export class SurfHUD {
@@ -64,6 +65,8 @@ export class SurfHUD {
   private btnQualityEl: HTMLButtonElement | null = null;
   private btnFpsEl: HTMLButtonElement | null = null;
   private btnTouchEl: HTMLButtonElement | null = null;
+  private btnFullscreenEl: HTMLButtonElement | null = null;
+  private btnHudFullscreenEl: HTMLButtonElement | null = null;
 
   // SNAP trick overlays
   private snapBannerEl: HTMLDivElement;
@@ -122,6 +125,8 @@ export class SurfHUD {
     this.btnQualityEl = document.getElementById('btn-quality') as HTMLButtonElement | null;
     this.btnFpsEl = document.getElementById('btn-fps') as HTMLButtonElement | null;
     this.btnTouchEl = document.getElementById('btn-touch') as HTMLButtonElement | null;
+    this.btnFullscreenEl = document.getElementById('btn-fullscreen') as HTMLButtonElement | null;
+    this.btnHudFullscreenEl = document.getElementById('btn-hud-fullscreen') as HTMLButtonElement | null;
     const btnResetEl = document.getElementById('btn-reset') as HTMLButtonElement;
 
     if (this.btnControlsEl) {
@@ -129,6 +134,12 @@ export class SurfHUD {
     }
     if (this.btnTouchEl) {
       this.btnTouchEl.addEventListener('click', () => this.callbacks.onToggleTouchControls?.());
+    }
+    if (this.btnFullscreenEl) {
+      this.btnFullscreenEl.addEventListener('click', () => this.callbacks.onToggleFullscreen?.());
+    }
+    if (this.btnHudFullscreenEl) {
+      this.btnHudFullscreenEl.addEventListener('click', () => this.callbacks.onToggleFullscreen?.());
     }
     this.btnAspectEl.addEventListener('click', () => this.callbacks.onToggleAspect());
     if (this.btnAtmosphereEl) {
@@ -249,6 +260,13 @@ export class SurfHUD {
     }
 
     // 5. Coaching hints: push-off from standstill, then how to pump
+    // Never show coaching hints while landing overlay is open
+    const landingOverlay = document.getElementById('landing-overlay');
+    if (landingOverlay && !landingOverlay.classList.contains('hidden')) {
+      this.coachHintEl.className = '';
+      return;
+    }
+
     if (ctrl.isBailing) {
       this.coachHintEl.textContent = `WIPEOUT: ${ctrl.bailReason || 'Lande gerade in Fahrtrichtung!'}`;
       this.coachHintEl.className = 'visible bail';
@@ -370,6 +388,11 @@ export class SurfHUD {
     localStorage.setItem('surfsk8.dockCollapsed', collapsed ? '1' : '0');
   }
 
+  public setDockOpen(open: boolean): void {
+    this.dockEl.classList.toggle('collapsed', !open);
+    localStorage.setItem('surfsk8.dockCollapsed', open ? '0' : '1');
+  }
+
   private updateSpeedo(kmh: number): void {
     const frac = Math.min(1, Math.max(0, kmh / SurfHUD.SPEEDO_MAX_KMH));
     this.speedEl.textContent = String(Math.round(kmh));
@@ -457,7 +480,7 @@ export class SurfHUD {
           <div class="ctrl-row"><span class="key">←</span><span class="key">→</span> carve — alternate in rhythm to pump</div>
           <div class="ctrl-row"><span class="key">↓</span><span class="key">⇧</span> compress on a wall drop = stronger pump</div>
           <div class="ctrl-row"><span class="key">␣</span> ollie</div>
-          <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span> camera positions</div>
+          <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4/O</span> camera positions & 3D orbit</div>
           <div class="ctrl-row"><span class="key">Tab</span> switch to WASD driving</div>
           <div class="ctrl-row"><span class="key">M</span> mute music / <span class="key">N</span> next song</div>
         `.trim();
@@ -467,7 +490,7 @@ export class SurfHUD {
           <div class="ctrl-row"><span class="key">A</span><span class="key">D</span> carve — alternate in rhythm to pump</div>
           <div class="ctrl-row"><span class="key">S</span><span class="key">⇧</span> compress on a wall drop = stronger pump</div>
           <div class="ctrl-row"><span class="key">␣</span> ollie</div>
-          <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span> camera positions</div>
+          <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4/O</span> camera positions & 3D orbit</div>
           <div class="ctrl-row"><span class="key">Tab</span> switch to Pfeiltasten driving</div>
           <div class="ctrl-row"><span class="key">M</span> mute music / <span class="key">N</span> next song</div>
         `.trim();
@@ -496,6 +519,7 @@ export class SurfHUD {
       follow: '🎥 Follow Cam [1]',
       filmer: '📹 Filmer Cam [2]',
       mural: '🌴 Palm Mural Cam [3]',
+      orbit: '🔍 3D Orbit Inspect [4 / O]',
     };
     this.btnCameraEl.textContent = camLabels[cameraStyle];
 
@@ -542,6 +566,20 @@ export class SurfHUD {
     if (!this.btnTouchEl) return;
     this.btnTouchEl.textContent = enabled ? '📱 Touch Controls: ON' : '📱 Touch Controls: OFF';
     this.btnTouchEl.classList.toggle('active-auto', enabled);
+  }
+
+  public updateFullscreenState(isFs: boolean): void {
+    if (this.btnFullscreenEl) {
+      this.btnFullscreenEl.textContent = isFs ? '🗗 Exit Fullscreen' : '⛶ Fullscreen';
+      this.btnFullscreenEl.classList.toggle('active-auto', isFs);
+    }
+    if (this.btnHudFullscreenEl) {
+      const icon = this.btnHudFullscreenEl.querySelector('.hud-fullscreen-icon');
+      if (icon) {
+        icon.textContent = isFs ? '🗗' : '⛶';
+      }
+      this.btnHudFullscreenEl.classList.toggle('active', isFs);
+    }
   }
 
   public updateFPS(fps: number): void {

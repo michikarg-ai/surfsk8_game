@@ -79,6 +79,8 @@ export class LandingPage {
   private qualityBtnEl: HTMLElement | null = null;
 
   public onCycleQuality?: () => void;
+  public onToggleFullscreen?: () => void;
+  private fullscreenBtnEl: HTMLElement | null = null;
 
   constructor(
     parkSurface: ParkSurface,
@@ -288,6 +290,14 @@ export class LandingPage {
       });
     }
 
+    this.fullscreenBtnEl = document.getElementById('landing-fullscreen-btn');
+    if (this.fullscreenBtnEl) {
+      this.fullscreenBtnEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.onToggleFullscreen?.();
+      });
+    }
+
     // Terms & Privacy Modal
     const termsBtn = document.getElementById('landing-terms-btn');
     const termsModal = document.getElementById('terms-modal');
@@ -449,6 +459,12 @@ export class LandingPage {
     if (this.boardIconView && this.boardNoticeView) {
       this.boardNoticeView.classList.remove('active');
       this.boardIconView.classList.add('active');
+    }
+  }
+
+  public updateFullscreenLabel(isFs: boolean): void {
+    if (this.fullscreenBtnEl) {
+      this.fullscreenBtnEl.textContent = isFs ? '🗗 EXIT FULLSCREEN' : '⛶ FULLSCREEN';
     }
   }
 

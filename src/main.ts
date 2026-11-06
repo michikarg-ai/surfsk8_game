@@ -115,12 +115,16 @@ class SurfskateMunichGame {
       onCycleQuality: () => this.cycleGraphicsQuality(),
       onToggleControlMode: () => this.toggleControlMode(),
       onToggleTouchControls: () => this.toggleTouchControls(),
+      onToggleFullscreen: () => this.toggleFullscreen(),
     });
     this.hud.setControlMode(this.controlMode);
     this.pretzels = new PretzelCollectibles(this.scene, this.hud, this.audio);
     this.landingPage = new LandingPage(
       this.parkSurface,
       () => {
+        if (TouchControls.isTouchDevice() && !this.isFullscreen()) {
+          this.toggleFullscreen();
+        }
         this.resetSession();
         this.audio.resume();
         this.lastTime = performance.now();
@@ -141,6 +145,7 @@ class SurfskateMunichGame {
       }
     );
     this.landingPage.onCycleQuality = () => this.cycleGraphicsQuality();
+    this.landingPage.onToggleFullscreen = () => this.toggleFullscreen();
 
     this.audio.onTrackChange = () => {
       this.syncHUDButtons();
@@ -179,8 +184,14 @@ class SurfskateMunichGame {
   }
 
   private bindEvents(): void {
-    window.addEventListener('resize', () => this.handleResize());
-    new ResizeObserver(() => this.handleResize()).observe(this.viewportContainer);
+    window.addEventListener('resize', () => this.updateAppDimensions());
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => this.updateAppDimensions(), 100);
+      setTimeout(() => this.updateAppDimensions(), 300);
+    });
+    document.addEventListener('fullscreenchange', () => this.syncFullscreenUI());
+    document.addEventListener('webkitfullscreenchange', () => this.syncFullscreenUI());
+    new ResizeObserver(() => this.updateAppDimensions()).observe(this.viewportContainer);
     window.addEventListener('pointerdown', () => this.audio.initOnFirstGesture(), { once: true });
     document.addEventListener('visibilitychange', () => {
       this.audio.handleVisibilityChange(!document.hidden);
@@ -222,6 +233,8 @@ class SurfskateMunichGame {
         } else if (code === 'Tab') {
           e.preventDefault();
           this.toggleControlMode();
+        } else if (code === 'KeyF') {
+          this.toggleFullscreen();
         } else if (code === 'KeyR') {
           this.toggleAspectMode();
         } else if (code === 'KeyM') {
@@ -271,6 +284,8 @@ class SurfskateMunichGame {
         this.nextTrack();
       } else if (code === 'KeyU') {
         this.cycleGraphicsQuality();
+      } else if (code === 'KeyF' && this.controlMode === 'arrows') {
+        this.toggleFullscreen();
       } else if (code === 'Backspace' || code === 'KeyX') {
         this.resetSession();
       }
@@ -294,6 +309,45 @@ class SurfskateMunichGame {
   public toggleAtmosphereMode(): void {
     this.worldScene.toggleAtmosphere();
     this.syncHUDButtons();
+  }
+
+  public toggleFullscreen(): void {
+    const doc = document as any;
+    const docEl = document.documentElement as any;
+    if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
+      if (docEl.requestFullscreen) {
+        docEl.requestFullscreen().catch(() => {});
+      } else if (docEl.webkitRequestFullscreen) {
+        docEl.webkitRequestFullscreen();
+      }
+    } else {
+      if (doc.exitFullscreen) {
+        doc.exitFullscreen().catch(() => {});
+      } else if (doc.webkitExitFullscreen) {
+        doc.webkitExitFullscreen();
+      }
+    }
+  }
+
+  public isFullscreen(): boolean {
+    const doc = document as any;
+    return !!(doc.fullscreenElement || doc.webkitFullscreenElement);
+  }
+
+  public syncFullscreenUI(): void {
+    const isFs = this.isFullscreen();
+    document.body.classList.toggle('is-fullscreen', isFs);
+    this.hud.updateFullscreenState(isFs);
+    if (this.landingPage) {
+      this.landingPage.updateFullscreenLabel(isFs);
+    }
+    this.updateAppDimensions();
+  }
+
+  public updateAppDimensions(): void {
+    const h = window.innerHeight;
+    document.documentElement.style.setProperty('--app-height', `${h}px`);
+    this.handleResize();
   }
 
   public setCameraStyle(style: CameraStyle): void {
