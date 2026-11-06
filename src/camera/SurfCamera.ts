@@ -1,13 +1,15 @@
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { SurfskateController } from '../physics/SurfskateController';
 
 export type AspectMode = '16:9' | '9:16';
-export type CameraStyle = 'follow' | 'filmer' | 'mural';
+export type CameraStyle = 'follow' | 'filmer' | 'mural' | 'orbit';
 
 export class SurfCamera {
   public camera: THREE.PerspectiveCamera;
   public aspectMode: AspectMode = '16:9';
   public cameraStyle: CameraStyle = 'follow';
+  public orbitControls: OrbitControls | null = null;
 
   private currentPos = new THREE.Vector3(19.0, 2.4, 5.2);
   private currentLookAt = new THREE.Vector3(12.0, 1.1, 3.2);
@@ -28,9 +30,19 @@ export class SurfCamera {
   private indyOrbitTimer = 0;
   private indyOrbitDuration = 0;
 
-  constructor() {
+  constructor(domElement?: HTMLElement) {
     this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 250);
     this.camera.position.copy(this.currentPos);
+
+    if (domElement) {
+      this.orbitControls = new OrbitControls(this.camera, domElement);
+      this.orbitControls.enableDamping = true;
+      this.orbitControls.dampingFactor = 0.05;
+      this.orbitControls.maxPolarAngle = Math.PI / 2 + 0.08;
+      this.orbitControls.minDistance = 1.0;
+      this.orbitControls.maxDistance = 60.0;
+      this.orbitControls.enabled = false;
+    }
   }
 
   /** Punch the camera in toward the skater for a SNAP. */
@@ -59,14 +71,32 @@ export class SurfCamera {
     this.camera.updateProjectionMatrix();
   }
 
-  public setCameraStyle(style: CameraStyle): void {
+  public setCameraStyle(style: CameraStyle, target?: THREE.Vector3): void {
     this.cameraStyle = style;
+    if (style === 'orbit') {
+      if (this.orbitControls) {
+        this.orbitControls.enabled = true;
+        if (target) {
+          this.orbitControls.target.copy(target);
+          this.camera.position.set(target.x, target.y + 4.5, target.z + 8.0);
+        } else {
+          this.orbitControls.target.set(0, 0.8, 0);
+          this.camera.position.set(0, 6.0, 11.0);
+        }
+        this.camera.lookAt(this.orbitControls.target);
+        this.orbitControls.update();
+      }
+    } else {
+      if (this.orbitControls) {
+        this.orbitControls.enabled = false;
+      }
+    }
   }
 
-  public cycleCameraStyle(): CameraStyle {
-    const order: CameraStyle[] = ['follow', 'filmer', 'mural'];
+  public cycleCameraStyle(target?: THREE.Vector3): CameraStyle {
+    const order: CameraStyle[] = ['follow', 'filmer', 'mural', 'orbit'];
     const idx = (order.indexOf(this.cameraStyle) + 1) % order.length;
-    this.cameraStyle = order[idx];
+    this.setCameraStyle(order[idx], target);
     return this.cameraStyle;
   }
 
@@ -89,6 +119,13 @@ export class SurfCamera {
   }
 
   public update(dt: number, ctrl: SurfskateController): void {
+    if (this.cameraStyle === 'orbit') {
+      if (this.orbitControls && this.orbitControls.enabled) {
+        this.orbitControls.update();
+      }
+      return;
+    }
+
     const clampedDt = Math.min(dt, 0.05);
 
     // SNAP zoom envelope: quick punch-in, hold, smooth release

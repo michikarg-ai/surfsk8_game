@@ -169,46 +169,64 @@ export class ImGefildeScene {
     return rt.texture;
   }
 
-  public async load(): Promise<void> {
+  public async load(parkId: string = 'im_gefilde'): Promise<void> {
     const loader = new GLTFLoader();
     const texLoader = new THREE.TextureLoader();
     const maxAniso = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
 
-    // Load the floor-flattened, wall-preserving Multi-Video 3D Gaussian Splatting model (`/models/skatepark_multi.glb`)
-    // AND explicitly load the extracted 4K color texture (`/textures/skatepark_multi_tex0.jpg`) so it is
-    // 100% guaranteed to bind even after rapid hot-reloads!
-    const [multiGltf, parkColorTex] = await Promise.all([
-      loader.loadAsync('/models/skatepark_multi.glb?v=4'),
-      texLoader.loadAsync('/textures/skatepark_multi_tex0.jpg'),
-    ]);
+    // Clear existing park objects from parkRoot if any
+    while (this.parkRoot.children.length > 0) {
+      const child = this.parkRoot.children[0];
+      this.parkRoot.remove(child);
+    }
 
-    parkColorTex.flipY = false; // glTF UV convention
-    parkColorTex.colorSpace = THREE.SRGBColorSpace;
-    parkColorTex.anisotropy = maxAniso;
-    parkColorTex.needsUpdate = true;
+    if (parkId === 'aschheim') {
+      const aschheimGltf = await loader.loadAsync('/models/pumptrack_aschheim.glb?v=1');
+      aschheimGltf.scene.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const mesh = child as THREE.Mesh;
+          mesh.castShadow = false;
+          mesh.receiveShadow = true;
+        }
+      });
+      this.parkRoot.add(aschheimGltf.scene);
+    } else {
+      // Load the floor-flattened, wall-preserving Multi-Video 3D Gaussian Splatting model (`/models/skatepark_multi.glb`)
+      // AND explicitly load the extracted 4K color texture (`/textures/skatepark_multi_tex0.jpg`) so it is
+      // 100% guaranteed to bind even after rapid hot-reloads!
+      const [multiGltf, parkColorTex] = await Promise.all([
+        loader.loadAsync('/models/skatepark_multi.glb?v=4'),
+        texLoader.loadAsync('/textures/skatepark_multi_tex0.jpg'),
+      ]);
 
-    // Exact real-world Procrustes alignment matching `im_gefilde_lidar.json`:
-    const S = 23.1442;
-    multiGltf.scene.scale.set(S, S, S);
-    multiGltf.scene.rotation.set(0, 2.7887, 0);
-    multiGltf.scene.position.set(2.548, -1.007, 0.437);
+      parkColorTex.flipY = false; // glTF UV convention
+      parkColorTex.colorSpace = THREE.SRGBColorSpace;
+      parkColorTex.anisotropy = maxAniso;
+      parkColorTex.needsUpdate = true;
 
-    multiGltf.scene.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh) {
-        const mesh = child as THREE.Mesh;
-        mesh.castShadow = false;
-        mesh.receiveShadow = true;
-        mesh.material = new THREE.MeshStandardMaterial({
-          map: parkColorTex,
-          color: 0xffffff,
-          roughness: 0.78,
-          metalness: 0.02,
-          envMapIntensity: 0.85,
-          side: THREE.FrontSide,
-        });
-      }
-    });
-    this.parkRoot.add(multiGltf.scene);
+      // Exact real-world Procrustes alignment matching `im_gefilde_lidar.json`:
+      const S = 23.1442;
+      multiGltf.scene.scale.set(S, S, S);
+      multiGltf.scene.rotation.set(0, 2.7887, 0);
+      multiGltf.scene.position.set(2.548, -1.007, 0.437);
+
+      multiGltf.scene.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const mesh = child as THREE.Mesh;
+          mesh.castShadow = false;
+          mesh.receiveShadow = true;
+          mesh.material = new THREE.MeshStandardMaterial({
+            map: parkColorTex,
+            color: 0xffffff,
+            roughness: 0.78,
+            metalness: 0.02,
+            envMapIntensity: 0.85,
+            side: THREE.FrontSide,
+          });
+        }
+      });
+      this.parkRoot.add(multiGltf.scene);
+    }
 
     // Subtle dark night ground plane well beneath the scan perimeter (-1.2m) so it never overlaps low pockets
     const outerGroundGeo = new THREE.CircleGeometry(90, 64);

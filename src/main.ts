@@ -185,6 +185,10 @@ class SurfskateMunichGame {
 
   private bindEvents(): void {
     window.addEventListener('resize', () => this.updateAppDimensions());
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => this.updateAppDimensions());
+      window.visualViewport.addEventListener('scroll', () => this.updateAppDimensions());
+    }
     window.addEventListener('orientationchange', () => {
       setTimeout(() => this.updateAppDimensions(), 100);
       setTimeout(() => this.updateAppDimensions(), 300);
@@ -345,7 +349,8 @@ class SurfskateMunichGame {
   }
 
   public updateAppDimensions(): void {
-    const h = window.innerHeight;
+    const vvHeight = window.visualViewport ? Math.round(window.visualViewport.height) : window.innerHeight;
+    const h = Math.min(window.innerHeight, vvHeight);
     document.documentElement.style.setProperty('--app-height', `${h}px`);
     this.handleResize();
   }

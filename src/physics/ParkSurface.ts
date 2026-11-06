@@ -39,14 +39,14 @@ export class ParkSurface {
     this.buildCopingSegments();
   }
 
-  public async loadLidarGrid(): Promise<void> {
+  public async loadLidarGrid(url: string = '/models/im_gefilde_lidar.json'): Promise<void> {
     try {
-      const resp = await fetch('/models/im_gefilde_lidar.json');
+      const resp = await fetch(url);
       if (resp.ok) {
         this.lidarData = (await resp.json()) as LidarGridPayload;
       }
     } catch (e) {
-      console.warn('Using analytical C2 surface fallback:', e);
+      console.warn('Using analytical C2 surface fallback for ' + url, e);
     }
   }
 
