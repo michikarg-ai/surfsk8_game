@@ -633,6 +633,95 @@
         font-size: 14px;
       }
 
+      /* ---------- Flow Line Recorder Dev Mode ---------- */
+      .flow-rec-btn {
+        pointer-events: auto;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--dark-1);
+        border: 1px solid rgba(255, 61, 90, 0.45);
+        color: var(--white);
+        padding: 8px 12px;
+        transform: skewX(var(--skew));
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+        font-family: var(--font-hud);
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        line-height: 1;
+        transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      }
+      .flow-rec-btn > * {
+        display: inline-block;
+        transform: skewX(calc(var(--skew) * -1));
+      }
+      .flow-rec-btn:hover {
+        background: rgba(255, 61, 90, 0.22);
+        border-color: #ff3d5a;
+        transform: skewX(var(--skew)) translateY(-2px);
+      }
+      .flow-rec-btn.is-recording {
+        background: #ff3d5a;
+        color: #ffffff;
+        border-color: #ffffff;
+        animation: rec-pulse 1s infinite alternate;
+      }
+      @keyframes rec-pulse {
+        from { box-shadow: 0 0 8px rgba(255, 61, 90, 0.6); }
+        to { box-shadow: 0 0 22px rgba(255, 61, 90, 1.0); }
+      }
+      body.reel-mode .flow-rec-btn {
+        padding: 6px 8px;
+        font-size: 11px;
+      }
+
+      /* Floating top-center dev recorder pill */
+      #hud-top-center {
+        justify-self: center;
+        align-self: start;
+        pointer-events: auto;
+      }
+      .dev-recorder-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(16, 18, 24, 0.88);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(0, 245, 212, 0.4);
+        color: #f5f5f5;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-family: var(--font-hud);
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        cursor: pointer;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+        transition: all 0.15s ease;
+      }
+      .dev-recorder-pill:hover {
+        border-color: var(--yellow);
+        color: var(--yellow);
+        transform: translateY(-2px);
+      }
+      .dev-recorder-pill.hidden {
+        display: none !important;
+      }
+      .dev-recorder-pill.is-recording {
+        border-color: #ff3d5a;
+        background: rgba(36, 12, 16, 0.92);
+        animation: rec-pulse 1s infinite alternate;
+      }
+      .dev-recorder-pill .rec-indicator {
+        font-size: 11px;
+        line-height: 1;
+      }
+
       .dock-body {
         position: relative;
         width: 100%;
@@ -1756,6 +1845,186 @@
       }
 
       /* =====================================================================
+         FLOW LINE RECORDER EXPORT MODAL
+         ===================================================================== */
+      .flowline-modal-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+      }
+      .flowline-modal-overlay.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .flowline-modal-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(6, 8, 12, 0.85);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+      .flowline-modal-card {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        max-width: 680px;
+        max-height: 85vh;
+        display: flex;
+        flex-direction: column;
+        background: linear-gradient(145deg, rgba(22, 26, 34, 0.98), rgba(12, 16, 22, 0.98));
+        border: 1px solid rgba(0, 245, 212, 0.35);
+        border-top: 3px solid #00f5d4;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85), 0 0 30px rgba(0, 245, 212, 0.15);
+        border-radius: 8px;
+        color: #f3f2ee;
+        overflow: hidden;
+      }
+      .flowline-modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        padding: 20px 24px 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .flowline-badge {
+        display: inline-block;
+        font-family: var(--font-hud);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        color: #00f5d4;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+      }
+      .flowline-title {
+        font-family: var(--font-hud);
+        font-size: 24px;
+        font-weight: 900;
+        letter-spacing: 0.05em;
+        color: #ffffff;
+        line-height: 1.1;
+      }
+      .flowline-close-btn {
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 22px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 4px 8px;
+        transition: color 0.15s ease, transform 0.15s ease;
+      }
+      .flowline-close-btn:hover {
+        color: #ffffff;
+        transform: scale(1.15);
+      }
+      .flowline-modal-body {
+        padding: 16px 24px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .flowline-desc {
+        font-size: 14px;
+        line-height: 1.5;
+        color: rgba(245, 245, 245, 0.85);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      .flowline-code {
+        background: rgba(0, 0, 0, 0.5);
+        color: #00f5d4;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: Menlo, Monaco, Consolas, monospace;
+        font-size: 12px;
+      }
+      .flowline-textarea {
+        width: 100%;
+        height: 240px;
+        background: rgba(8, 10, 14, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 6px;
+        color: #00f5d4;
+        font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+        font-size: 12px;
+        line-height: 1.45;
+        padding: 12px 14px;
+        resize: vertical;
+        outline: none;
+        box-sizing: border-box;
+      }
+      .flowline-textarea:focus {
+        border-color: #00f5d4;
+        box-shadow: 0 0 12px rgba(0, 245, 212, 0.3);
+      }
+      .flowline-modal-footer {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 14px 24px 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(14, 18, 24, 0.6);
+      }
+      .flowline-btn {
+        font-family: var(--font-hud);
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 10px 18px;
+        border-radius: 4px;
+        border: none;
+        cursor: pointer;
+        transform: skewX(var(--skew));
+        transition: all 0.15s ease;
+      }
+      .flowline-btn > * {
+        transform: skewX(calc(var(--skew) * -1));
+      }
+      .flowline-btn-primary {
+        background: #00f5d4;
+        color: #0a0e14;
+      }
+      .flowline-btn-primary:hover {
+        background: #26ffe2;
+        box-shadow: 0 0 16px rgba(0, 245, 212, 0.5);
+      }
+      .flowline-btn-accent {
+        background: var(--yellow);
+        color: #111111;
+      }
+      .flowline-btn-accent:hover {
+        background: #ffe359;
+        box-shadow: 0 0 16px rgba(242, 204, 38, 0.5);
+      }
+      .flowline-btn-ghost {
+        background: rgba(255, 255, 255, 0.08);
+        color: #ffffff;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        margin-left: auto;
+      }
+      .flowline-btn-ghost:hover {
+        background: rgba(255, 255, 255, 0.18);
+        border-color: #ffffff;
+      }
+      body.reel-mode .flowline-modal-card {
+        max-width: 94vw;
+        max-height: 82vh;
+      }
+      body.reel-mode .flowline-title {
+        font-size: 20px;
+      }
+
+      /* =====================================================================
          TOUCH CONTROLS LAYER (Smartphones & Touchscreens)
          ===================================================================== */
       #touch-controls-layer {
@@ -2436,6 +2705,31 @@
         </div>
       </div>
 
+      <!-- Flow Line Dev Mode Export Modal -->
+      <div class="flowline-modal-overlay hidden" id="flowline-export-modal">
+        <div class="flowline-modal-backdrop" id="flowline-modal-backdrop"></div>
+        <div class="flowline-modal-card">
+          <div class="flowline-modal-header">
+            <div>
+              <span class="flowline-badge">DEV MODE • WAYPOINTS RECORDER</span>
+              <h2 class="flowline-title" id="flowline-modal-title">🌊 FLOW LINE EXPORT</h2>
+            </div>
+            <button class="flowline-close-btn" id="flowline-modal-x-btn" type="button" aria-label="Close">✕</button>
+          </div>
+          <div class="flowline-modal-body">
+            <p class="flowline-desc">
+              Your custom Flow Line was recorded live in Skatepark "Im Gefilde"! Copy this snippet to chat or directly into <code class="flowline-code">FlowLineChallenge.WAYPOINTS_2D</code>:
+            </p>
+            <textarea id="flowline-export-textarea" class="flowline-textarea" readonly spellcheck="false"></textarea>
+          </div>
+          <div class="flowline-modal-footer">
+            <button id="flowline-modal-copy-btn" type="button" class="flowline-btn flowline-btn-primary">📋 COPY WAYPOINTS</button>
+            <button id="flowline-modal-test-btn" type="button" class="flowline-btn flowline-btn-accent">▶ TEST RECORDED LINE</button>
+            <button id="flowline-modal-close-btn" type="button" class="flowline-btn flowline-btn-ghost">CLOSE</button>
+          </div>
+        </div>
+      </div>
+
       <div class="hud-layer">
         <!-- Top Row: SESSION | SCORE | BEST LINE on top-left -->
         <div class="hud-top">
@@ -2458,8 +2752,17 @@
             </div>
           </div>
 
-          <div></div>
+          <div id="hud-top-center">
+            <button id="hud-dev-recorder-pill" class="dev-recorder-pill hidden" type="button" title="Dev Mode Flow Line Recorder [L]">
+              <span class="rec-indicator">🔴</span>
+              <span id="hud-dev-recorder-pill-text">REC FLOW LINE [L]</span>
+            </button>
+          </div>
           <div class="hud-top-right">
+            <button class="flow-rec-btn" id="btn-flow-recorder" type="button" title="Record Custom Flow Line [L]">
+              <span class="rec-dot">🔴</span>
+              <span id="btn-flow-recorder-label">REC LINE [L]</span>
+            </button>
             <button class="hud-fullscreen-btn" id="btn-hud-fullscreen" type="button" title="Toggle Fullscreen">
               <span class="hud-fullscreen-icon">⛶</span>
             </button>
@@ -2557,6 +2860,7 @@
                   <button class="hud-btn" id="btn-truckfeel">🛹 Truck: Balanced [T]</button>
                   <button class="hud-btn" id="btn-music">🎵 Track 1/3 [M] [N]</button>
                   <button class="hud-btn" id="btn-autoflow">🎮 Manual Control [J]</button>
+                  <button class="hud-btn" id="btn-dock-flow-rec">🔴 Rec Flow Line [L]</button>
                   <button class="hud-btn" id="btn-quality">⚡ Quality: AUTO [U]</button>
                   <button class="hud-btn" id="btn-fps" title="Live Framerate">📊 60 FPS</button>
                   <button class="hud-btn" id="btn-reset">↺ Respawn [X]</button>

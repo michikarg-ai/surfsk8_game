@@ -14,7 +14,7 @@ function createTextSprite(title: string, subtitle: string, accentColor: string):
   const ctx = canvas.getContext('2d')!;
 
   // Rounded rectangular card background
-  ctx.fillStyle = 'rgba(12, 16, 24, 0.58)';
+  ctx.fillStyle = 'rgba(12, 16, 24, 0.45)';
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
     ctx.roundRect(16, 16, 480, 112, 24);
@@ -35,7 +35,7 @@ function createTextSprite(title: string, subtitle: string, accentColor: string):
 
   // Glowing neon accent border
   ctx.strokeStyle = accentColor;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2;
   ctx.stroke();
 
   // Primary title text
@@ -58,7 +58,7 @@ function createTextSprite(title: string, subtitle: string, accentColor: string):
     depthWrite: false,
   });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(2.2, 0.62, 1.0);
+  sprite.scale.set(1.35, 0.38, 1.0);
   return sprite;
 }
 
@@ -106,12 +106,17 @@ export class FlowLineChallenge {
   ];
 
   public static readonly NUM_SAMPLE_POINTS = 260;
-  public static readonly START_TRIGGER_RADIUS = 2.6;
+  public static readonly START_TRIGGER_RADIUS = 1.8;
   public static readonly MAX_ALLOWED_DISTANCE = 5.5;
   public static readonly FINISH_TRIGGER_RADIUS = 3.0;
   public static readonly FINISH_MIN_PROGRESS = 0.95;
 
   public isActive = false;
+  public isRecording = false;
+  private recordedPoints: THREE.Vector2[] = [];
+  private lastExportCode = '';
+  public onRecordingStateChange?: (isRecording: boolean, pointCount: number) => void;
+
   private progressIdx = 0;
   private retriggerCooldown = 0;
 
@@ -152,10 +157,11 @@ export class FlowLineChallenge {
     this.group.add(this.flowLineGroup);
     this.group.add(this.finishGateGroup);
 
-    this.buildCurveAndGeometry();
+    this.buildCurveFromWaypoints(FlowLineChallenge.WAYPOINTS_2D);
     this.buildStartGateVisuals();
     this.buildFlowLineVisuals();
     this.buildFinishGateVisuals();
+    this.ensureModalExists();
 
     // Default state: line and finish gate are hidden until player enters start point
     this.startGateGroup.visible = true;
@@ -166,8 +172,10 @@ export class FlowLineChallenge {
   /**
    * Samples park surface heights and generates the 3D CatmullRom spline and tube geometry.
    */
-  private buildCurveAndGeometry(): void {
-    const rawControlPoints = FlowLineChallenge.WAYPOINTS_2D.map(
+  public buildCurveFromWaypoints(waypoints: readonly THREE.Vector2[]): void {
+    if (waypoints.length < 2) return;
+
+    const rawControlPoints = waypoints.map(
       (pt) =>
         new THREE.Vector3(
           pt.x,
@@ -182,7 +190,11 @@ export class FlowLineChallenge {
       'centripetal',
       0.5
     );
-    const sampled = rawCurve.getPoints(FlowLineChallenge.NUM_SAMPLE_POINTS);
+    const sampleCount = Math.max(
+      FlowLineChallenge.NUM_SAMPLE_POINTS,
+      waypoints.length * 8
+    );
+    const sampled = rawCurve.getPoints(sampleCount);
 
     // Re-sample height exactly from park surface at every single point along the path
     for (const p of sampled) {
@@ -191,6 +203,20 @@ export class FlowLineChallenge {
 
     this.curvePoints = sampled;
     this.curve = new THREE.CatmullRomCurve3(sampled, false, 'centripetal', 0.5);
+
+    if (this.tubeMesh) {
+      this.tubeMesh.geometry.dispose();
+      this.tubeMesh.geometry = new THREE.TubeGeometry(
+        this.curve,
+        sampleCount,
+        0.034,
+        8,
+        false
+      );
+    }
+
+    this.updateStartGatePosition();
+    this.updateFinishGatePosition();
   }
 
   /**
@@ -198,11 +224,11 @@ export class FlowLineChallenge {
    */
   private buildStartGateVisuals(): void {
     // 1. Outer glowing cyan ring
-    const outerGeo = new THREE.TorusGeometry(0.95, 0.025, 8, 48);
+    const outerGeo = new THREE.TorusGeometry(0.52, 0.018, 8, 48);
     const outerMat = new THREE.MeshBasicMaterial({
       color: 0x00f5d4,
       transparent: true,
-      opacity: 0.42,
+      opacity: 0.32,
       blending: THREE.AdditiveBlending,
     });
     this.startOuterRing = new THREE.Mesh(outerGeo, outerMat);
@@ -211,11 +237,11 @@ export class FlowLineChallenge {
     this.startGateGroup.add(this.startOuterRing);
 
     // 2. Inner glowing warm orange ring
-    const innerGeo = new THREE.TorusGeometry(0.68, 0.02, 8, 36);
+    const innerGeo = new THREE.TorusGeometry(0.36, 0.014, 8, 36);
     const innerMat = new THREE.MeshBasicMaterial({
       color: 0xff9f1c,
       transparent: true,
-      opacity: 0.42,
+      opacity: 0.32,
       blending: THREE.AdditiveBlending,
     });
     this.startInnerRing = new THREE.Mesh(innerGeo, innerMat);
@@ -224,11 +250,11 @@ export class FlowLineChallenge {
     this.startGateGroup.add(this.startInnerRing);
 
     // 3. Ground contact glow decal disc
-    const discGeo = new THREE.CircleGeometry(0.98, 36);
+    const discGeo = new THREE.CircleGeometry(0.54, 36);
     const discMat = new THREE.MeshBasicMaterial({
       color: 0x00f5d4,
       transparent: true,
-      opacity: 0.1,
+      opacity: 0.07,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
@@ -238,22 +264,22 @@ export class FlowLineChallenge {
     this.startGateGroup.add(disc);
 
     // 4. Vertical cylindrical light beacon
-    const beaconGeo = new THREE.CylinderGeometry(0.9, 0.9, 1.5, 32, 1, true);
+    const beaconGeo = new THREE.CylinderGeometry(0.50, 0.50, 0.65, 32, 1, true);
     const beaconMat = new THREE.MeshBasicMaterial({
       color: 0x00e5ff,
       transparent: true,
-      opacity: 0.11,
+      opacity: 0.07,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
     this.startBeacon = new THREE.Mesh(beaconGeo, beaconMat);
-    this.startBeacon.position.y = 0.75;
+    this.startBeacon.position.y = 0.32;
     this.startGateGroup.add(this.startBeacon);
 
     // 5. PointLight casting warm cyan radiance onto concrete
-    this.startLight = new THREE.PointLight(0x00f5d4, 0.8, 4.5);
-    this.startLight.position.set(0, 0.8, 0);
+    this.startLight = new THREE.PointLight(0x00f5d4, 0.6, 3.2);
+    this.startLight.position.set(0, 0.45, 0);
     this.startGateGroup.add(this.startLight);
 
     // 6. Floating Canvas Label Sprite: "FLOW LINE START"
@@ -262,7 +288,7 @@ export class FlowLineChallenge {
       'SKATE HERE TO BEGIN',
       '#00f5d4'
     );
-    this.startLabelSprite.position.set(0, 1.45, 0);
+    this.startLabelSprite.position.set(0, 0.88, 0);
     this.startGateGroup.add(this.startLabelSprite);
 
     this.updateStartGatePosition();
@@ -316,33 +342,33 @@ export class FlowLineChallenge {
    */
   private buildFinishGateVisuals(): void {
     // 1. Glowing golden finish arch
-    const archGeo = new THREE.TorusGeometry(0.95, 0.035, 8, 32);
+    const archGeo = new THREE.TorusGeometry(0.55, 0.022, 8, 32);
     const archMat = new THREE.MeshStandardMaterial({
       color: 0xffd166,
       emissive: 0xffaa00,
       emissiveIntensity: 1.0,
       roughness: 0.2,
       transparent: true,
-      opacity: 0.52,
+      opacity: 0.38,
     });
     this.finishArchRing = new THREE.Mesh(archGeo, archMat);
-    this.finishArchRing.position.set(0, 0.95, 0);
+    this.finishArchRing.position.set(0, 0.65, 0);
     this.finishGateGroup.add(this.finishArchRing);
 
     // 2. Ground finish bar
-    const barGeo = new THREE.BoxGeometry(1.9, 0.02, 0.2);
+    const barGeo = new THREE.BoxGeometry(1.1, 0.015, 0.14);
     const barMat = new THREE.MeshBasicMaterial({
       color: 0xffd166,
       transparent: true,
       opacity: 0.42,
     });
     const finishBar = new THREE.Mesh(barGeo, barMat);
-    finishBar.position.set(0, 0.015, 0);
+    finishBar.position.set(0, 0.01, 0);
     this.finishGateGroup.add(finishBar);
 
     // 3. Warm golden PointLight
-    this.finishLight = new THREE.PointLight(0xffaa00, 1.0, 5.0);
-    this.finishLight.position.set(0, 0.95, 0);
+    this.finishLight = new THREE.PointLight(0xffaa00, 0.8, 3.5);
+    this.finishLight.position.set(0, 0.65, 0);
     this.finishGateGroup.add(this.finishLight);
 
     // 4. Floating Canvas Label Sprite: "FINISH GATE (+2000)"
@@ -351,7 +377,7 @@ export class FlowLineChallenge {
       '+2000 FLOW BONUS',
       '#ffd166'
     );
-    this.finishLabelSprite.position.set(0, 1.55, 0);
+    this.finishLabelSprite.position.set(0, 0.95, 0);
     this.finishGateGroup.add(this.finishLabelSprite);
 
     this.updateFinishGatePosition();
@@ -412,14 +438,57 @@ export class FlowLineChallenge {
       this.retriggerCooldown = Math.max(0, this.retriggerCooldown - dt);
     }
 
+    // --- DEV RECORDER MODE: Skater is laying down a custom flow line ---
+    if (this.isRecording) {
+      const lastPt = this.recordedPoints[this.recordedPoints.length - 1];
+      const dx = controller.position.x - lastPt.x;
+      const dz = controller.position.z - lastPt.y;
+      const dist = Math.hypot(dx, dz);
+
+      if (dist >= 1.6) {
+        const newPt = new THREE.Vector2(
+          Number(controller.position.x.toFixed(2)),
+          Number(controller.position.z.toFixed(2))
+        );
+        this.recordedPoints.push(newPt);
+        if (this.recordedPoints.length >= 2) {
+          this.buildCurveFromWaypoints(this.recordedPoints);
+        }
+        this.hud.setFlowLineHint(
+          `🔴 REC FLOW LINE: ${this.recordedPoints.length} pts — Press [L] to finish & export`
+        );
+        this.onRecordingStateChange?.(true, this.recordedPoints.length);
+      }
+
+      if (this.recordedPoints.length >= 2 && this.curve) {
+        const numMarkers = this.pulseMarkers.length;
+        for (let i = 0; i < numMarkers; i++) {
+          const t = (timeSec * 0.12 + i / numMarkers) % 1.0;
+          this.curve.getPointAt(t, this.pulseMarkers[i].position);
+          const tangent = this.curve.getTangentAt(t);
+          this.pulseMarkers[i].quaternion.setFromUnitVectors(
+            new THREE.Vector3(0, 0, 1),
+            tangent
+          );
+        }
+      }
+      return;
+    }
+
     if (!this.isActive) {
       // Animate starting gate when idle
       this.startOuterRing.rotation.z = timeSec * 0.8;
       this.startInnerRing.rotation.z = -timeSec * 1.1;
       (this.startBeacon.material as THREE.MeshBasicMaterial).opacity =
-        0.1 + Math.sin(timeSec * 2.5) * 0.03;
+        0.06 + Math.sin(timeSec * 2.5) * 0.02;
       this.startLabelSprite.position.y =
-        1.45 + Math.sin(timeSec * 2.4) * 0.06;
+        0.88 + Math.sin(timeSec * 2.4) * 0.04;
+
+      if (this.finishGateGroup.visible) {
+        this.finishArchRing.rotation.z = timeSec * 1.2;
+        this.finishLabelSprite.position.y =
+          0.95 + Math.sin(timeSec * 2.6) * 0.04;
+      }
 
       // Check if skater enters starting gate
       const startPt = this.curvePoints[0];
@@ -454,7 +523,7 @@ export class FlowLineChallenge {
     // 2. Animate finish gate arch
     this.finishArchRing.rotation.z = timeSec * 1.2;
     this.finishLabelSprite.position.y =
-      1.55 + Math.sin(timeSec * 2.6) * 0.06;
+      0.95 + Math.sin(timeSec * 2.6) * 0.04;
 
     // 3. Wipeout / Bail ends the challenge
     if (controller.isBailing) {
@@ -521,6 +590,208 @@ export class FlowLineChallenge {
     }
   }
 
+  public toggleRecording(currentPos: THREE.Vector3): void {
+    if (!this.isRecording) {
+      // START RECORDING
+      this.isRecording = true;
+      this.isActive = false;
+      this.startGateGroup.visible = false;
+      this.finishGateGroup.visible = false;
+      this.flowLineGroup.visible = true;
+
+      this.recordedPoints = [
+        new THREE.Vector2(
+          Number(currentPos.x.toFixed(2)),
+          Number(currentPos.z.toFixed(2))
+        ),
+      ];
+
+      this.closeExportModal();
+
+      this.hud.showTrickBanner(
+        '🔴 REC FLOW LINE — SKATE & PRESS [L] TO FINISH',
+        true
+      );
+      this.hud.setFlowLineHint(
+        '🔴 RECORDING FLOW LINE (1 pt) — Press [L] to stop'
+      );
+      this.onRecordingStateChange?.(true, 1);
+    } else {
+      // STOP RECORDING
+      this.isRecording = false;
+
+      const lastPt = this.recordedPoints[this.recordedPoints.length - 1];
+      const dist = Math.hypot(currentPos.x - lastPt.x, currentPos.z - lastPt.y);
+      if (dist >= 0.5) {
+        this.recordedPoints.push(
+          new THREE.Vector2(
+            Number(currentPos.x.toFixed(2)),
+            Number(currentPos.z.toFixed(2))
+          )
+        );
+      }
+
+      if (this.recordedPoints.length >= 3) {
+        this.buildCurveFromWaypoints(this.recordedPoints);
+        this.updateStartGatePosition();
+        this.updateFinishGatePosition();
+        this.startGateGroup.visible = true;
+        this.finishGateGroup.visible = true;
+        this.flowLineGroup.visible = true;
+
+        const code =
+          `public static readonly WAYPOINTS_2D: readonly THREE.Vector2[] = [\n` +
+          this.recordedPoints
+            .map(
+              (p, i) =>
+                `  new THREE.Vector2(${p.x.toFixed(2)}, ${p.y.toFixed(2)}), // ${i + 1}`
+            )
+            .join('\n') +
+          `\n];`;
+
+        this.lastExportCode = code;
+        console.log(code);
+        try {
+          void navigator.clipboard?.writeText(code);
+        } catch (err) {
+          console.warn('Clipboard write failed:', err);
+        }
+
+        this.openExportModal(code);
+        this.hud.showTrickBanner(
+          `FLOW LINE SAVED: ${this.recordedPoints.length} PTS!`,
+          true
+        );
+        this.hud.setFlowLineHint(
+          'FLOW LINE READY — Enter Start Gate to test line'
+        );
+        this.onRecordingStateChange?.(false, this.recordedPoints.length);
+      } else {
+        this.hud.showTrickBanner('REC CANCELLED (NEED >= 3 PTS)', false);
+        this.hud.setFlowLineHint(null);
+        this.buildCurveFromWaypoints(FlowLineChallenge.WAYPOINTS_2D);
+        this.startGateGroup.visible = true;
+        this.flowLineGroup.visible = false;
+        this.finishGateGroup.visible = false;
+        this.onRecordingStateChange?.(false, 0);
+      }
+    }
+  }
+
+  public getRecordedPointsCount(): number {
+    return this.recordedPoints.length;
+  }
+
+  public isExportModalOpen(): boolean {
+    const modal = document.getElementById('flowline-export-modal');
+    return !!modal && !modal.classList.contains('hidden');
+  }
+
+  public openExportModal(code: string): void {
+    this.lastExportCode = code;
+    this.ensureModalExists();
+    const modal = document.getElementById('flowline-export-modal');
+    const textarea = document.getElementById(
+      'flowline-export-textarea'
+    ) as HTMLTextAreaElement | null;
+    const title = document.getElementById('flowline-modal-title');
+
+    if (textarea) {
+      textarea.value = code;
+    }
+    if (title) {
+      title.textContent = `🌊 FLOW LINE EXPORT (${this.recordedPoints.length} PTS)`;
+    }
+    modal?.classList.remove('hidden');
+  }
+
+  public reopenExportModal(): void {
+    if (this.lastExportCode) {
+      this.openExportModal(this.lastExportCode);
+    }
+  }
+
+  public closeExportModal(): void {
+    const modal = document.getElementById('flowline-export-modal');
+    modal?.classList.add('hidden');
+  }
+
+  private modalInitialized = false;
+
+  private ensureModalExists(): void {
+    let modal = document.getElementById('flowline-export-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'flowline-export-modal';
+      modal.className = 'flowline-modal-overlay hidden';
+      modal.innerHTML = `
+        <div class="flowline-modal-backdrop" id="flowline-modal-backdrop"></div>
+        <div class="flowline-modal-card">
+          <div class="flowline-modal-header">
+            <div>
+              <span class="flowline-badge">DEV MODE • WAYPOINTS RECORDER</span>
+              <h2 class="flowline-title" id="flowline-modal-title">🌊 FLOW LINE EXPORT</h2>
+            </div>
+            <button class="flowline-close-btn" id="flowline-modal-x-btn" type="button" aria-label="Close">✕</button>
+          </div>
+          <div class="flowline-modal-body">
+            <p class="flowline-desc">
+              Your custom Flow Line was recorded live in Skatepark "Im Gefilde"! Copy this snippet to chat or directly into <code class="flowline-code">FlowLineChallenge.WAYPOINTS_2D</code>:
+            </p>
+            <textarea id="flowline-export-textarea" class="flowline-textarea" readonly spellcheck="false"></textarea>
+          </div>
+          <div class="flowline-modal-footer">
+            <button id="flowline-modal-copy-btn" type="button" class="flowline-btn flowline-btn-primary">📋 COPY WAYPOINTS</button>
+            <button id="flowline-modal-test-btn" type="button" class="flowline-btn flowline-btn-accent">▶ TEST RECORDED LINE</button>
+            <button id="flowline-modal-close-btn" type="button" class="flowline-btn flowline-btn-ghost">CLOSE</button>
+          </div>
+        </div>
+      `;
+      (document.getElementById('viewport-frame') ?? document.body).appendChild(modal);
+    }
+
+    if (!this.modalInitialized) {
+      this.modalInitialized = true;
+      const copyBtn = document.getElementById('flowline-modal-copy-btn');
+      const testBtn = document.getElementById('flowline-modal-test-btn');
+      const closeBtn = document.getElementById('flowline-modal-close-btn');
+      const xBtn = document.getElementById('flowline-modal-x-btn');
+      const backdrop = document.getElementById('flowline-modal-backdrop');
+      const textarea = document.getElementById(
+        'flowline-export-textarea'
+      ) as HTMLTextAreaElement | null;
+
+      copyBtn?.addEventListener('click', () => {
+        if (!textarea) return;
+        textarea.select();
+        try {
+          void navigator.clipboard?.writeText(textarea.value);
+          const origText = copyBtn.textContent;
+          copyBtn.textContent = 'COPIED TO CLIPBOARD! ✓';
+          setTimeout(() => {
+            copyBtn.textContent = origText;
+          }, 2000);
+        } catch {
+          document.execCommand('copy');
+        }
+      });
+
+      testBtn?.addEventListener('click', () => {
+        this.closeExportModal();
+        this.isActive = false;
+        this.startGateGroup.visible = true;
+        this.finishGateGroup.visible = true;
+        this.flowLineGroup.visible = true;
+        this.hud.showTrickBanner('READY TO TEST — RIDE TO START GATE!', true);
+        this.hud.setFlowLineHint('🌊 ENTER START GATE TO BEGIN CHALLENGE');
+      });
+
+      closeBtn?.addEventListener('click', () => this.closeExportModal());
+      xBtn?.addEventListener('click', () => this.closeExportModal());
+      backdrop?.addEventListener('click', () => this.closeExportModal());
+    }
+  }
+
   private startChallenge(): void {
     this.isActive = true;
     this.progressIdx = 0;
@@ -565,6 +836,7 @@ export class FlowLineChallenge {
 
   public reset(): void {
     this.isActive = false;
+    this.isRecording = false;
     this.progressIdx = 0;
     this.retriggerCooldown = 0;
 
@@ -573,5 +845,6 @@ export class FlowLineChallenge {
     this.finishGateGroup.visible = false;
 
     this.hud.setFlowLineHint(null);
+    this.closeExportModal();
   }
 }

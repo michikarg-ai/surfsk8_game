@@ -129,6 +129,9 @@ class SurfskateMunichGame {
     this.hud.setControlMode(this.controlMode);
     this.pretzels = new PretzelCollectibles(this.scene, this.hud, this.audio);
     this.flowLine = new FlowLineChallenge(this.scene, this.parkSurface, this.hud, this.audio);
+    this.flowLine.onRecordingStateChange = () => {
+      this.syncFlowRecorderUI();
+    };
     this.landingPage = new LandingPage(
       this.parkSurface,
       () => {
@@ -225,6 +228,33 @@ class SurfskateMunichGame {
       });
     }
 
+    const btnFlowRec = document.getElementById('btn-flow-recorder');
+    if (btnFlowRec) {
+      btnFlowRec.addEventListener('click', () => {
+        this.toggleFlowLineRecording();
+      });
+    }
+    const pillDevRec = document.getElementById('hud-dev-recorder-pill');
+    if (pillDevRec) {
+      pillDevRec.addEventListener('click', () => {
+        if (
+          !this.flowLine.isRecording &&
+          this.flowLine.getRecordedPointsCount() >= 3 &&
+          !this.flowLine.isExportModalOpen()
+        ) {
+          this.flowLine.reopenExportModal();
+        } else {
+          this.toggleFlowLineRecording();
+        }
+      });
+    }
+    const dockFlowRec = document.getElementById('btn-dock-flow-rec');
+    if (dockFlowRec) {
+      dockFlowRec.addEventListener('click', () => {
+        this.toggleFlowLineRecording();
+      });
+    }
+
     window.addEventListener('keydown', (e) => {
       this.audio.initOnFirstGesture();
       const code = e.code;
@@ -261,8 +291,28 @@ class SurfskateMunichGame {
       }
 
       if (code === 'Escape') {
+        if (this.flowLine.isExportModalOpen()) {
+          this.flowLine.closeExportModal();
+          return;
+        }
         this.pauseGameAndOpenLanding();
         return;
+      }
+
+      if (code === 'KeyL') {
+        const activeTag = document.activeElement?.tagName.toLowerCase();
+        if (activeTag !== 'input' && activeTag !== 'textarea') {
+          if (
+            this.controlMode === 'arrows' ||
+            e.shiftKey ||
+            this.flowLine.isRecording ||
+            this.controller.speed < 2.0
+          ) {
+            e.preventDefault();
+            this.toggleFlowLineRecording();
+            return;
+          }
+        }
       }
 
       this.keys.add(code);
@@ -488,6 +538,52 @@ class SurfskateMunichGame {
     this.hud.resetSession();
     this.pretzels.reset();
     this.flowLine.reset();
+    this.syncFlowRecorderUI();
+  }
+
+  public toggleFlowLineRecording(): void {
+    this.flowLine.toggleRecording(this.controller.position);
+    this.syncFlowRecorderUI();
+  }
+
+  public syncFlowRecorderUI(): void {
+    const isDev = new URLSearchParams(window.location.search).get('dev') === '1';
+    const isRec = this.flowLine.isRecording;
+    const pts = this.flowLine.getRecordedPointsCount();
+
+    const pill = document.getElementById('hud-dev-recorder-pill');
+    const pillText = document.getElementById('hud-dev-recorder-pill-text');
+    const btnRec = document.getElementById('btn-flow-recorder');
+    const btnLabel = document.getElementById('btn-flow-recorder-label');
+
+    if (pill && pillText) {
+      if (isRec) {
+        pill.classList.remove('hidden');
+        pill.classList.add('is-recording');
+        pillText.textContent = `🔴 REC: ${pts} PTS — [L] FINISH`;
+      } else if (pts >= 3) {
+        pill.classList.remove('hidden');
+        pill.classList.remove('is-recording');
+        pillText.textContent = `📋 LINE: ${pts} PTS — [L] REC NEW`;
+      } else if (isDev) {
+        pill.classList.remove('hidden');
+        pill.classList.remove('is-recording');
+        pillText.textContent = `🔴 REC FLOW LINE [L]`;
+      } else {
+        pill.classList.add('hidden');
+        pill.classList.remove('is-recording');
+      }
+    }
+
+    if (btnRec && btnLabel) {
+      if (isRec) {
+        btnRec.classList.add('is-recording');
+        btnLabel.textContent = `⏹ STOP [L]`;
+      } else {
+        btnRec.classList.remove('is-recording');
+        btnLabel.textContent = `🔴 REC LINE [L]`;
+      }
+    }
   }
 
   private syncHUDButtons(): void {
@@ -503,6 +599,7 @@ class SurfskateMunichGame {
     );
     this.hud.updateQualityButton(this.graphicsPreset, this.effectiveQuality);
     this.hud.updateTouchButton(this.touchControls.isEnabled);
+    this.syncFlowRecorderUI();
     const keyLabel = document.getElementById('hud-garage-key-label');
     if (keyLabel) {
       keyLabel.textContent = this.touchControls.isEnabled ? '⏸' : 'ESC';
