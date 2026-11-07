@@ -74,38 +74,134 @@ export class FlowLineChallenge {
 
   /** Authentic LiDAR / aerial orthophoto flow waypoints around Skatepark "Im Gefilde". */
   public static readonly WAYPOINTS_2D: readonly THREE.Vector2[] = [
-    // Part 1: Start & initial pump/carve around Central Volcano & Spine
-    new THREE.Vector2(13.2, 2.2),   // 1. Start Gate (where skater stands in sketch 1)
-    new THREE.Vector2(10.2, 3.8),   // 2. Initial pump into central basin
-    new THREE.Vector2(6.2, 2.4),    // 3. Climb up Central Volcano south-west bank
-    new THREE.Vector2(7.4, -0.8),   // 4. High carve over Central Volcano dome (h ~ 1.1m)
-    new THREE.Vector2(9.6, 1.4),    // 5. Drop down east side of Volcano
-    new THREE.Vector2(3.2, 2.2),    // 6. Sweep west across flow basin
-    // Part 2: NW Spine Rollers -> High NW Over-Vert Cradle -> 3 Waves along North Wall
-    new THREE.Vector2(-4.5, 1.6),   // 7. Carve up SW/West Lower Spine Roller
-    new THREE.Vector2(-8.2, -0.4),  // 8. Wrap around West bank (h ~ 0.9m)
-    new THREE.Vector2(-4.2, -5.8),  // 9. Carve over NW Upper Spine Roller (h ~ 1.1m)
-    new THREE.Vector2(-6.2, -10.2), // 10. Drop into NW Cradle pocket (h ~ 0.1m)
-    new THREE.Vector2(-6.4, -14.2), // 11. HIGH wall climb up NW Over-Vert Cradle lip (h ~ 2.2m!)
-    new THREE.Vector2(-3.0, -10.0), // 12. Drop down out of NW Cradle into North basin
-    new THREE.Vector2(1.5, -14.2),  // 13. North Wall Wave 1 TOP (climb high up wall, h ~ 1.5m)
-    new THREE.Vector2(3.5, -9.6),   // 14. North Wall Wave 1 BOTTOM (trough, h ~ 0.0m)
-    new THREE.Vector2(7.2, -13.6),  // 15. North Wall Wave 2 TOP (climb high up wall, h ~ 1.7m)
-    new THREE.Vector2(9.2, -9.2),   // 16. North Wall Wave 2 BOTTOM (trough, h ~ 0.1m)
-    new THREE.Vector2(12.4, -11.6), // 17. North Wall Wave 3 TOP (climb high up NE wall, h ~ 1.8m)
-    new THREE.Vector2(11.8, -6.8),  // 18. North Wall Wave 3 BOTTOM (trough, h ~ 0.0m)
-    // Part 3: East Wall waves -> High Sunset Palm Mural Wall -> Finish Gate
-    new THREE.Vector2(17.6, -5.4),  // 19. East Wall Wave 1 TOP (h ~ 1.2m)
-    new THREE.Vector2(14.2, -2.6),  // 20. East Wall Wave 1 BOTTOM (h ~ 0.1m)
-    new THREE.Vector2(19.2, -1.0),  // 21. East Wall Wave 2 TOP (h ~ 1.0m)
-    new THREE.Vector2(15.2, 1.4),   // 22. East Wall Wave 2 BOTTOM (h ~ 0.1m)
-    new THREE.Vector2(19.6, 5.0),   // 23. HIGH climb up East Sunset Palm-Tree Mural Wall (h ~ 1.7m!)
-    new THREE.Vector2(15.4, 6.2),   // 24. Drop down Sunset Palm Mural Wall
-    new THREE.Vector2(15.0, 8.6),   // 25. Final wall carve on SE lip (h ~ 1.3m)
-    new THREE.Vector2(11.4, 3.2),   // 26. Finish Gate right near the Start area
+    new THREE.Vector2(8.16, 0.63), // 1
+    new THREE.Vector2(8.36, 2.23), // 2
+    new THREE.Vector2(9.57, 3.31), // 3
+    new THREE.Vector2(10.48, 4.69), // 4
+    new THREE.Vector2(11.95, 5.35), // 5
+    new THREE.Vector2(13.20, 6.40), // 6
+    new THREE.Vector2(13.79, 7.93), // 7
+    new THREE.Vector2(13.62, 9.57), // 8
+    new THREE.Vector2(14.90, 10.57), // 9
+    new THREE.Vector2(16.51, 10.56), // 10
+    new THREE.Vector2(16.07, 12.12), // 11
+    new THREE.Vector2(15.45, 13.60), // 12
+    new THREE.Vector2(16.44, 14.89), // 13
+    new THREE.Vector2(15.87, 16.41), // 14
+    new THREE.Vector2(14.35, 16.97), // 15
+    new THREE.Vector2(13.79, 18.51), // 16
+    new THREE.Vector2(12.56, 19.54), // 17
+    new THREE.Vector2(11.23, 18.60), // 18
+    new THREE.Vector2(9.62, 18.16), // 19
+    new THREE.Vector2(7.97, 18.12), // 20
+    new THREE.Vector2(7.34, 16.63), // 21
+    new THREE.Vector2(7.16, 14.98), // 22
+    new THREE.Vector2(6.30, 13.57), // 23
+    new THREE.Vector2(7.20, 12.23), // 24
+    new THREE.Vector2(7.50, 10.66), // 25
+    new THREE.Vector2(7.30, 9.05), // 26
+    new THREE.Vector2(7.18, 7.40), // 27
+    new THREE.Vector2(7.93, 5.96), // 28
+    new THREE.Vector2(8.88, 4.56), // 29
+    new THREE.Vector2(9.47, 3.05), // 30
+    new THREE.Vector2(9.02, 1.44), // 31
+    new THREE.Vector2(7.42, 1.06), // 32
+    new THREE.Vector2(6.33, 2.27), // 33
+    new THREE.Vector2(5.39, 3.66), // 34
+    new THREE.Vector2(4.94, 5.21), // 35
+    new THREE.Vector2(5.38, 6.77), // 36
+    new THREE.Vector2(5.84, 8.37), // 37
+    new THREE.Vector2(6.29, 9.94), // 38
+    new THREE.Vector2(6.06, 11.54), // 39
+    new THREE.Vector2(4.57, 12.20), // 40
+    new THREE.Vector2(4.31, 13.79), // 41
+    new THREE.Vector2(4.22, 15.40), // 42
+    new THREE.Vector2(2.78, 14.60), // 43
+    new THREE.Vector2(1.14, 14.44), // 44
+    new THREE.Vector2(0.15, 15.72), // 45
+    new THREE.Vector2(-0.69, 14.30), // 46
+    new THREE.Vector2(-0.46, 12.71), // 47
+    new THREE.Vector2(-0.56, 11.10), // 48
+    new THREE.Vector2(-1.82, 10.01), // 49
+    new THREE.Vector2(-2.18, 8.43), // 50
+    new THREE.Vector2(-2.38, 6.83), // 51
+    new THREE.Vector2(-3.80, 6.06), // 52
+    new THREE.Vector2(-5.28, 6.77), // 53
+    new THREE.Vector2(-6.91, 6.99), // 54
+    new THREE.Vector2(-8.50, 7.39), // 55
+    new THREE.Vector2(-9.73, 8.50), // 56
+    new THREE.Vector2(-11.17, 7.79), // 57
+    new THREE.Vector2(-11.93, 6.35), // 58
+    new THREE.Vector2(-13.46, 5.84), // 59
+    new THREE.Vector2(-14.87, 5.01), // 60
+    new THREE.Vector2(-14.86, 3.39), // 61
+    new THREE.Vector2(-15.13, 1.77), // 62
+    new THREE.Vector2(-16.65, 1.21), // 63
+    new THREE.Vector2(-17.91, 0.23), // 64
+    new THREE.Vector2(-17.20, -1.23), // 65
+    new THREE.Vector2(-15.62, -1.64), // 66
+    new THREE.Vector2(-14.05, -2.08), // 67
+    new THREE.Vector2(-13.05, -3.39), // 68
+    new THREE.Vector2(-12.27, -4.81), // 69
+    new THREE.Vector2(-11.46, -6.20), // 70
+    new THREE.Vector2(-10.47, -7.51), // 71
+    new THREE.Vector2(-8.93, -8.07), // 72
+    new THREE.Vector2(-8.19, -6.63), // 73
+    new THREE.Vector2(-8.44, -5.01), // 74
+    new THREE.Vector2(-9.30, -3.65), // 75
+    new THREE.Vector2(-8.51, -2.24), // 76
+    new THREE.Vector2(-7.11, -3.08), // 77
+    new THREE.Vector2(-6.68, -4.65), // 78
+    new THREE.Vector2(-6.26, -6.24), // 79
+    new THREE.Vector2(-6.74, -7.80), // 80
+    new THREE.Vector2(-6.79, -9.43), // 81
+    new THREE.Vector2(-7.41, -10.95), // 82
+    new THREE.Vector2(-8.81, -11.84), // 83
+    new THREE.Vector2(-10.07, -12.82), // 84
+    new THREE.Vector2(-8.96, -14.01), // 85
+    new THREE.Vector2(-7.38, -13.69), // 86
+    new THREE.Vector2(-5.79, -14.05), // 87
+    new THREE.Vector2(-4.35, -13.32), // 88
+    new THREE.Vector2(-3.76, -11.76), // 89
+    new THREE.Vector2(-2.11, -11.62), // 90
+    new THREE.Vector2(-0.77, -12.53), // 91
+    new THREE.Vector2(0.76, -11.91), // 92
+    new THREE.Vector2(2.08, -10.96), // 93
+    new THREE.Vector2(3.58, -11.56), // 94
+    new THREE.Vector2(4.69, -12.74), // 95
+    new THREE.Vector2(6.17, -12.13), // 96
+    new THREE.Vector2(7.12, -10.82), // 97
+    new THREE.Vector2(8.77, -10.93), // 98
+    new THREE.Vector2(10.25, -11.59), // 99
+    new THREE.Vector2(10.99, -10.10), // 100
+    new THREE.Vector2(11.93, -8.79), // 101
+    new THREE.Vector2(13.59, -8.85), // 102
+    new THREE.Vector2(15.15, -9.23), // 103
+    new THREE.Vector2(15.83, -7.75), // 104
+    new THREE.Vector2(16.34, -6.18), // 105
+    new THREE.Vector2(17.84, -5.54), // 106
+    new THREE.Vector2(19.44, -5.58), // 107
+    new THREE.Vector2(20.28, -4.22), // 108
+    new THREE.Vector2(20.33, -2.57), // 109
+    new THREE.Vector2(20.70, -1.00), // 110
+    new THREE.Vector2(22.06, -0.08), // 111
+    new THREE.Vector2(23.52, 0.60), // 112
+    new THREE.Vector2(23.21, 2.18), // 113
+    new THREE.Vector2(21.93, 3.17), // 114
+    new THREE.Vector2(20.60, 4.19), // 115
+    new THREE.Vector2(19.31, 5.19), // 116
+    new THREE.Vector2(17.99, 6.19), // 117
+    new THREE.Vector2(16.33, 6.41), // 118
+    new THREE.Vector2(15.01, 5.40), // 119
+    new THREE.Vector2(13.85, 4.22), // 120
+    new THREE.Vector2(13.03, 2.75), // 121
+    new THREE.Vector2(11.82, 1.68), // 122
+    new THREE.Vector2(10.42, 0.86), // 123
+    new THREE.Vector2(8.83, 0.84), // 124
   ];
 
-  public static readonly NUM_SAMPLE_POINTS = 260;
+  public static readonly NUM_SAMPLE_POINTS = 372;
+  public static readonly CHEVRON_STEP = 8;
   public static readonly START_TRIGGER_RADIUS = 1.8;
   public static readonly MAX_ALLOWED_DISTANCE = 5.5;
   public static readonly FINISH_TRIGGER_RADIUS = 3.0;
@@ -139,6 +235,7 @@ export class FlowLineChallenge {
   private tubeMesh!: THREE.Mesh;
   private tubeMaterial!: THREE.MeshStandardMaterial;
   private pulseMarkers: THREE.Mesh[] = [];
+  private chevronMarkers: THREE.Mesh[] = [];
 
   private finishArchRing!: THREE.Mesh;
   private finishLabelSprite!: THREE.Sprite;
@@ -192,7 +289,7 @@ export class FlowLineChallenge {
     );
     const sampleCount = Math.max(
       FlowLineChallenge.NUM_SAMPLE_POINTS,
-      waypoints.length * 8
+      waypoints.length * 3
     );
     const sampled = rawCurve.getPoints(sampleCount);
 
@@ -215,8 +312,47 @@ export class FlowLineChallenge {
       );
     }
 
+    this.buildChevrons();
     this.updateStartGatePosition();
     this.updateFinishGatePosition();
+  }
+
+  /**
+   * Places directional chevron markers along the sampled flow line.
+   */
+  private buildChevrons(): void {
+    for (const c of this.chevronMarkers) {
+      this.flowLineGroup.remove(c);
+      c.geometry.dispose();
+    }
+    this.chevronMarkers = [];
+
+    if (!this.curve || this.curvePoints.length < 2) return;
+
+    const chevronGeo = new THREE.ConeGeometry(0.08, 0.2, 3);
+    chevronGeo.rotateX(Math.PI / 2);
+    chevronGeo.scale(1.0, 0.3, 1.0);
+    const chevronMat = new THREE.MeshBasicMaterial({
+      color: 0x00f5d4,
+      transparent: true,
+      opacity: 0.45,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+
+    const step = FlowLineChallenge.CHEVRON_STEP;
+    for (let idx = step; idx < this.curvePoints.length - step; idx += step) {
+      const t = idx / (this.curvePoints.length - 1);
+      const pos = this.curve.getPointAt(t);
+      const tangent = this.curve.getTangentAt(t);
+
+      const marker = new THREE.Mesh(chevronGeo, chevronMat);
+      marker.position.copy(pos);
+      marker.position.y += 0.02;
+      marker.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent);
+      this.flowLineGroup.add(marker);
+      this.chevronMarkers.push(marker);
+    }
   }
 
   /**
@@ -425,6 +561,7 @@ export class FlowLineChallenge {
       );
     }
 
+    this.buildChevrons();
     this.updateStartGatePosition();
     this.updateFinishGatePosition();
   }
@@ -521,9 +658,11 @@ export class FlowLineChallenge {
     }
 
     // 2. Animate finish gate arch
-    this.finishArchRing.rotation.z = timeSec * 1.2;
-    this.finishLabelSprite.position.y =
-      0.95 + Math.sin(timeSec * 2.6) * 0.04;
+    if (this.finishGateGroup.visible) {
+      this.finishArchRing.rotation.z = timeSec * 1.2;
+      this.finishLabelSprite.position.y =
+        0.95 + Math.sin(timeSec * 2.6) * 0.04;
+    }
 
     // 3. Wipeout / Bail ends the challenge
     if (controller.isBailing) {
@@ -574,6 +713,9 @@ export class FlowLineChallenge {
       this.progressIdx / (this.curvePoints.length - 1);
     const pct = Math.round(progressFrac * 100);
     this.hud.setFlowLineHint(`🌊 FOLLOW THE FLOW: ${pct}%`);
+
+    // Closed-loop handling: Show finish gate once skater has made substantial progress (>= 75%)
+    this.finishGateGroup.visible = progressFrac >= 0.75;
 
     // 8. Check Finish Gate completion
     const finishPt = this.curvePoints[this.curvePoints.length - 1];
@@ -798,7 +940,7 @@ export class FlowLineChallenge {
 
     this.startGateGroup.visible = false;
     this.flowLineGroup.visible = true;
-    this.finishGateGroup.visible = true;
+    this.finishGateGroup.visible = false;
 
     this.hud.showTrickBanner('🌊 FOLLOW THE FLOW!', true);
     this.hud.setFlowLineHint('🌊 FOLLOW THE FLOW: 0%');

@@ -550,18 +550,21 @@ class SurfskateMunichGame {
     const isDev = new URLSearchParams(window.location.search).get('dev') === '1';
     const isRec = this.flowLine.isRecording;
     const pts = this.flowLine.getRecordedPointsCount();
+    const hasRecorded = pts >= 3;
+    const showDevButtons = isDev || isRec || hasRecorded;
 
     const pill = document.getElementById('hud-dev-recorder-pill');
     const pillText = document.getElementById('hud-dev-recorder-pill-text');
     const btnRec = document.getElementById('btn-flow-recorder');
     const btnLabel = document.getElementById('btn-flow-recorder-label');
+    const dockRec = document.getElementById('btn-dock-flow-rec');
 
     if (pill && pillText) {
       if (isRec) {
         pill.classList.remove('hidden');
         pill.classList.add('is-recording');
         pillText.textContent = `🔴 REC: ${pts} PTS — [L] FINISH`;
-      } else if (pts >= 3) {
+      } else if (hasRecorded) {
         pill.classList.remove('hidden');
         pill.classList.remove('is-recording');
         pillText.textContent = `📋 LINE: ${pts} PTS — [L] REC NEW`;
@@ -577,12 +580,21 @@ class SurfskateMunichGame {
 
     if (btnRec && btnLabel) {
       if (isRec) {
+        btnRec.classList.remove('hidden');
         btnRec.classList.add('is-recording');
         btnLabel.textContent = `⏹ STOP [L]`;
-      } else {
+      } else if (showDevButtons) {
+        btnRec.classList.remove('hidden');
         btnRec.classList.remove('is-recording');
         btnLabel.textContent = `🔴 REC LINE [L]`;
+      } else {
+        btnRec.classList.add('hidden');
+        btnRec.classList.remove('is-recording');
       }
+    }
+
+    if (dockRec) {
+      dockRec.classList.toggle('hidden', !showDevButtons);
     }
   }
 
