@@ -14,7 +14,7 @@ function createTextSprite(title: string, subtitle: string, accentColor: string):
   const ctx = canvas.getContext('2d')!;
 
   // Rounded rectangular card background
-  ctx.fillStyle = 'rgba(12, 16, 24, 0.88)';
+  ctx.fillStyle = 'rgba(12, 16, 24, 0.58)';
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
     ctx.roundRect(16, 16, 480, 112, 24);
@@ -35,7 +35,7 @@ function createTextSprite(title: string, subtitle: string, accentColor: string):
 
   // Glowing neon accent border
   ctx.strokeStyle = accentColor;
-  ctx.lineWidth = 5;
+  ctx.lineWidth = 3;
   ctx.stroke();
 
   // Primary title text
@@ -58,7 +58,7 @@ function createTextSprite(title: string, subtitle: string, accentColor: string):
     depthWrite: false,
   });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(3.4, 0.96, 1.0);
+  sprite.scale.set(2.2, 0.62, 1.0);
   return sprite;
 }
 
@@ -72,23 +72,42 @@ function createTextSprite(title: string, subtitle: string, accentColor: string):
 export class FlowLineChallenge {
   public readonly group = new THREE.Group();
 
-  /** 10 Authentic LiDAR / aerial orthophoto flow waypoints around Skatepark "Im Gefilde". */
+  /** Authentic LiDAR / aerial orthophoto flow waypoints around Skatepark "Im Gefilde". */
   public static readonly WAYPOINTS_2D: readonly THREE.Vector2[] = [
-    new THREE.Vector2(11.4, 3.2), // 1. Start Gate in front of spawn (15.2, 4.2)
-    new THREE.Vector2(6.8, 1.4), // 2. Sweeping carve past Central Volcano
-    new THREE.Vector2(1.4, -2.8), // 3. Transition into NW basin
-    new THREE.Vector2(-4.8, -7.2), // 4. NW Upper Spine Roller wall
-    new THREE.Vector2(-6.6, -11.5), // 5. NW Cradle Bowl pocket wall-to-wall carve
-    new THREE.Vector2(-8.8, -3.2), // 6. West transition bank
-    new THREE.Vector2(-4.0, 5.6), // 7. SW transition wall
-    new THREE.Vector2(1.2, 10.8), // 8. South Clover Bowl wall
-    new THREE.Vector2(10.6, 12.8), // 9. SE Deep Bowl wall
-    new THREE.Vector2(16.2, 5.8), // 10. Finish Gate at East Sunset Palm Mural wall
+    // Part 1: Start & initial pump/carve around Central Volcano & Spine
+    new THREE.Vector2(13.2, 2.2),   // 1. Start Gate (where skater stands in sketch 1)
+    new THREE.Vector2(10.2, 3.8),   // 2. Initial pump into central basin
+    new THREE.Vector2(6.2, 2.4),    // 3. Climb up Central Volcano south-west bank
+    new THREE.Vector2(7.4, -0.8),   // 4. High carve over Central Volcano dome (h ~ 1.1m)
+    new THREE.Vector2(9.6, 1.4),    // 5. Drop down east side of Volcano
+    new THREE.Vector2(3.2, 2.2),    // 6. Sweep west across flow basin
+    // Part 2: NW Spine Rollers -> High NW Over-Vert Cradle -> 3 Waves along North Wall
+    new THREE.Vector2(-4.5, 1.6),   // 7. Carve up SW/West Lower Spine Roller
+    new THREE.Vector2(-8.2, -0.4),  // 8. Wrap around West bank (h ~ 0.9m)
+    new THREE.Vector2(-4.2, -5.8),  // 9. Carve over NW Upper Spine Roller (h ~ 1.1m)
+    new THREE.Vector2(-6.2, -10.2), // 10. Drop into NW Cradle pocket (h ~ 0.1m)
+    new THREE.Vector2(-6.4, -14.2), // 11. HIGH wall climb up NW Over-Vert Cradle lip (h ~ 2.2m!)
+    new THREE.Vector2(-3.0, -10.0), // 12. Drop down out of NW Cradle into North basin
+    new THREE.Vector2(1.5, -14.2),  // 13. North Wall Wave 1 TOP (climb high up wall, h ~ 1.5m)
+    new THREE.Vector2(3.5, -9.6),   // 14. North Wall Wave 1 BOTTOM (trough, h ~ 0.0m)
+    new THREE.Vector2(7.2, -13.6),  // 15. North Wall Wave 2 TOP (climb high up wall, h ~ 1.7m)
+    new THREE.Vector2(9.2, -9.2),   // 16. North Wall Wave 2 BOTTOM (trough, h ~ 0.1m)
+    new THREE.Vector2(12.4, -11.6), // 17. North Wall Wave 3 TOP (climb high up NE wall, h ~ 1.8m)
+    new THREE.Vector2(11.8, -6.8),  // 18. North Wall Wave 3 BOTTOM (trough, h ~ 0.0m)
+    // Part 3: East Wall waves -> High Sunset Palm Mural Wall -> Finish Gate
+    new THREE.Vector2(17.6, -5.4),  // 19. East Wall Wave 1 TOP (h ~ 1.2m)
+    new THREE.Vector2(14.2, -2.6),  // 20. East Wall Wave 1 BOTTOM (h ~ 0.1m)
+    new THREE.Vector2(19.2, -1.0),  // 21. East Wall Wave 2 TOP (h ~ 1.0m)
+    new THREE.Vector2(15.2, 1.4),   // 22. East Wall Wave 2 BOTTOM (h ~ 0.1m)
+    new THREE.Vector2(19.6, 5.0),   // 23. HIGH climb up East Sunset Palm-Tree Mural Wall (h ~ 1.7m!)
+    new THREE.Vector2(15.4, 6.2),   // 24. Drop down Sunset Palm Mural Wall
+    new THREE.Vector2(15.0, 8.6),   // 25. Final wall carve on SE lip (h ~ 1.3m)
+    new THREE.Vector2(11.4, 3.2),   // 26. Finish Gate right near the Start area
   ];
 
-  public static readonly NUM_SAMPLE_POINTS = 160;
+  public static readonly NUM_SAMPLE_POINTS = 260;
   public static readonly START_TRIGGER_RADIUS = 2.6;
-  public static readonly MAX_ALLOWED_DISTANCE = 4.8;
+  public static readonly MAX_ALLOWED_DISTANCE = 5.5;
   public static readonly FINISH_TRIGGER_RADIUS = 3.0;
   public static readonly FINISH_MIN_PROGRESS = 0.95;
 
@@ -152,7 +171,7 @@ export class FlowLineChallenge {
       (pt) =>
         new THREE.Vector3(
           pt.x,
-          this.parkSurface.sample(pt.x, pt.y).height + 0.08,
+          this.parkSurface.sample(pt.x, pt.y).height + 0.05,
           pt.y
         )
     );
@@ -167,7 +186,7 @@ export class FlowLineChallenge {
 
     // Re-sample height exactly from park surface at every single point along the path
     for (const p of sampled) {
-      p.y = this.parkSurface.sample(p.x, p.z).height + 0.08;
+      p.y = this.parkSurface.sample(p.x, p.z).height + 0.05;
     }
 
     this.curvePoints = sampled;
@@ -179,96 +198,71 @@ export class FlowLineChallenge {
    */
   private buildStartGateVisuals(): void {
     // 1. Outer glowing cyan ring
-    const outerGeo = new THREE.TorusGeometry(1.6, 0.045, 8, 48);
+    const outerGeo = new THREE.TorusGeometry(0.95, 0.025, 8, 48);
     const outerMat = new THREE.MeshBasicMaterial({
       color: 0x00f5d4,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.42,
       blending: THREE.AdditiveBlending,
     });
     this.startOuterRing = new THREE.Mesh(outerGeo, outerMat);
     this.startOuterRing.rotation.x = -Math.PI / 2;
-    this.startOuterRing.position.y = 0.03;
+    this.startOuterRing.position.y = 0.02;
     this.startGateGroup.add(this.startOuterRing);
 
     // 2. Inner glowing warm orange ring
-    const innerGeo = new THREE.TorusGeometry(1.1, 0.035, 8, 36);
+    const innerGeo = new THREE.TorusGeometry(0.68, 0.02, 8, 36);
     const innerMat = new THREE.MeshBasicMaterial({
       color: 0xff9f1c,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.42,
       blending: THREE.AdditiveBlending,
     });
     this.startInnerRing = new THREE.Mesh(innerGeo, innerMat);
     this.startInnerRing.rotation.x = -Math.PI / 2;
-    this.startInnerRing.position.y = 0.03;
+    this.startInnerRing.position.y = 0.02;
     this.startGateGroup.add(this.startInnerRing);
 
     // 3. Ground contact glow decal disc
-    const discGeo = new THREE.CircleGeometry(1.65, 36);
+    const discGeo = new THREE.CircleGeometry(0.98, 36);
     const discMat = new THREE.MeshBasicMaterial({
       color: 0x00f5d4,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.1,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
     const disc = new THREE.Mesh(discGeo, discMat);
     disc.rotation.x = -Math.PI / 2;
-    disc.position.y = 0.015;
+    disc.position.y = 0.01;
     this.startGateGroup.add(disc);
 
     // 4. Vertical cylindrical light beacon
-    const beaconGeo = new THREE.CylinderGeometry(1.5, 1.5, 3.2, 32, 1, true);
+    const beaconGeo = new THREE.CylinderGeometry(0.9, 0.9, 1.5, 32, 1, true);
     const beaconMat = new THREE.MeshBasicMaterial({
       color: 0x00e5ff,
       transparent: true,
-      opacity: 0.28,
+      opacity: 0.11,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
     this.startBeacon = new THREE.Mesh(beaconGeo, beaconMat);
-    this.startBeacon.position.y = 1.6;
+    this.startBeacon.position.y = 0.75;
     this.startGateGroup.add(this.startBeacon);
 
-    // 5. Left and right vertical neon totems
-    const totemGeo = new THREE.CylinderGeometry(0.04, 0.04, 2.6, 12);
-    const totemMat = new THREE.MeshStandardMaterial({
-      color: 0xff9f1c,
-      emissive: 0xff9f1c,
-      emissiveIntensity: 1.2,
-      roughness: 0.3,
-    });
-    const capGeo = new THREE.SphereGeometry(0.09, 12, 12);
-    const capMat = new THREE.MeshBasicMaterial({ color: 0x00f5d4 });
-
-    const leftTotem = new THREE.Mesh(totemGeo, totemMat);
-    leftTotem.position.set(-1.6, 1.3, 0);
-    const leftCap = new THREE.Mesh(capGeo, capMat);
-    leftCap.position.set(-1.6, 2.6, 0);
-    this.startGateGroup.add(leftTotem);
-    this.startGateGroup.add(leftCap);
-
-    const rightTotem = new THREE.Mesh(totemGeo, totemMat);
-    rightTotem.position.set(1.6, 1.3, 0);
-    const rightCap = new THREE.Mesh(capGeo, capMat);
-    rightCap.position.set(1.6, 2.6, 0);
-    this.startGateGroup.add(rightTotem);
-    this.startGateGroup.add(rightCap);
-
-    // 6. PointLight casting warm cyan radiance onto concrete
-    this.startLight = new THREE.PointLight(0x00f5d4, 2.0, 7.0);
-    this.startLight.position.set(0, 1.4, 0);
+    // 5. PointLight casting warm cyan radiance onto concrete
+    this.startLight = new THREE.PointLight(0x00f5d4, 0.8, 4.5);
+    this.startLight.position.set(0, 0.8, 0);
     this.startGateGroup.add(this.startLight);
 
-    // 7. Floating Canvas Label Sprite: "FLOW LINE START"
+    // 6. Floating Canvas Label Sprite: "FLOW LINE START"
     this.startLabelSprite = createTextSprite(
       '🌊 FLOW LINE START',
       'SKATE HERE TO BEGIN',
       '#00f5d4'
     );
-    this.startLabelSprite.position.set(0, 2.4, 0);
+    this.startLabelSprite.position.set(0, 1.45, 0);
     this.startGateGroup.add(this.startLabelSprite);
 
     this.updateStartGatePosition();
@@ -281,32 +275,36 @@ export class FlowLineChallenge {
     const tubeGeo = new THREE.TubeGeometry(
       this.curve,
       FlowLineChallenge.NUM_SAMPLE_POINTS,
-      0.075,
+      0.034,
       8,
       false
     );
     this.tubeMaterial = new THREE.MeshStandardMaterial({
       color: 0x00f0ff,
       emissive: 0x00d4f5,
-      emissiveIntensity: 1.3,
+      emissiveIntensity: 0.65,
       roughness: 0.18,
       metalness: 0.1,
       transparent: true,
-      opacity: 0.95,
+      opacity: 0.46,
+      depthWrite: false,
     });
     this.tubeMesh = new THREE.Mesh(tubeGeo, this.tubeMaterial);
     this.flowLineGroup.add(this.tubeMesh);
 
-    // 8 Animated glowing pulse markers traveling along the line
-    const markerGeo = new THREE.TorusGeometry(0.24, 0.04, 8, 20);
+    // 12 Animated glowing pulse marker triangles traveling along the line
+    const markerGeo = new THREE.ConeGeometry(0.095, 0.22, 3);
+    markerGeo.rotateX(Math.PI / 2);
+    markerGeo.scale(1.0, 0.35, 1.0);
     const markerMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.58,
       blending: THREE.AdditiveBlending,
+      depthWrite: false,
     });
 
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 12; i++) {
       const marker = new THREE.Mesh(markerGeo, markerMat);
       this.flowLineGroup.add(marker);
       this.pulseMarkers.push(marker);
@@ -318,55 +316,42 @@ export class FlowLineChallenge {
    */
   private buildFinishGateVisuals(): void {
     // 1. Glowing golden finish arch
-    const archGeo = new THREE.TorusGeometry(1.6, 0.065, 8, 36);
+    const archGeo = new THREE.TorusGeometry(0.95, 0.035, 8, 32);
     const archMat = new THREE.MeshStandardMaterial({
       color: 0xffd166,
       emissive: 0xffaa00,
-      emissiveIntensity: 1.4,
+      emissiveIntensity: 1.0,
       roughness: 0.2,
+      transparent: true,
+      opacity: 0.52,
     });
     this.finishArchRing = new THREE.Mesh(archGeo, archMat);
-    this.finishArchRing.position.set(0, 1.4, 0);
+    this.finishArchRing.position.set(0, 0.95, 0);
     this.finishGateGroup.add(this.finishArchRing);
 
     // 2. Ground finish bar
-    const barGeo = new THREE.BoxGeometry(3.0, 0.03, 0.28);
+    const barGeo = new THREE.BoxGeometry(1.9, 0.02, 0.2);
     const barMat = new THREE.MeshBasicMaterial({
       color: 0xffd166,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.42,
     });
     const finishBar = new THREE.Mesh(barGeo, barMat);
-    finishBar.position.set(0, 0.02, 0);
+    finishBar.position.set(0, 0.015, 0);
     this.finishGateGroup.add(finishBar);
 
-    // 3. Side support pillars
-    const pillarGeo = new THREE.CylinderGeometry(0.045, 0.045, 1.6, 12);
-    const pillarMat = new THREE.MeshStandardMaterial({
-      color: 0xffd166,
-      emissive: 0xff9900,
-      emissiveIntensity: 0.8,
-    });
-    const leftPillar = new THREE.Mesh(pillarGeo, pillarMat);
-    leftPillar.position.set(-1.6, 0.8, 0);
-    this.finishGateGroup.add(leftPillar);
-
-    const rightPillar = new THREE.Mesh(pillarGeo, pillarMat);
-    rightPillar.position.set(1.6, 0.8, 0);
-    this.finishGateGroup.add(rightPillar);
-
-    // 4. Warm golden PointLight
-    this.finishLight = new THREE.PointLight(0xffaa00, 2.4, 8.0);
-    this.finishLight.position.set(0, 1.5, 0);
+    // 3. Warm golden PointLight
+    this.finishLight = new THREE.PointLight(0xffaa00, 1.0, 5.0);
+    this.finishLight.position.set(0, 0.95, 0);
     this.finishGateGroup.add(this.finishLight);
 
-    // 5. Floating Canvas Label Sprite: "FINISH GATE (+2000)"
+    // 4. Floating Canvas Label Sprite: "FINISH GATE (+2000)"
     this.finishLabelSprite = createTextSprite(
       '🏁 FINISH GATE',
       '+2000 FLOW BONUS',
       '#ffd166'
     );
-    this.finishLabelSprite.position.set(0, 2.4, 0);
+    this.finishLabelSprite.position.set(0, 1.55, 0);
     this.finishGateGroup.add(this.finishLabelSprite);
 
     this.updateFinishGatePosition();
@@ -375,13 +360,13 @@ export class FlowLineChallenge {
   private updateStartGatePosition(): void {
     if (!this.curvePoints.length) return;
     const startPt = this.curvePoints[0];
-    this.startGateGroup.position.set(startPt.x, startPt.y - 0.08, startPt.z);
+    this.startGateGroup.position.set(startPt.x, startPt.y - 0.05, startPt.z);
   }
 
   private updateFinishGatePosition(): void {
     if (!this.curvePoints.length) return;
     const finishPt = this.curvePoints[this.curvePoints.length - 1];
-    this.finishGateGroup.position.set(finishPt.x, finishPt.y - 0.08, finishPt.z);
+    this.finishGateGroup.position.set(finishPt.x, finishPt.y - 0.05, finishPt.z);
 
     const tangent = this.curve.getTangentAt(1.0);
     const angle = Math.atan2(tangent.x, tangent.z);
@@ -394,7 +379,7 @@ export class FlowLineChallenge {
    */
   public refreshSurfaceHeights(): void {
     for (const p of this.curvePoints) {
-      p.y = this.parkSurface.sample(p.x, p.z).height + 0.08;
+      p.y = this.parkSurface.sample(p.x, p.z).height + 0.05;
     }
     this.curve = new THREE.CatmullRomCurve3(
       this.curvePoints,
@@ -408,7 +393,7 @@ export class FlowLineChallenge {
       this.tubeMesh.geometry = new THREE.TubeGeometry(
         this.curve,
         FlowLineChallenge.NUM_SAMPLE_POINTS,
-        0.075,
+        0.034,
         8,
         false
       );
@@ -432,9 +417,9 @@ export class FlowLineChallenge {
       this.startOuterRing.rotation.z = timeSec * 0.8;
       this.startInnerRing.rotation.z = -timeSec * 1.1;
       (this.startBeacon.material as THREE.MeshBasicMaterial).opacity =
-        0.24 + Math.sin(timeSec * 3.0) * 0.08;
+        0.1 + Math.sin(timeSec * 2.5) * 0.03;
       this.startLabelSprite.position.y =
-        2.4 + Math.sin(timeSec * 2.4) * 0.08;
+        1.45 + Math.sin(timeSec * 2.4) * 0.06;
 
       // Check if skater enters starting gate
       const startPt = this.curvePoints[0];
@@ -457,7 +442,7 @@ export class FlowLineChallenge {
     // 1. Animate pulse markers cruising along the line
     const numMarkers = this.pulseMarkers.length;
     for (let i = 0; i < numMarkers; i++) {
-      const t = (timeSec * 0.18 + i / numMarkers) % 1.0;
+      const t = (timeSec * 0.08 + i / numMarkers) % 1.0;
       this.curve.getPointAt(t, this.pulseMarkers[i].position);
       const tangent = this.curve.getTangentAt(t);
       this.pulseMarkers[i].quaternion.setFromUnitVectors(
@@ -469,7 +454,7 @@ export class FlowLineChallenge {
     // 2. Animate finish gate arch
     this.finishArchRing.rotation.z = timeSec * 1.2;
     this.finishLabelSprite.position.y =
-      2.4 + Math.sin(timeSec * 2.6) * 0.08;
+      1.55 + Math.sin(timeSec * 2.6) * 0.06;
 
     // 3. Wipeout / Bail ends the challenge
     if (controller.isBailing) {
@@ -481,7 +466,7 @@ export class FlowLineChallenge {
     const minSearchIdx = Math.max(0, this.progressIdx - 2);
     const maxSearchIdx = Math.min(
       this.curvePoints.length - 1,
-      this.progressIdx + 14
+      this.progressIdx + 20
     );
 
     let closestIdx = this.progressIdx;

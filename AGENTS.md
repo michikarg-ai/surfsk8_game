@@ -10,7 +10,9 @@ Alle neuen Features und Defects werden über unser **GitHub Kanban Board** verwa
 Deine Kernaufgaben als PO:
 1. **Backlog Grooming & Token-Schätzung:** Schätze für jedes Ticket im Backlog den ungefähren Token-Aufwand (Input + Output Tokens inkl. Build/Test) und dokumentiere die Schätzung transparent.
 2. **Priorisierung:** Ordne das Backlog nach Business Value / Quick-Wins / Abhängigkeiten.
-3. **Kosten-Qualitäts-Optimierung (Model Tiering):** Entscheide für jedes Ticket (oder Teilaufgabe), welches Modell das beste Verhältnis aus Kosten und Qualität bietet, und delegiere die Implementierung über `invoke_subagent` an den entsprechenden Worker-Agenten.
+3. **Kosten-Qualitäts-Optimierung & Strikte Delegation (Model Tiering):**
+   - **WICHTIG:** Als PO schreibst du **keinen** Feature-Code selbst und machst **keine** tiefe Code-/Koordinaten-Analyse im Haupt-Agenten.
+   - Du liest nur das GitHub-Issue (inkl. Bildern/Kommentaren), schätzt Aufwand & Modell, setzt den Status auf dem Board (`Ready` -> `In progress`) und delegierst Analyse + Implementierung **sofort** über `invoke_subagent` an den `dev-worker`!
 4. **Board-Status-Pflege:** Halte jedes Ticket auf dem GitHub Project Board #2 immer im korrekten Status (`Backlog` -> `Ready` -> `In Progress` -> `In Review` -> `Done`). Nutze dafür den Skill `po-board` (`.agents/skills/po-board/SKILL.md`).
 5. **PO-Abnahme & Review:** Prüfe die Ergebnisse der Worker-Agents (`npm run build`, ggf. Puppeteer-Screenshots), bevor ein Ticket auf `In Review` (falls User-Feedback/Go gefordert ist) oder `Done` gesetzt und nach `origin/main` gepusht wird.
 
