@@ -9,35 +9,48 @@ export interface PretzelConfig {
   position: THREE.Vector3;
 }
 
+interface BurstParticle {
+  active: boolean;
+  pos: THREE.Vector3;
+  vel: THREE.Vector3;
+  life: number;
+  maxLife: number;
+  baseScale: number;
+}
+
+interface PretzelItem {
+  id: number;
+  name: string;
+  basePos: THREE.Vector3;
+  container: THREE.Group;
+  mesh: THREE.Mesh;
+  glowRing: THREE.Mesh;
+  ringMaterial: THREE.MeshBasicMaterial;
+  collected: boolean;
+  popping: boolean;
+  popTimer: number;
+}
+
 export class PretzelCollectibles {
   public readonly group = new THREE.Group();
-  private items: {
-    id: number;
-    name: string;
-    basePos: THREE.Vector3;
-    container: THREE.Group;
-    mesh: THREE.Mesh;
-    light: THREE.PointLight;
-    glowRing: THREE.Mesh;
-    collected: boolean;
-    popping: boolean;
-    popTimer: number;
-  }[] = [];
+  private items: PretzelItem[] = [];
 
-  private particleGroup = new THREE.Group();
-  private particles: {
-    mesh: THREE.Mesh;
-    vel: THREE.Vector3;
-    life: number;
-    maxLife: number;
-  }[] = [];
+  // Zero-allocation particle pool via single InstancedMesh
+  private static readonly MAX_BURST_PARTICLES = 64;
+  private burstMesh: THREE.InstancedMesh;
+  private burstParticles: BurstParticle[] = [];
+  private dummyObj = new THREE.Object3D();
 
   private pretzelGeometry: THREE.BufferGeometry;
   private pretzelMaterial: THREE.MeshStandardMaterial;
   private saltGeometry: THREE.BoxGeometry;
   private saltMaterial: THREE.MeshStandardMaterial;
+  private ringGeometry: THREE.TorusGeometry;
+  private particleGeometry: THREE.IcosahedronGeometry;
+  private particleMaterial: THREE.MeshBasicMaterial;
 
   public static readonly PRETZEL_SCALE = 0.42;
+  private static readonly POP_DURATION = 0.38;
 
   public collectedCount = 0;
   public readonly totalCount = 5;
@@ -52,8 +65,8 @@ export class PretzelCollectibles {
       color: 0x9c4e0e, // Warm Bavarian baked lye crust
       roughness: 0.32,
       metalness: 0.06,
-      emissive: 0x3d1a00,
-      emissiveIntensity: 0.25,
+      emissive: 0x4a2202,
+      emissiveIntensity: 0.32,
     });
 
     this.saltGeometry = new THREE.BoxGeometry(0.016, 0.016, 0.016);
@@ -63,9 +76,47 @@ export class PretzelCollectibles {
       metalness: 0.1,
     });
 
+    this.ringGeometry = new THREE.TorusGeometry(0.38, 0.012, 8, 36);
+
+    // Pre-allocated particle system: 1 single draw call, zero runtime allocations
+    this.particleGeometry = new THREE.IcosahedronGeometry(0.045, 1);
+    this.particleMaterial = new THREE.MeshBasicMaterial({
+      color: 0xfbbf24,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+    });
+
+    this.burstMesh = new THREE.InstancedMesh(
+      this.particleGeometry,
+      this.particleMaterial,
+      PretzelCollectibles.MAX_BURST_PARTICLES
+    );
+    this.burstMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.burstMesh.frustumCulled = false;
+
+    // Initialize particle pool matrices hidden (scale 0)
+    this.dummyObj.scale.set(0, 0, 0);
+    this.dummyObj.position.set(0, -9999, 0);
+    this.dummyObj.updateMatrix();
+
+    for (let i = 0; i < PretzelCollectibles.MAX_BURST_PARTICLES; i++) {
+      this.burstMesh.setMatrixAt(i, this.dummyObj.matrix);
+      this.burstParticles.push({
+        active: false,
+        pos: new THREE.Vector3(),
+        vel: new THREE.Vector3(),
+        life: 0,
+        maxLife: 1.0,
+        baseScale: 1.0,
+      });
+    }
+    this.burstMesh.instanceMatrix.needsUpdate = true;
+
     this.group.name = 'PretzelCollectibles';
+    this.group.add(this.burstMesh);
     this.scene.add(this.group);
-    this.scene.add(this.particleGroup);
 
     this.spawnPretzels();
   }
@@ -153,22 +204,19 @@ export class PretzelCollectibles {
       }
       mesh.add(saltGroup);
 
-      // 2. Subtle Glowing Pickup Halo / Ring sized to the pretzel
-      const ringGeo = new THREE.TorusGeometry(0.38, 0.012, 8, 36);
-      const ringMat = new THREE.MeshBasicMaterial({
+      // 2. Glowing Pickup Halo / Ring sized to the pretzel (NO PointLight!)
+      // PointLights cause synchronous Three.js WebGL shader recompiles when toggled.
+      // Emissive materials + additive halo give a brilliant glow without any shader recompile hitch.
+      const ringMaterial = new THREE.MeshBasicMaterial({
         color: 0xf59e0b,
         transparent: true,
         opacity: 0.65,
         blending: THREE.AdditiveBlending,
+        depthWrite: false,
       });
-      const glowRing = new THREE.Mesh(ringGeo, ringMat);
+      const glowRing = new THREE.Mesh(this.ringGeometry, ringMaterial);
       glowRing.rotation.x = Math.PI / 2;
       container.add(glowRing);
-
-      // 3. Warm Golden Point Light casting glow onto the concrete bowl at night
-      const light = new THREE.PointLight(0xf59e0b, 1.2, 3.2);
-      light.position.set(0, 0.08, 0);
-      container.add(light);
 
       this.group.add(container);
 
@@ -178,8 +226,8 @@ export class PretzelCollectibles {
         basePos: cfg.position.clone(),
         container,
         mesh,
-        light,
         glowRing,
+        ringMaterial,
         collected: false,
         popping: false,
         popTimer: 0,
@@ -197,18 +245,24 @@ export class PretzelCollectibles {
 
       if (item.popping) {
         item.popTimer += dt;
-        const progress = item.popTimer / 0.35;
+        const progress = item.popTimer / PretzelCollectibles.POP_DURATION;
         if (progress >= 1.0) {
           item.popping = false;
-          item.container.visible = false;
+          item.mesh.visible = false;
+          item.glowRing.visible = false;
         } else {
-          // Explode / expand and fade out
-          const s = PretzelCollectibles.PRETZEL_SCALE * (1.0 + progress * 1.4);
-          item.mesh.scale.set(s, s, s);
-          item.mesh.rotation.y += dt * 12.0;
-          item.mesh.position.y += dt * 1.5;
-          item.light.intensity = Math.max(0, 1.2 * (1.0 - progress));
-          (item.glowRing.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.65 * (1.0 - progress));
+          // Zero-allocation, smooth celebratory pop animation:
+          // 1. Gently lift upward
+          item.mesh.position.y = progress * 1.5;
+          // 2. Rapid spin
+          item.mesh.rotation.y += dt * 14.0;
+          // 3. Smooth expansion then collapse to 0
+          const popScale = PretzelCollectibles.PRETZEL_SCALE * (1.0 + Math.sin(progress * Math.PI) * 0.35) * (1.0 - progress);
+          item.mesh.scale.set(popScale, popScale, popScale);
+          // 4. Halo ring expands and fades out smoothly
+          const ringScale = 1.0 + progress * 2.4;
+          item.glowRing.scale.set(ringScale, ringScale, ringScale);
+          item.ringMaterial.opacity = Math.max(0, 0.65 * (1.0 - progress));
         }
         continue;
       }
@@ -231,11 +285,11 @@ export class PretzelCollectibles {
       }
     }
 
-    // Update active particle effects
+    // Update active particle effects via InstancedMesh (zero GC, single draw call)
     this.updateParticles(dt);
   }
 
-  private collectItem(item: (typeof this.items)[0]): void {
+  private collectItem(item: PretzelItem): void {
     item.collected = true;
     item.popping = true;
     item.popTimer = 0;
@@ -246,7 +300,7 @@ export class PretzelCollectibles {
       track('pretzel_collect', { count: this.collectedCount, all: isAllCollected });
     } catch {}
 
-    // Spawn golden collection sparkles
+    // Spawn golden collection sparkles from pre-allocated object pool
     this.emitCollectBurst(item.container.position);
 
     // Audio feedback
@@ -266,54 +320,74 @@ export class PretzelCollectibles {
   }
 
   private emitCollectBurst(pos: THREE.Vector3): void {
-    const geo = new THREE.SphereGeometry(0.045, 6, 6);
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0xfbbf24,
-      blending: THREE.AdditiveBlending,
-      transparent: true,
-      opacity: 1.0,
-    });
+    const countToEmit = 28;
+    let emitted = 0;
 
-    for (let i = 0; i < 28; i++) {
-      const p = new THREE.Mesh(geo, mat.clone());
-      p.position.copy(pos);
+    for (let i = 0; i < PretzelCollectibles.MAX_BURST_PARTICLES && emitted < countToEmit; i++) {
+      const p = this.burstParticles[i];
+      if (p.active) continue;
+
+      p.active = true;
+      p.pos.copy(pos);
       const angle = Math.random() * Math.PI * 2;
-      const speed = 2.0 + Math.random() * 3.5;
-      const up = 1.0 + Math.random() * 3.0;
-      const vel = new THREE.Vector3(
+      const speed = 2.2 + Math.random() * 3.6;
+      const up = 1.2 + Math.random() * 3.2;
+      p.vel.set(
         Math.cos(angle) * speed,
         up,
         Math.sin(angle) * speed
       );
-      this.particleGroup.add(p);
-      this.particles.push({
-        mesh: p,
-        vel,
-        life: 0,
-        maxLife: 0.6 + Math.random() * 0.4,
-      });
+      p.life = 0;
+      p.maxLife = 0.55 + Math.random() * 0.35;
+      p.baseScale = 0.8 + Math.random() * 0.5;
+      emitted++;
     }
   }
 
   private updateParticles(dt: number): void {
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const p = this.particles[i];
+    let anyActive = false;
+
+    for (let i = 0; i < PretzelCollectibles.MAX_BURST_PARTICLES; i++) {
+      const p = this.burstParticles[i];
+      if (!p.active) continue;
+
       p.life += dt;
       if (p.life >= p.maxLife) {
-        this.particleGroup.remove(p.mesh);
-        p.mesh.geometry.dispose();
-        (p.mesh.material as THREE.Material).dispose();
-        this.particles.splice(i, 1);
+        p.active = false;
+        this.dummyObj.scale.set(0, 0, 0);
+        this.dummyObj.position.set(0, -9999, 0);
+        this.dummyObj.updateMatrix();
+        this.burstMesh.setMatrixAt(i, this.dummyObj.matrix);
+        anyActive = true;
         continue;
       }
+
+      anyActive = true;
       p.vel.y -= 9.8 * dt; // gravity
-      p.mesh.position.addScaledVector(p.vel, dt);
+      p.pos.addScaledVector(p.vel, dt);
+
       const progress = p.life / p.maxLife;
-      const mat = p.mesh.material as THREE.MeshBasicMaterial;
-      mat.opacity = Math.max(0, 1.0 - progress);
-      const s = Math.max(0.01, 1.0 - progress * 0.7);
-      p.mesh.scale.set(s, s, s);
+      const s = Math.max(0, p.baseScale * (1.0 - progress));
+      this.dummyObj.position.copy(p.pos);
+      this.dummyObj.scale.set(s, s, s);
+      this.dummyObj.updateMatrix();
+      this.burstMesh.setMatrixAt(i, this.dummyObj.matrix);
     }
+
+    if (anyActive) {
+      this.burstMesh.instanceMatrix.needsUpdate = true;
+    }
+  }
+
+  private resetParticles(): void {
+    this.dummyObj.scale.set(0, 0, 0);
+    this.dummyObj.position.set(0, -9999, 0);
+    this.dummyObj.updateMatrix();
+    for (let i = 0; i < PretzelCollectibles.MAX_BURST_PARTICLES; i++) {
+      this.burstParticles[i].active = false;
+      this.burstMesh.setMatrixAt(i, this.dummyObj.matrix);
+    }
+    this.burstMesh.instanceMatrix.needsUpdate = true;
   }
 
   public reset(): void {
@@ -322,23 +396,18 @@ export class PretzelCollectibles {
       item.collected = false;
       item.popping = false;
       item.popTimer = 0;
-      item.container.visible = true;
+      item.mesh.visible = true;
+      item.glowRing.visible = true;
       item.mesh.scale.set(
         PretzelCollectibles.PRETZEL_SCALE,
         PretzelCollectibles.PRETZEL_SCALE,
         PretzelCollectibles.PRETZEL_SCALE
       );
       item.mesh.position.set(0, 0, 0);
-      item.light.intensity = 1.2;
-      (item.glowRing.material as THREE.MeshBasicMaterial).opacity = 0.65;
+      item.ringMaterial.opacity = 0.65;
+      item.glowRing.scale.set(1, 1, 1);
     }
-    // Clear particles
-    for (const p of this.particles) {
-      this.particleGroup.remove(p.mesh);
-      p.mesh.geometry.dispose();
-      (p.mesh.material as THREE.Material).dispose();
-    }
-    this.particles = [];
+    this.resetParticles();
     this.hud.updatePretzelCount(this.collectedCount, this.totalCount);
   }
 }

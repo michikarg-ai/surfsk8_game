@@ -72,7 +72,7 @@ export class SurfHUD {
   private snapBannerEl: HTMLDivElement;
   private snapHintEl: HTMLDivElement;
   private coachHintEl: HTMLDivElement;
-  private snapBannerTimeout: number | null = null;
+  private snapBannerAnimation: Animation | null = null;
   private flowLineHint: string | null = null;
 
   constructor(private callbacks: HUDCallbacks) {
@@ -289,31 +289,53 @@ export class SurfHUD {
   /** Big animated trick name (SNAP!, LAYBACK!, BERTSLIDE!, FS REVERSE 360!). */
   public showTrickBanner(text: string, perfect: boolean): void {
     this.snapBannerEl.textContent = text;
-    this.snapBannerEl.className = '';
-    // Force reflow so the animation restarts on consecutive tricks
-    void this.snapBannerEl.offsetWidth;
     const long = text.length > 10 ? ' long' : '';
-    this.snapBannerEl.className = (perfect ? 'show perfect' : 'show') + long;
-    if (this.snapBannerTimeout !== null) window.clearTimeout(this.snapBannerTimeout);
-    this.snapBannerTimeout = window.setTimeout(() => {
-      this.snapBannerEl.className = '';
-      this.snapBannerTimeout = null;
-    }, 1500);
+    this.snapBannerEl.className = (perfect ? 'perfect' : '') + long;
+
+    // Use Web Animations API: runs on GPU compositor thread, 0 layout reflows (no offsetWidth)!
+    if (this.snapBannerAnimation) {
+      this.snapBannerAnimation.cancel();
+    }
+    this.snapBannerAnimation = this.snapBannerEl.animate(
+      [
+        { opacity: 0, transform: 'translate3d(-50%, -50%, 0) scale(0.3) skewX(-20deg)', offset: 0 },
+        { opacity: 1, transform: 'translate3d(-50%, -50%, 0) scale(1.12) skewX(-12deg)', offset: 0.14 },
+        { opacity: 1, transform: 'translate3d(-50%, -50%, 0) scale(0.98) skewX(-12deg)', offset: 0.26 },
+        { opacity: 1, transform: 'translate3d(-50%, -50%, 0) scale(1.0) skewX(-12deg)', offset: 0.70 },
+        { opacity: 0, transform: 'translate3d(-50%, -62%, 0) scale(1.18) skewX(-12deg)', offset: 1.0 },
+      ],
+      {
+        duration: 1450,
+        easing: 'cubic-bezier(0.2, 1.4, 0.4, 1)',
+        fill: 'forwards',
+      }
+    );
   }
 
   /** Big red banner when the player wipes out / bails. */
   public showBailBanner(reason = 'WIPEOUT!'): void {
     this.breakCombo();
     this.snapBannerEl.textContent = reason;
-    this.snapBannerEl.className = '';
-    void this.snapBannerEl.offsetWidth;
     const long = reason.length > 10 ? ' long' : '';
-    this.snapBannerEl.className = 'show bail' + long;
-    if (this.snapBannerTimeout !== null) window.clearTimeout(this.snapBannerTimeout);
-    this.snapBannerTimeout = window.setTimeout(() => {
-      this.snapBannerEl.className = '';
-      this.snapBannerTimeout = null;
-    }, 1500);
+    this.snapBannerEl.className = 'bail' + long;
+
+    if (this.snapBannerAnimation) {
+      this.snapBannerAnimation.cancel();
+    }
+    this.snapBannerAnimation = this.snapBannerEl.animate(
+      [
+        { opacity: 0, transform: 'translate3d(-50%, -50%, 0) scale(0.3) skewX(-20deg)', offset: 0 },
+        { opacity: 1, transform: 'translate3d(-50%, -50%, 0) scale(1.12) skewX(-12deg)', offset: 0.14 },
+        { opacity: 1, transform: 'translate3d(-50%, -50%, 0) scale(0.98) skewX(-12deg)', offset: 0.26 },
+        { opacity: 1, transform: 'translate3d(-50%, -50%, 0) scale(1.0) skewX(-12deg)', offset: 0.70 },
+        { opacity: 0, transform: 'translate3d(-50%, -62%, 0) scale(1.18) skewX(-12deg)', offset: 1.0 },
+      ],
+      {
+        duration: 1450,
+        easing: 'cubic-bezier(0.2, 1.4, 0.4, 1)',
+        fill: 'forwards',
+      }
+    );
   }
 
   /** Wipe out the active combo without banking it to the session score. */
@@ -337,7 +359,8 @@ export class SurfHUD {
     style.textContent = `
       #hud-snap-banner {
         position: absolute; left: 50%; top: 34%;
-        transform: translate(-50%, -50%) scale(0.4) skewX(-12deg);
+        transform: translate3d(-50%, -50%, 0) scale(0.4) skewX(-12deg);
+        will-change: transform, opacity;
         font-family: 'Barlow Condensed', 'Impact', sans-serif; font-style: italic;
         font-size: clamp(64px, 12vw, 150px); font-weight: 900; letter-spacing: 0.04em;
         color: #f5f5f5; opacity: 0; pointer-events: none; z-index: 60; white-space: nowrap;
@@ -352,14 +375,16 @@ export class SurfHUD {
         color: #ff3344;
         text-shadow: 0 10px 36px rgba(255, 51, 68, 0.7), 0 6px 20px rgba(0, 0, 0, 0.85);
       }
-      #hud-snap-banner.show { animation: snapPop 1.45s cubic-bezier(0.2, 1.4, 0.4, 1) forwards; }
       #hud-snap-banner.long { font-size: clamp(44px, 8.5vw, 116px); }
-      @keyframes snapPop {
-        0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.3) skewX(-20deg); }
-        14%  { opacity: 1; transform: translate(-50%, -50%) scale(1.12) skewX(-12deg); }
-        26%  { transform: translate(-50%, -50%) scale(0.98) skewX(-12deg); }
-        70%  { opacity: 1; transform: translate(-50%, -50%) scale(1.0) skewX(-12deg); }
-        100% { opacity: 0; transform: translate(-50%, -62%) scale(1.18) skewX(-12deg); }
+      #hud-score {
+        display: inline-block;
+        transition: transform 0.25s cubic-bezier(0.2, 1.4, 0.4, 1), color 0.25s ease;
+        will-change: transform;
+      }
+      #hud-pretzel-count {
+        display: inline-block;
+        transition: transform 0.22s cubic-bezier(0.2, 1.4, 0.4, 1);
+        will-change: transform;
       }
       #hud-coach-hint {
         position: absolute; left: 50%; top: 18%; transform: translateX(-50%) skewX(-11deg);
@@ -410,12 +435,12 @@ export class SurfHUD {
       this.bestComboEl.textContent = this.bestCombo.toLocaleString();
     }
     this.scoreEl.textContent = this.totalScore.toLocaleString();
-    this.scoreEl.style.transform = 'scale(1.22)';
+    this.scoreEl.style.transform = 'scale3d(1.22, 1.22, 1)';
     this.scoreEl.style.color = '#fbbf24';
     setTimeout(() => {
       this.scoreEl.style.transform = '';
       this.scoreEl.style.color = '';
-    }, 400);
+    }, 320);
   }
 
   public awardBonusPoints(points: number, label: string): void {
@@ -430,6 +455,12 @@ export class SurfHUD {
   public updatePretzelCount(collected: number, total: number): void {
     if (this.pretzelCountEl) {
       this.pretzelCountEl.textContent = `🥨 ${collected}/${total}`;
+      if (collected > 0) {
+        this.pretzelCountEl.style.transform = 'scale3d(1.25, 1.25, 1)';
+        setTimeout(() => {
+          if (this.pretzelCountEl) this.pretzelCountEl.style.transform = '';
+        }, 220);
+      }
     }
     if (this.pretzelBlockEl) {
       const isComplete = collected >= total && total > 0;
