@@ -201,6 +201,11 @@ export class FlowLineChallenge {
   ];
 
   public static readonly NUM_SAMPLE_POINTS = 372;
+  public static readonly TUBULAR_SEGMENTS = FlowLineChallenge.NUM_SAMPLE_POINTS - 1; // 371
+  public static readonly RADIAL_SEGMENTS = 6;
+  public static readonly INDICES_PER_SEGMENT = FlowLineChallenge.RADIAL_SEGMENTS * 6; // 36
+  public static readonly VISIBLE_AHEAD_POINTS = 26; // ~13.5m ahead
+  public static readonly VISIBLE_BEHIND_POINTS = 2; // ~1.0m behind skater
   public static readonly CHEVRON_STEP = 8;
   public static readonly START_TRIGGER_RADIUS = 1.8;
   public static readonly MAX_ALLOWED_DISTANCE = 5.5;
@@ -291,7 +296,8 @@ export class FlowLineChallenge {
       FlowLineChallenge.NUM_SAMPLE_POINTS,
       waypoints.length * 3
     );
-    const sampled = rawCurve.getPoints(sampleCount);
+    const tubularSegments = sampleCount - 1;
+    const sampled = rawCurve.getPoints(tubularSegments);
 
     // Re-sample height exactly from park surface at every single point along the path
     for (const p of sampled) {
@@ -305,9 +311,9 @@ export class FlowLineChallenge {
       this.tubeMesh.geometry.dispose();
       this.tubeMesh.geometry = new THREE.TubeGeometry(
         this.curve,
-        sampleCount,
+        tubularSegments,
         0.034,
-        8,
+        FlowLineChallenge.RADIAL_SEGMENTS,
         false
       );
     }
@@ -350,6 +356,7 @@ export class FlowLineChallenge {
       marker.position.copy(pos);
       marker.position.y += 0.02;
       marker.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent);
+      marker.userData.sampleIdx = idx;
       this.flowLineGroup.add(marker);
       this.chevronMarkers.push(marker);
     }
@@ -434,11 +441,15 @@ export class FlowLineChallenge {
    * Builds the 3D neon flow line tube and animated pulse markers.
    */
   private buildFlowLineVisuals(): void {
+    const tubularSegments = Math.max(
+      FlowLineChallenge.TUBULAR_SEGMENTS,
+      this.curvePoints.length - 1
+    );
     const tubeGeo = new THREE.TubeGeometry(
       this.curve,
-      FlowLineChallenge.NUM_SAMPLE_POINTS,
+      tubularSegments,
       0.034,
-      8,
+      FlowLineChallenge.RADIAL_SEGMENTS,
       false
     );
     this.tubeMaterial = new THREE.MeshStandardMaterial({
@@ -550,13 +561,17 @@ export class FlowLineChallenge {
       0.5
     );
 
+    const tubularSegments = Math.max(
+      FlowLineChallenge.TUBULAR_SEGMENTS,
+      this.curvePoints.length - 1
+    );
     if (this.tubeMesh) {
       this.tubeMesh.geometry.dispose();
       this.tubeMesh.geometry = new THREE.TubeGeometry(
         this.curve,
-        FlowLineChallenge.NUM_SAMPLE_POINTS,
+        tubularSegments,
         0.034,
-        8,
+        FlowLineChallenge.RADIAL_SEGMENTS,
         false
       );
     }
@@ -645,36 +660,20 @@ export class FlowLineChallenge {
 
     // --- ACTIVE FLOW LINE CHALLENGE ---
 
-    // 1. Animate pulse markers cruising along the line
-    const numMarkers = this.pulseMarkers.length;
-    for (let i = 0; i < numMarkers; i++) {
-      const t = (timeSec * 0.08 + i / numMarkers) % 1.0;
-      this.curve.getPointAt(t, this.pulseMarkers[i].position);
-      const tangent = this.curve.getTangentAt(t);
-      this.pulseMarkers[i].quaternion.setFromUnitVectors(
-        new THREE.Vector3(0, 0, 1),
-        tangent
-      );
-    }
-
-    // 2. Animate finish gate arch
-    if (this.finishGateGroup.visible) {
-      this.finishArchRing.rotation.z = timeSec * 1.2;
-      this.finishLabelSprite.position.y =
-        0.95 + Math.sin(timeSec * 2.6) * 0.04;
-    }
-
-    // 3. Wipeout / Bail ends the challenge
+    // 1. Wipeout / Bail ends the challenge
     if (controller.isBailing) {
       this.failChallenge('FLOW LINE LOST!');
       return;
     }
 
-    // 4. Progress tracking along active local window
-    const minSearchIdx = Math.max(0, this.progressIdx - 2);
+    // 2. Progress tracking along active local window
+    const minSearchIdx = Math.max(
+      0,
+      this.progressIdx - FlowLineChallenge.VISIBLE_BEHIND_POINTS
+    );
     const maxSearchIdx = Math.min(
       this.curvePoints.length - 1,
-      this.progressIdx + 20
+      this.progressIdx + FlowLineChallenge.VISIBLE_AHEAD_POINTS
     );
 
     let closestIdx = this.progressIdx;
@@ -697,25 +696,36 @@ export class FlowLineChallenge {
 
     const distToLine = Math.sqrt(minDistSq);
 
-    // 5. Check if skater is too far away from the line
+    // 3. Check if skater is too far away from the line
     if (distToLine > FlowLineChallenge.MAX_ALLOWED_DISTANCE) {
       this.failChallenge('FLOW LINE ENDED — TOO FAR!');
       return;
     }
 
-    // 6. Wave Flow Speed Assist: surfing an endless wave without stalling
+    // 4. Dynamically update visible 10-15m window of tube, chevrons & pulse markers
+    this.updateFlowLineVisibility(timeSec);
+
+    // 5. Wave Flow Speed Assist: surfing an endless wave without stalling
     if (controller.speed > 1.0 && controller.speed < 5.2) {
       controller.speed = Math.min(5.8, controller.speed + dt * 1.1);
     }
 
-    // 7. Live HUD Progress Hint
+    // 6. Live HUD Progress Hint
     const progressFrac =
       this.progressIdx / (this.curvePoints.length - 1);
     const pct = Math.round(progressFrac * 100);
     this.hud.setFlowLineHint(`🌊 FOLLOW THE FLOW: ${pct}%`);
 
-    // Closed-loop handling: Show finish gate once skater has made substantial progress (>= 75%)
-    this.finishGateGroup.visible = progressFrac >= 0.75;
+    // 7. Finish Gate Visibility:
+    // Show finish gate once the track end enters the 15m visibility window (>= NUM_SAMPLE_POINTS - 30, ca. 90% progress)
+    const finishThreshold = Math.max(0, this.curvePoints.length - 1 - 30);
+    this.finishGateGroup.visible = this.progressIdx >= finishThreshold;
+
+    if (this.finishGateGroup.visible) {
+      this.finishArchRing.rotation.z = timeSec * 1.2;
+      this.finishLabelSprite.position.y =
+        0.95 + Math.sin(timeSec * 2.6) * 0.04;
+    }
 
     // 8. Check Finish Gate completion
     const finishPt = this.curvePoints[this.curvePoints.length - 1];
@@ -921,6 +931,7 @@ export class FlowLineChallenge {
       testBtn?.addEventListener('click', () => {
         this.closeExportModal();
         this.isActive = false;
+        this.resetFlowLineVisibility();
         this.startGateGroup.visible = true;
         this.finishGateGroup.visible = true;
         this.flowLineGroup.visible = true;
@@ -934,6 +945,90 @@ export class FlowLineChallenge {
     }
   }
 
+  /**
+   * Dynamically renders only the ~10-15m window of the flow line in front of the skater,
+   * keeping rendering lightweight with zero per-frame buffer allocations.
+   */
+  private updateFlowLineVisibility(timeSec: number): void {
+    if (!this.tubeMesh?.geometry || !this.curvePoints.length) return;
+
+    const numSegments = this.curvePoints.length - 1;
+    const startSeg = Math.max(
+      0,
+      this.progressIdx - FlowLineChallenge.VISIBLE_BEHIND_POINTS
+    );
+    const endSeg = Math.min(
+      numSegments,
+      this.progressIdx + FlowLineChallenge.VISIBLE_AHEAD_POINTS
+    );
+    const startIndex = startSeg * FlowLineChallenge.INDICES_PER_SEGMENT;
+    const count = Math.max(
+      0,
+      (endSeg - startSeg) * FlowLineChallenge.INDICES_PER_SEGMENT
+    );
+
+    this.tubeMesh.geometry.setDrawRange(startIndex, count);
+
+    // Chevron directional markers: visible only within the active 10-15m window ahead
+    const windowStart = this.progressIdx;
+    const windowEnd = this.progressIdx + FlowLineChallenge.VISIBLE_AHEAD_POINTS;
+
+    for (const marker of this.chevronMarkers) {
+      const sampleIdx = (marker.userData.sampleIdx as number) ?? 0;
+      if (sampleIdx >= windowStart && sampleIdx <= windowEnd) {
+        marker.visible = true;
+        const distFromEnd = windowEnd - sampleIdx;
+        if (distFromEnd < 6) {
+          const s = Math.max(0.2, distFromEnd / 6);
+          marker.scale.set(s, s, s);
+        } else {
+          marker.scale.set(1.0, 1.0, 1.0);
+        }
+      } else {
+        marker.visible = false;
+      }
+    }
+
+    // Pulse markers: smoothly cruise along the active 10-15m visible segment
+    const numMarkers = this.pulseMarkers.length;
+    const startFrac = startSeg / numSegments;
+    const endFrac = endSeg / numSegments;
+    const fracSpan = Math.max(0.001, endFrac - startFrac);
+
+    for (let i = 0; i < numMarkers; i++) {
+      const localT = (timeSec * 0.35 + i / numMarkers) % 1.0;
+      const t = Math.min(1.0, startFrac + localT * fracSpan);
+      this.curve.getPointAt(t, this.pulseMarkers[i].position);
+      const tangent = this.curve.getTangentAt(t);
+      this.pulseMarkers[i].quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 0, 1),
+        tangent
+      );
+      this.pulseMarkers[i].visible = true;
+
+      const edgeDist = Math.min(localT, 1.0 - localT);
+      const s = edgeDist < 0.15 ? Math.max(0.2, edgeDist / 0.15) : 1.0;
+      this.pulseMarkers[i].scale.set(s, s, s);
+    }
+  }
+
+  /**
+   * Resets draw range and restores visibility of all flow line markers (used outside of active challenge).
+   */
+  private resetFlowLineVisibility(): void {
+    if (this.tubeMesh?.geometry) {
+      this.tubeMesh.geometry.setDrawRange(0, Infinity);
+    }
+    for (const marker of this.chevronMarkers) {
+      marker.visible = true;
+      marker.scale.set(1.0, 1.0, 1.0);
+    }
+    for (const marker of this.pulseMarkers) {
+      marker.visible = true;
+      marker.scale.set(1.0, 1.0, 1.0);
+    }
+  }
+
   private startChallenge(): void {
     this.isActive = true;
     this.progressIdx = 0;
@@ -941,6 +1036,8 @@ export class FlowLineChallenge {
     this.startGateGroup.visible = false;
     this.flowLineGroup.visible = true;
     this.finishGateGroup.visible = false;
+
+    this.updateFlowLineVisibility(0);
 
     this.hud.showTrickBanner('🌊 FOLLOW THE FLOW!', true);
     this.hud.setFlowLineHint('🌊 FOLLOW THE FLOW: 0%');
@@ -951,6 +1048,7 @@ export class FlowLineChallenge {
     this.isActive = false;
     this.retriggerCooldown = 1.5;
 
+    this.resetFlowLineVisibility();
     this.startGateGroup.visible = true;
     this.flowLineGroup.visible = false;
     this.finishGateGroup.visible = false;
@@ -967,6 +1065,7 @@ export class FlowLineChallenge {
     this.isActive = false;
     this.retriggerCooldown = 2.0;
 
+    this.resetFlowLineVisibility();
     this.startGateGroup.visible = true;
     this.flowLineGroup.visible = false;
     this.finishGateGroup.visible = false;
@@ -982,6 +1081,7 @@ export class FlowLineChallenge {
     this.progressIdx = 0;
     this.retriggerCooldown = 0;
 
+    this.resetFlowLineVisibility();
     this.startGateGroup.visible = true;
     this.flowLineGroup.visible = false;
     this.finishGateGroup.visible = false;
