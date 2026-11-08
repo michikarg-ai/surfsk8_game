@@ -464,7 +464,16 @@ export class LandingPage {
 
   public updateFullscreenLabel(isFs: boolean): void {
     if (this.fullscreenBtnEl) {
-      this.fullscreenBtnEl.textContent = isFs ? '🗗 EXIT FULLSCREEN' : '⛶ FULLSCREEN';
+      const iconPath = isFs
+        ? 'M4 14h6m0 0v6m0-6L3 21m17-7h-6m0 0v6m0-6l7 7M10 4v6m0 0H4m6 0L3 3m10 7h6m-6 0V4m0 6l7-7'
+        : 'M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3';
+      const label = isFs ? 'EXIT FULLSCREEN' : 'FULLSCREEN';
+      this.fullscreenBtnEl.innerHTML = `
+        <svg class="landing-fs-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;">
+          <path d="${iconPath}"/>
+        </svg>
+        <span>${label}</span>
+      `.trim();
     }
   }
 

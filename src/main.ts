@@ -112,6 +112,9 @@ class SurfskateMunichGame {
           this.controller.speed >= 2.4,
       }),
     });
+    if (TouchControls.isTouchDevice()) {
+      document.body.classList.add('has-touch-controls');
+    }
 
     this.hud = new SurfHUD({
       onToggleAspect: () => this.toggleAspectMode(),
@@ -681,7 +684,7 @@ class SurfskateMunichGame {
     }
     document.body.classList.toggle(
       'has-touch-controls',
-      this.touchControls.isEnabled && this.touchControls.isVisible
+      this.touchControls.isEnabled && (this.touchControls.isVisible || TouchControls.isTouchDevice())
     );
     if (this.landingPage) {
       this.landingPage.updateQualityLabel(this.graphicsPreset, this.effectiveQuality);

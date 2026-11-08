@@ -207,7 +207,7 @@ export class FlowLineChallenge {
   public static readonly VISIBLE_AHEAD_POINTS = 32; // ~16.5m ahead
   public static readonly VISIBLE_BEHIND_POINTS = 2; // ~1.0m behind skater
   public static readonly CHEVRON_STEP = 8;
-  public static readonly START_TRIGGER_RADIUS = 1.8;
+  public static readonly START_TRIGGER_RADIUS = 1.2;
   public static readonly MAX_ALLOWED_DISTANCE = 5.5;
   public static readonly FINISH_TRIGGER_RADIUS = 3.0;
   public static readonly FINISH_MIN_PROGRESS = 0.95;
@@ -265,20 +265,20 @@ export class FlowLineChallenge {
     this.buildFinishGateVisuals();
     this.ensureModalExists();
 
-    // Default state: start gate and the first ~16m preview of the flow line are visible from spawn
+    // Default state: only start gate is visible; flow line and finish gate remain hidden until start
     this.startGateGroup.visible = true;
-    this.flowLineGroup.visible = true;
+    this.flowLineGroup.visible = false;
     this.finishGateGroup.visible = false;
     this.progressIdx = 0;
-    this.updateFlowLineVisibility(0);
   }
 
   /**
-   * Smooths a 2D polyline via iterative weighted moving-average Laplacian filtering.
+   * Minimal shape-preserving 2D smoothing (1 pass) to soften micro-jitter while staying
+   * tightly faithful to recorded wall lines and preventing bowl-curve shrinkage.
    */
   private smoothWaypoints2D(
     waypoints: readonly THREE.Vector2[],
-    iterations = 6
+    iterations = 1
   ): THREE.Vector2[] {
     let current = waypoints.map((pt) => pt.clone());
     const n = current.length;
@@ -294,49 +294,10 @@ export class FlowLineChallenge {
         const nxt = current[i + 1];
         next.push(
           new THREE.Vector2(
-            0.25 * prev.x + 0.5 * curr.x + 0.25 * nxt.x,
-            0.25 * prev.y + 0.5 * curr.y + 0.25 * nxt.y
+            0.12 * prev.x + 0.76 * curr.x + 0.12 * nxt.x,
+            0.12 * prev.y + 0.76 * curr.y + 0.12 * nxt.y
           )
         );
-      }
-
-      next.push(current[n - 1].clone());
-      current = next;
-    }
-
-    return current;
-  }
-
-  /**
-   * Smooths 3D curve sample points in position and height while keeping the tube
-   * safely above the park concrete surface.
-   */
-  private smoothCurvePoints3D(
-    points: THREE.Vector3[],
-    iterations = 4
-  ): THREE.Vector3[] {
-    const n = points.length;
-    if (n < 3) return points;
-
-    let current = points.map((p) => p.clone());
-
-    for (let iter = 0; iter < iterations; iter++) {
-      const next: THREE.Vector3[] = [];
-      next.push(current[0].clone());
-
-      for (let i = 1; i < n - 1; i++) {
-        const prev = current[i - 1];
-        const curr = current[i];
-        const nxt = current[i + 1];
-
-        const smX = 0.25 * prev.x + 0.5 * curr.x + 0.25 * nxt.x;
-        const smY = 0.25 * prev.y + 0.5 * curr.y + 0.25 * nxt.y;
-        const smZ = 0.25 * prev.z + 0.5 * curr.z + 0.25 * nxt.z;
-
-        const surfaceH = this.parkSurface.sample(smX, smZ).height;
-        const finalY = Math.max(smY, surfaceH + 0.045);
-
-        next.push(new THREE.Vector3(smX, finalY, smZ));
       }
 
       next.push(current[n - 1].clone());
@@ -352,8 +313,8 @@ export class FlowLineChallenge {
   public buildCurveFromWaypoints(waypoints: readonly THREE.Vector2[]): void {
     if (waypoints.length < 2) return;
 
-    // 1. Smooth 2D waypoints to remove keyboard input jitter and sharp corners
-    const smoothed2D = this.smoothWaypoints2D(waypoints, 6);
+    // 1. Minimal 1-pass shape-preserving smoothing to keep line riding high up on the bowl walls
+    const smoothed2D = this.smoothWaypoints2D(waypoints, 1);
 
     const rawControlPoints = smoothed2D.map(
       (pt) =>
@@ -377,13 +338,12 @@ export class FlowLineChallenge {
     const tubularSegments = sampleCount - 1;
     const sampled = rawCurve.getPoints(tubularSegments);
 
-    // Re-sample height exactly from park surface at every single point along the path
+    // Re-sample height exactly from park surface at every single point along the path so the line hugs the steep walls
     for (const p of sampled) {
       p.y = this.parkSurface.sample(p.x, p.z).height + 0.05;
     }
 
-    // 2. Multi-pass 3D height & trajectory smoothing
-    this.curvePoints = this.smoothCurvePoints3D(sampled, 4);
+    this.curvePoints = sampled;
     this.curve = new THREE.CatmullRomCurve3(
       this.curvePoints,
       false,
@@ -644,8 +604,6 @@ export class FlowLineChallenge {
     for (const p of this.curvePoints) {
       p.y = this.parkSurface.sample(p.x, p.z).height + 0.05;
     }
-    // Re-smooth 3D heights and trajectory across refined LiDAR surface
-    this.curvePoints = this.smoothCurvePoints3D(this.curvePoints, 4);
     this.curve = new THREE.CatmullRomCurve3(
       this.curvePoints,
       false,
@@ -671,7 +629,11 @@ export class FlowLineChallenge {
     this.buildChevrons();
     this.updateStartGatePosition();
     this.updateFinishGatePosition();
-    this.updateFlowLineVisibility(0);
+    if (this.isActive || this.isRecording) {
+      this.updateFlowLineVisibility(0);
+    } else {
+      this.flowLineGroup.visible = false;
+    }
   }
 
   public update(
@@ -735,9 +697,7 @@ export class FlowLineChallenge {
           0.95 + Math.sin(timeSec * 2.6) * 0.04;
       }
 
-      // Always show first ~16m preview of the flow line leading out of the start gate with animated pulse markers
-      this.progressIdx = 0;
-      this.updateFlowLineVisibility(timeSec);
+      this.flowLineGroup.visible = false;
 
       // Check if skater enters starting gate
       const startPt = this.curvePoints[0];
@@ -750,33 +710,7 @@ export class FlowLineChallenge {
         this.retriggerCooldown <= 0 &&
         distToStart < FlowLineChallenge.START_TRIGGER_RADIUS
       ) {
-        let isAligned = true;
-        if (this.curve) {
-          const tangent = this.curve.getTangentAt(0);
-          const fwdX = -Math.sin(controller.heading);
-          const fwdZ = -Math.cos(controller.heading);
-          const dotFacing = fwdX * tangent.x + fwdZ * tangent.z;
-
-          let dotVel = dotFacing;
-          if (controller.speed > 0.3) {
-            const velLen = Math.hypot(
-              controller.velocity.x,
-              controller.velocity.z
-            );
-            if (velLen > 0.05) {
-              dotVel =
-                (controller.velocity.x * tangent.x +
-                  controller.velocity.z * tangent.z) /
-                velLen;
-            }
-          }
-          // Only start if facing or moving forward along the line (not entering backwards)
-          isAligned = dotFacing >= 0.0 || dotVel >= 0.0;
-        }
-
-        if (isAligned) {
-          this.startChallenge();
-        }
+        this.startChallenge();
       }
       return;
     }
@@ -1173,9 +1107,8 @@ export class FlowLineChallenge {
     this.progressIdx = 0;
 
     this.startGateGroup.visible = true;
-    this.flowLineGroup.visible = true;
+    this.flowLineGroup.visible = false;
     this.finishGateGroup.visible = false;
-    this.updateFlowLineVisibility(0);
 
     this.hud.setFlowLineHint(null);
     if (reason === 'FLOW LINE LOST!') {
@@ -1191,9 +1124,8 @@ export class FlowLineChallenge {
     this.progressIdx = 0;
 
     this.startGateGroup.visible = true;
-    this.flowLineGroup.visible = true;
+    this.flowLineGroup.visible = false;
     this.finishGateGroup.visible = false;
-    this.updateFlowLineVisibility(0);
 
     this.hud.setFlowLineHint(null);
     this.hud.awardBonusPoints(2000, 'FLOW LINE COMPLETE! +2000');
@@ -1207,9 +1139,8 @@ export class FlowLineChallenge {
     this.retriggerCooldown = 0;
 
     this.startGateGroup.visible = true;
-    this.flowLineGroup.visible = true;
+    this.flowLineGroup.visible = false;
     this.finishGateGroup.visible = false;
-    this.updateFlowLineVisibility(0);
 
     this.hud.setFlowLineHint(null);
     this.closeExportModal();

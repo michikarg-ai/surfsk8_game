@@ -123,12 +123,16 @@ export class TouchControls {
 
     const shouldEnable = TouchControls.isTouchDevice();
     this.setEnabled(shouldEnable);
+    if (shouldEnable && typeof document !== 'undefined') {
+      document.body.classList.add('has-touch-controls');
+    }
   }
 
   public static isTouchDevice(): boolean {
     return (
       'ontouchstart' in window ||
       (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) ||
+      (typeof window !== 'undefined' && window.innerWidth <= 960) ||
       window.location.search.includes('touch=1')
     );
   }

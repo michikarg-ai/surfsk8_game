@@ -620,8 +620,13 @@
         transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
       }
       .hud-fullscreen-btn > span {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         transform: skewX(calc(var(--skew) * -1));
+      }
+      .hud-fullscreen-btn svg {
+        display: block;
       }
       .hud-fullscreen-btn:hover {
         background: var(--yellow);
@@ -2066,8 +2071,51 @@
         transition: transform 0.2s ease, top 0.2s ease, left 0.2s ease;
       }
       body.has-touch-controls .dock {
-        margin-bottom: 154px;
-        transition: margin-bottom 0.2s ease;
+        position: absolute !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        bottom: max(8px, calc(env(safe-area-inset-bottom, 0px) + 6px)) !important;
+        margin-bottom: 0 !important;
+        width: auto !important;
+        max-width: calc(100vw - 32px) !important;
+        display: flex !important;
+        flex-direction: column-reverse !important;
+        align-items: center !important;
+        z-index: 60 !important;
+        pointer-events: auto !important;
+      }
+      body.has-touch-controls .dock-toggle .key-cap {
+        display: none !important;
+      }
+      body.has-touch-controls .dock-body {
+        width: min(540px, calc(100vw - 28px)) !important;
+        max-height: calc(var(--app-height, 100dvh) - 100px) !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+        z-index: 200 !important;
+        margin-bottom: 8px !important;
+        box-sizing: border-box !important;
+        background: rgba(18, 16, 14, 0.97) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+      }
+      body.has-touch-controls .dock.collapsed .dock-body {
+        display: none !important;
+        max-height: 0 !important;
+        padding: 0 !important;
+        margin-bottom: 0 !important;
+        border-width: 0 !important;
+        pointer-events: none !important;
+      }
+      body.has-touch-controls #hud-combo-box {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%) skewX(var(--skew)) translateY(14px) scale(0.95);
+        bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+      }
+      body.has-touch-controls #hud-combo-box.active {
+        transform: translateX(-50%) skewX(var(--skew)) translateY(0) scale(1);
       }
       body.reel-mode.has-touch-controls #hud-bottom-left,
       body.reel-mode.has-touch-controls .bottom-left-cluster {
@@ -2077,9 +2125,9 @@
         transform-origin: top left;
       }
       body.reel-mode.has-touch-controls .dock {
-        margin-bottom: 146px;
-        transform: scale(0.85);
-        transform-origin: bottom right;
+        margin-bottom: 0 !important;
+        transform: translateX(-50%) scale(0.85) !important;
+        transform-origin: bottom center !important;
       }
 
       /* Left zone: Ergonomic 4-Way Carve Rocker & Push/Brake Steuerkreuz (#touch-left) */
@@ -2395,6 +2443,43 @@
           margin-bottom: 0 !important;
           transform: scale(0.68) !important;
           transform-origin: top left !important;
+        }
+        .dock {
+          position: absolute !important;
+          left: 50% !important;
+          transform: translateX(-50%) !important;
+          bottom: max(8px, calc(env(safe-area-inset-bottom, 0px) + 6px)) !important;
+          margin-bottom: 0 !important;
+          width: auto !important;
+          max-width: calc(100vw - 32px) !important;
+          display: flex !important;
+          flex-direction: column-reverse !important;
+          align-items: center !important;
+          z-index: 60 !important;
+        }
+        .dock-toggle .key-cap {
+          display: none !important;
+        }
+        .dock-body {
+          width: min(540px, calc(100vw - 28px)) !important;
+          max-height: calc(var(--app-height, 100dvh) - 100px) !important;
+          overflow-y: auto !important;
+          -webkit-overflow-scrolling: touch;
+          touch-action: pan-y;
+          z-index: 200 !important;
+          margin-bottom: 8px !important;
+          box-sizing: border-box !important;
+          background: rgba(18, 16, 14, 0.97) !important;
+          backdrop-filter: blur(12px) !important;
+          -webkit-backdrop-filter: blur(12px) !important;
+        }
+        .dock.collapsed .dock-body {
+          display: none !important;
+          max-height: 0 !important;
+          padding: 0 !important;
+          margin-bottom: 0 !important;
+          border-width: 0 !important;
+          pointer-events: none !important;
         }
       }
       @media (max-height: 500px) {
@@ -2716,15 +2801,32 @@
         font-size: 14px;
       }
 
-      /* Dock Riding Controls toggle for PC vs Mobile */
+      /* Dock Controls toggle for PC vs Mobile */
+      #dock-tricks-mobile,
       #dock-riding-mobile {
         display: none;
       }
+      #dock-tricks-keyboard,
+      #dock-riding-keyboard {
+        display: block;
+      }
+      body.has-touch-controls #dock-tricks-keyboard,
       body.has-touch-controls #dock-riding-keyboard {
         display: none !important;
       }
+      body.has-touch-controls #dock-tricks-mobile,
       body.has-touch-controls #dock-riding-mobile {
         display: block !important;
+      }
+      @media (pointer: coarse), (max-width: 960px) {
+        #dock-tricks-keyboard,
+        #dock-riding-keyboard {
+          display: none !important;
+        }
+        #dock-tricks-mobile,
+        #dock-riding-mobile {
+          display: block !important;
+        }
       }
     </style>
   </head>
@@ -2742,7 +2844,10 @@
         <canvas id="landing-skater-canvas"></canvas>
         <div class="landing-top-bar">
           <button id="landing-fullscreen-btn" type="button" class="landing-aux-pill" title="Toggle Fullscreen">
-            ⛶ FULLSCREEN
+            <svg class="landing-fs-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+            </svg>
+            <span>FULLSCREEN</span>
           </button>
           <button id="landing-help-btn" type="button" class="landing-aux-pill" title="Controls &amp; Help">
             ❓ CONTROLS
@@ -3196,10 +3301,14 @@
               <span id="btn-flow-recorder-label">REC LINE [L]</span>
             </button>
             <button class="hud-fullscreen-btn" id="btn-hud-fullscreen" type="button" title="Toggle Fullscreen">
-              <span class="hud-fullscreen-icon">⛶</span>
-            </button>
-            <button class="hud-help-btn" id="btn-hud-help" type="button" title="Steuerung &amp; Hilfe [?]">
-              <span>?</span>
+              <span class="hud-fullscreen-icon">
+                <svg class="fs-icon fs-icon-enter" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                </svg>
+                <svg class="fs-icon fs-icon-exit" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                  <path d="M4 14h6m0 0v6m0-6L3 21m17-7h-6m0 0v6m0-6l7 7M10 4v6m0 0H4m6 0L3 3m10 7h6m-6 0V4m0 6l7-7"/>
+                </svg>
+              </span>
             </button>
             <button class="garage-toggle" id="btn-hud-garage" title="Back to Garage / Landing Page [ESC]">
               <span class="key-cap"><span id="hud-garage-key-label">ESC</span></span>
@@ -3268,11 +3377,21 @@
               <div>
                 <div class="dock-section-title">Tricks</div>
                 <div id="dock-tricks-list">
-                  <div class="trick-row"><span class="key">Q</span><span class="trick-name">Snap</span><span class="trick-how">top of a wall, right speed</span></div>
-                  <div class="trick-row"><span class="key">W</span><span class="trick-name">Layback</span><span class="trick-how">hold in a fast, deep turn</span></div>
-                  <div class="trick-row"><span class="key">A</span><span class="trick-name">Bertslide</span><span class="trick-how">hold while leaning into a turn</span></div>
-                  <div class="trick-row"><span class="key">S</span><span class="trick-name">FS Reverse 360</span><span class="trick-how">while carving → with speed</span></div>
-                  <div class="trick-row"><span class="key">␣</span> / <span class="key">I</span><span class="trick-name">Indy Grab</span><span class="trick-how">ollie off a wall, hold in air</span></div>
+                  <div id="dock-tricks-keyboard">
+                    <div class="trick-row"><span class="key">Q</span><span class="trick-name">Snap</span><span class="trick-how">top of a wall, right speed</span></div>
+                    <div class="trick-row"><span class="key">W</span><span class="trick-name">Layback</span><span class="trick-how">hold in a fast, deep turn</span></div>
+                    <div class="trick-row"><span class="key">A</span><span class="trick-name">Bertslide</span><span class="trick-how">hold while leaning into a turn</span></div>
+                    <div class="trick-row"><span class="key">S</span><span class="trick-name">FS Reverse 360</span><span class="trick-how">while carving → with speed</span></div>
+                    <div class="trick-row"><span class="key">␣</span> / <span class="key">I</span><span class="trick-name">Indy Grab</span><span class="trick-how">ollie off a wall, hold in air</span></div>
+                  </div>
+                  <div id="dock-tricks-mobile">
+                    <div class="trick-row"><span class="key">OLLIE</span><span class="trick-name">Ollie (Air)</span><span class="trick-how">abspringen an Lippe / Airs</span></div>
+                    <div class="trick-row"><span class="key">HOLD OLLIE</span><span class="trick-name">Indy Grab (Air)</span><span class="trick-how">in der Luft halten</span></div>
+                    <div class="trick-row"><span class="key">TRICK</span><span class="trick-name">360 Spin / Flip (Air)</span><span class="trick-how">Air Spin &amp; Coping Snap</span></div>
+                    <div class="trick-row"><span class="key">◀ / ▶ + TRICK</span><span class="trick-name">Bert Slide (Wall)</span><span class="trick-how">in der Kurve halten</span></div>
+                    <div class="trick-row"><span class="key">TRICK (COPING)</span><span class="trick-name">Lip Trick / Stall</span><span class="trick-how">an der Bowl-Kante</span></div>
+                    <div class="trick-row"><span class="key">COMPRESS</span><span class="trick-name">Crouch &amp; Speed Pump</span><span class="trick-how">Kniebeuge vor Transition</span></div>
+                  </div>
                 </div>
 
                 <div class="dock-section-title">Riding</div>
@@ -3309,7 +3428,7 @@
                   <button class="hud-btn" id="btn-quality">⚡ Quality: AUTO [U]</button>
                   <button class="hud-btn" id="btn-fps" title="Live Framerate">📊 60 FPS</button>
                   <button class="hud-btn" id="btn-reset">↺ Respawn [X]</button>
-                  <button class="hud-btn" id="btn-fullscreen">⛶ Fullscreen</button>
+                  <button class="hud-btn" id="btn-fullscreen">Fullscreen</button>
                   <button class="hud-btn" id="btn-touch">📱 Touch Controls: AUTO</button>
                   <a class="hud-btn" id="btn-viewer" href="/viewer.html" target="_blank" style="text-decoration:none;display:flex;align-items:center;justify-content:center;color:inherit;">🔍 3D Photogrammetry Viewer</a>
                   <button class="hud-btn" id="btn-garage">🏠 Garage Selector [ESC]</button>

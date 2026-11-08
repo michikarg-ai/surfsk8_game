@@ -275,11 +275,28 @@ export class SurfHUD {
       this.coachHintEl.textContent = this.flowLineHint;
       this.coachHintEl.className = 'visible ready';
     } else if (ctrl.coachHint) {
-      this.coachHintEl.textContent = ctrl.coachHint;
+      let hint = ctrl.coachHint;
+      const isTouch =
+        document.body.classList.contains('has-touch-controls') ||
+        (typeof window !== 'undefined' && window.innerWidth <= 960);
+      if (isTouch) {
+        hint = hint
+          .replace(/press [↑W] once to push off/i, 'tap ▲ PUMP to push off')
+          .replace(/press [↑W]/i, 'tap ▲ PUMP')
+          .replace(/← →/g, '◀ ▶');
+      }
+      this.coachHintEl.textContent = hint;
       this.coachHintEl.className = 'visible';
     } else if (ctrl.isGrounded && ctrl.speed < 0.4) {
-      const pushKey = this.controlMode === 'arrows' ? '↑' : 'W';
-      this.coachHintEl.textContent = `Press ${pushKey} once to push off`;
+      const isTouch =
+        document.body.classList.contains('has-touch-controls') ||
+        (typeof window !== 'undefined' && window.innerWidth <= 960);
+      if (isTouch) {
+        this.coachHintEl.textContent = 'Tap ▲ PUMP to push off';
+      } else {
+        const pushKey = this.controlMode === 'arrows' ? '↑' : 'W';
+        this.coachHintEl.textContent = `Press ${pushKey} once to push off`;
+      }
       this.coachHintEl.className = 'visible idle';
     } else {
       this.coachHintEl.className = '';
@@ -499,28 +516,42 @@ export class SurfHUD {
 
   public renderDockCheatSheet(): void {
     if (this.tricksListEl) {
-      if (this.controlMode === 'arrows') {
-        this.tricksListEl.innerHTML = `
+      const kbHtml =
+        this.controlMode === 'arrows'
+          ? `
           <div class="trick-row"><span class="key">Q</span><span class="trick-name">Snap</span><span class="trick-how">top of a wall, right speed</span></div>
           <div class="trick-row"><span class="key">W</span><span class="trick-name">Layback</span><span class="trick-how">hold in a fast, deep turn</span></div>
           <div class="trick-row"><span class="key">A</span><span class="trick-name">Bertslide</span><span class="trick-how">hold while leaning into a turn</span></div>
           <div class="trick-row"><span class="key">S</span><span class="trick-name">FS Reverse 360</span><span class="trick-how">while carving → with speed</span></div>
           <div class="trick-row"><span class="key">␣</span> / <span class="key">I</span><span class="trick-name">Indy Grab</span><span class="trick-how">ollie off a wall, hold in air</span></div>
-        `.trim();
-      } else {
-        this.tricksListEl.innerHTML = `
+        `.trim()
+          : `
           <div class="trick-row"><span class="key">O</span><span class="trick-name">Snap</span><span class="trick-how">top of a wall, right speed</span></div>
           <div class="trick-row"><span class="key">P</span><span class="trick-name">Layback</span><span class="trick-how">hold in a fast, deep turn</span></div>
           <div class="trick-row"><span class="key">K</span><span class="trick-name">Bertslide</span><span class="trick-how">hold while leaning into a turn</span></div>
           <div class="trick-row"><span class="key">L</span><span class="trick-name">FS Reverse 360</span><span class="trick-how">while carving → with speed</span></div>
           <div class="trick-row"><span class="key">␣</span> / <span class="key">I</span><span class="trick-name">Indy Grab</span><span class="trick-how">ollie off a wall, hold in air</span></div>
         `.trim();
-      }
+
+      const mobileHtml = `
+        <div class="trick-row"><span class="key">OLLIE</span><span class="trick-name">Ollie (Air)</span><span class="trick-how">abspringen an Lippe / Airs</span></div>
+        <div class="trick-row"><span class="key">HOLD OLLIE</span><span class="trick-name">Indy Grab (Air)</span><span class="trick-how">in der Luft halten</span></div>
+        <div class="trick-row"><span class="key">TRICK</span><span class="trick-name">360 Spin / Flip (Air)</span><span class="trick-how">Air Spin &amp; Coping Snap</span></div>
+        <div class="trick-row"><span class="key">◀ / ▶ + TRICK</span><span class="trick-name">Bert Slide (Wall)</span><span class="trick-how">in der Kurve halten</span></div>
+        <div class="trick-row"><span class="key">TRICK (COPING)</span><span class="trick-name">Lip Trick / Stall</span><span class="trick-how">an der Bowl-Kante</span></div>
+        <div class="trick-row"><span class="key">COMPRESS</span><span class="trick-name">Crouch &amp; Speed Pump</span><span class="trick-how">Kniebeuge vor Transition</span></div>
+      `.trim();
+
+      this.tricksListEl.innerHTML = `
+        <div id="dock-tricks-keyboard">${kbHtml}</div>
+        <div id="dock-tricks-mobile">${mobileHtml}</div>
+      `;
     }
 
     if (this.ridingListEl) {
-      if (this.controlMode === 'arrows') {
-        this.ridingListEl.innerHTML = `
+      const kbHtml =
+        this.controlMode === 'arrows'
+          ? `
           <div class="ctrl-row"><span class="key">↑</span> one push-off from a standstill</div>
           <div class="ctrl-row"><span class="key">←</span><span class="key">→</span> carve — alternate in rhythm to pump</div>
           <div class="ctrl-row"><span class="key">↓</span><span class="key">⇧</span> compress on a wall drop = stronger pump</div>
@@ -528,9 +559,8 @@ export class SurfHUD {
           <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4/O</span> camera positions & 3D orbit</div>
           <div class="ctrl-row"><span class="key">Tab</span> switch to WASD driving</div>
           <div class="ctrl-row"><span class="key">M</span> mute music / <span class="key">N</span> next song</div>
-        `.trim();
-      } else {
-        this.ridingListEl.innerHTML = `
+        `.trim()
+          : `
           <div class="ctrl-row"><span class="key">W</span> one push-off from a standstill</div>
           <div class="ctrl-row"><span class="key">A</span><span class="key">D</span> carve — alternate in rhythm to pump</div>
           <div class="ctrl-row"><span class="key">S</span><span class="key">⇧</span> compress on a wall drop = stronger pump</div>
@@ -539,7 +569,20 @@ export class SurfHUD {
           <div class="ctrl-row"><span class="key">Tab</span> switch to Pfeiltasten driving</div>
           <div class="ctrl-row"><span class="key">M</span> mute music / <span class="key">N</span> next song</div>
         `.trim();
-      }
+
+      const mobileHtml = `
+        <div class="ctrl-row"><span class="key">◀</span><span class="key">▶</span> carve — in den Bowl-Wänden carven</div>
+        <div class="ctrl-row"><span class="key">▲ PUMP</span> Schwung holen &amp; pushen</div>
+        <div class="ctrl-row"><span class="key">▼ BRAKE</span> abbremsen &amp; kontrollieren</div>
+        <div class="ctrl-row"><span class="key">OLLIE</span> abspringen an der Lippe / Airs</div>
+        <div class="ctrl-row"><span class="key">TRICK</span> Snap, Bert, Layback &amp; 360</div>
+        <div class="ctrl-row"><span class="key">COMPRESS</span> Kniebeuge vor Transition</div>
+      `.trim();
+
+      this.ridingListEl.innerHTML = `
+        <div id="dock-riding-keyboard">${kbHtml}</div>
+        <div id="dock-riding-mobile">${mobileHtml}</div>
+      `;
     }
   }
 
@@ -615,13 +658,15 @@ export class SurfHUD {
 
   public updateFullscreenState(isFs: boolean): void {
     if (this.btnFullscreenEl) {
-      this.btnFullscreenEl.textContent = isFs ? '🗗 Exit Fullscreen' : '⛶ Fullscreen';
+      this.btnFullscreenEl.textContent = isFs ? 'Exit Fullscreen' : 'Fullscreen';
       this.btnFullscreenEl.classList.toggle('active-auto', isFs);
     }
     if (this.btnHudFullscreenEl) {
-      const icon = this.btnHudFullscreenEl.querySelector('.hud-fullscreen-icon');
-      if (icon) {
-        icon.textContent = isFs ? '🗗' : '⛶';
+      const enterIcon = this.btnHudFullscreenEl.querySelector<HTMLElement>('.fs-icon-enter');
+      const exitIcon = this.btnHudFullscreenEl.querySelector<HTMLElement>('.fs-icon-exit');
+      if (enterIcon && exitIcon) {
+        enterIcon.style.display = isFs ? 'none' : 'block';
+        exitIcon.style.display = isFs ? 'block' : 'none';
       }
       this.btnHudFullscreenEl.classList.toggle('active', isFs);
     }
