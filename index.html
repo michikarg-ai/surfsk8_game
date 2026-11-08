@@ -2052,49 +2052,61 @@
       }
 
       /* Adjust HUD elements when touch controls are visible */
+      body.has-touch-controls #hud-bottom-left,
       body.has-touch-controls .bottom-left-cluster {
-        margin-bottom: 126px;
-        transition: margin-bottom 0.2s ease;
+        position: absolute;
+        top: calc(52px + env(safe-area-inset-top, 0px));
+        left: max(16px, env(safe-area-inset-left, 16px));
+        bottom: auto;
+        margin-bottom: 0;
+        transform: scale(0.75);
+        transform-origin: top left;
+        z-index: 25;
+        gap: 16px;
+        transition: transform 0.2s ease, top 0.2s ease, left 0.2s ease;
       }
       body.has-touch-controls .dock {
-        margin-bottom: 126px;
+        margin-bottom: 154px;
         transition: margin-bottom 0.2s ease;
       }
+      body.reel-mode.has-touch-controls #hud-bottom-left,
       body.reel-mode.has-touch-controls .bottom-left-cluster {
-        margin-bottom: 108px;
-        transform: scale(0.85);
-        transform-origin: bottom left;
+        top: calc(48px + env(safe-area-inset-top, 0px));
+        left: max(12px, env(safe-area-inset-left, 12px));
+        transform: scale(0.68);
+        transform-origin: top left;
       }
       body.reel-mode.has-touch-controls .dock {
-        margin-bottom: 112px;
+        margin-bottom: 146px;
         transform: scale(0.85);
         transform-origin: bottom right;
       }
 
-      /* Left zone: Ergonomic Dual-Paddle Carve Rocker & Push/Crouch */
-      #touch-carve-zone {
+      /* Left zone: Ergonomic 4-Way Carve Rocker & Push/Brake Steuerkreuz (#touch-left) */
+      #touch-carve-zone,
+      #touch-left {
         position: absolute;
         left: max(16px, env(safe-area-inset-left, 16px));
-        bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 14px));
-        width: 172px;
+        bottom: max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px));
+        width: 224px;
         pointer-events: auto;
         touch-action: none;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 6px;
+        gap: 8px;
         z-index: 50;
       }
       .touch-carve-rocker {
         position: relative;
         width: 100%;
-        height: 60px;
+        height: 80px;
         display: flex;
         align-items: stretch;
         border-radius: 8px;
         overflow: hidden;
-        background: rgba(16, 18, 22, 0.65);
-        border: 2px solid rgba(255, 255, 255, 0.26);
+        background: rgba(16, 18, 22, 0.72);
+        border: 2px solid rgba(255, 255, 255, 0.28);
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
@@ -2103,11 +2115,11 @@
         transition: border-bottom-color 0.12s ease, box-shadow 0.12s ease;
       }
       .touch-carve-rocker.crouching {
-        border-bottom-color: var(--yellow);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 6px 18px rgba(242, 204, 38, 0.5);
+        border-bottom-color: var(--coral);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 6px 18px rgba(255, 61, 90, 0.5);
       }
       .touch-carve-rocker.crouching .rocker-divider {
-        background: rgba(242, 204, 38, 0.65);
+        background: rgba(255, 61, 90, 0.65);
       }
       .rocker-divider {
         width: 2px;
@@ -2122,8 +2134,8 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
-        padding: 0 10px;
+        gap: 8px;
+        padding: 0 12px;
         cursor: pointer;
         touch-action: none;
         user-select: none;
@@ -2133,13 +2145,13 @@
         transform: skewX(calc(var(--skew) * -1));
       }
       .paddle-arrow {
-        font-size: 18px;
+        font-size: 24px;
         color: var(--yellow);
         line-height: 1;
       }
       .paddle-label {
         font-family: var(--font-hud);
-        font-size: 15px;
+        font-size: 17px;
         font-weight: 900;
         letter-spacing: 0.12em;
         line-height: 1;
@@ -2154,16 +2166,16 @@
         transform: skewX(calc(var(--skew) * -1)) scale(1.18);
       }
 
-      /* Push & Crouch Aux Pills */
+      /* Push & Brake Aux Pills */
       .touch-aux-pill {
-        width: 112px;
-        height: 28px;
+        width: 140px;
+        height: 36px;
         border-radius: 4px;
-        background: rgba(18, 16, 14, 0.72);
-        border: 1px solid rgba(255, 255, 255, 0.24);
+        background: rgba(18, 16, 14, 0.76);
+        border: 1px solid rgba(255, 255, 255, 0.26);
         color: #f5f4f0;
         font-family: var(--font-hud);
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 900;
         letter-spacing: 0.1em;
         transform: skewX(var(--skew));
@@ -2185,10 +2197,17 @@
         transform: skewX(var(--skew)) scale(0.96);
       }
       .touch-push-pill {
-        border-color: rgba(250, 164, 26, 0.45);
+        border-color: rgba(250, 164, 26, 0.55);
       }
-      .touch-crouch-pill {
-        border-color: rgba(48, 182, 246, 0.45);
+      .touch-brake-pill {
+        border-color: rgba(255, 61, 90, 0.45);
+        color: #ffadb8;
+      }
+      .touch-brake-pill.active {
+        background: rgba(255, 61, 90, 0.65);
+        border-color: #ff3d5a;
+        color: #ffffff;
+        box-shadow: 0 0 16px rgba(255, 61, 90, 0.7);
       }
 
       .touch-zone-label {
@@ -2197,20 +2216,21 @@
         font-weight: 800;
         letter-spacing: 0.14em;
         color: rgba(255, 255, 255, 0.65);
-        margin-top: 2px;
+        margin-top: 1px;
         text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
         pointer-events: none;
       }
 
-      /* Right zone: Action & Trick Cluster */
-      #touch-actions-zone {
+      /* Right zone: Action & Trick Cluster (#touch-right) */
+      #touch-actions-zone,
+      #touch-right {
         position: absolute;
         right: max(16px, env(safe-area-inset-right, 16px));
-        bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 14px));
+        bottom: max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px));
         display: flex;
         flex-direction: column;
         align-items: flex-end;
-        gap: 8px;
+        gap: 10px;
         pointer-events: auto;
         touch-action: none;
         z-index: 50;
@@ -2218,17 +2238,17 @@
       .touch-tricks-cluster {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 10px;
+        gap: 12px;
       }
       .touch-trick-btn {
-        width: 68px;
-        height: 48px;
+        width: 86px;
+        height: 58px;
         border-radius: 6px;
-        background: rgba(18, 16, 14, 0.72);
+        background: rgba(18, 16, 14, 0.76);
         border: 1px solid rgba(255, 255, 255, 0.28);
         color: #f5f4f0;
         font-family: var(--font-hud);
-        font-size: 14px;
+        font-size: 16.5px;
         font-weight: 900;
         letter-spacing: 0.08em;
         text-transform: uppercase;
@@ -2249,7 +2269,7 @@
         line-height: 1;
       }
       .touch-trick-btn .trick-sub {
-        font-size: 7.5px;
+        font-size: 9px;
         font-weight: 800;
         letter-spacing: 0.06em;
         opacity: 0.8;
@@ -2269,8 +2289,8 @@
 
       /* Large Primary Action Button: Compress / Bowl Pump */
       .touch-action-primary {
-        width: 146px;
-        height: 54px;
+        width: 184px;
+        height: 66px;
         border-radius: 6px;
         background: linear-gradient(135deg, #f5f5f5, #e0e0e0);
         color: #121212;
@@ -2288,7 +2308,7 @@
       .touch-action-primary .primary-main,
       .touch-action-primary .ollie-main {
         font-family: var(--font-hud);
-        font-size: 19px;
+        font-size: 22px;
         font-weight: 900;
         letter-spacing: 0.08em;
         line-height: 1;
@@ -2298,11 +2318,11 @@
       .touch-action-primary .primary-sub,
       .touch-action-primary .ollie-sub {
         font-family: var(--font-hud);
-        font-size: 8.5px;
+        font-size: 10px;
         font-weight: 800;
         letter-spacing: 0.08em;
         opacity: 0.82;
-        margin-top: 2px;
+        margin-top: 3px;
         display: block;
         transform: skewX(calc(var(--skew) * -1));
       }
@@ -2316,94 +2336,118 @@
       }
 
       /* Reel-mode (Vertical 9:16) sizing adjustments */
-      body.reel-mode #touch-carve-zone {
+      body.reel-mode #touch-carve-zone,
+      body.reel-mode #touch-left {
         left: max(10px, env(safe-area-inset-left, 10px));
-        bottom: max(18px, calc(env(safe-area-inset-bottom, 0px) + 12px));
-        width: 146px;
-        gap: 5px;
+        bottom: max(16px, calc(env(safe-area-inset-bottom, 0px) + 10px));
+        width: 184px;
+        gap: 6px;
       }
       body.reel-mode .touch-carve-rocker {
-        height: 52px;
+        height: 70px;
       }
       body.reel-mode .paddle-label {
-        font-size: 11px;
+        font-size: 14px;
       }
       body.reel-mode .paddle-arrow {
-        font-size: 15px;
+        font-size: 20px;
       }
       body.reel-mode .touch-aux-pill {
-        height: 25px;
-        font-size: 10.5px;
+        width: 130px;
+        height: 32px;
+        font-size: 12px;
       }
-      body.reel-mode #touch-actions-zone {
+      body.reel-mode #touch-actions-zone,
+      body.reel-mode #touch-right {
         right: max(10px, env(safe-area-inset-right, 10px));
-        bottom: max(18px, calc(env(safe-area-inset-bottom, 0px) + 12px));
-        gap: 5px;
+        bottom: max(16px, calc(env(safe-area-inset-bottom, 0px) + 10px));
+        gap: 8px;
       }
       body.reel-mode .touch-trick-btn {
-        width: 60px;
-        height: 44px;
-        font-size: 13px;
+        width: 74px;
+        height: 52px;
+        font-size: 15px;
       }
       body.reel-mode .touch-trick-btn .trick-sub {
-        font-size: 7px;
+        font-size: 8px;
       }
       body.reel-mode .touch-action-primary {
-        width: 130px;
-        height: 48px;
+        width: 160px;
+        height: 58px;
       }
       body.reel-mode .touch-action-primary .primary-main,
       body.reel-mode .touch-action-primary .ollie-main {
-        font-size: 16.5px;
+        font-size: 19px;
       }
       body.reel-mode .touch-action-primary .primary-sub,
       body.reel-mode .touch-action-primary .ollie-sub {
-        font-size: 7.8px;
+        font-size: 8.5px;
       }
 
       /* Compact landscape (Phones held in landscape) */
+      @media (max-width: 960px), (max-height: 520px) {
+        body.has-touch-controls #hud-bottom-left,
+        body.has-touch-controls .bottom-left-cluster {
+          position: absolute !important;
+          top: calc(48px + env(safe-area-inset-top, 0px)) !important;
+          left: max(12px, env(safe-area-inset-left, 12px)) !important;
+          bottom: auto !important;
+          margin-bottom: 0 !important;
+          transform: scale(0.68) !important;
+          transform-origin: top left !important;
+        }
+      }
       @media (max-height: 500px) {
-        #touch-carve-zone {
-          bottom: max(12px, calc(env(safe-area-inset-bottom, 0px) + 8px)) !important;
+        #touch-carve-zone,
+        #touch-left {
+          bottom: max(8px, calc(env(safe-area-inset-bottom, 0px) + 6px)) !important;
           left: max(10px, env(safe-area-inset-left, 10px)) !important;
-          gap: 4px !important;
-          width: 140px !important;
+          gap: 5px !important;
+          width: 212px !important;
         }
         .touch-carve-rocker {
-          height: 44px !important;
+          height: 68px !important;
+        }
+        .paddle-arrow {
+          font-size: 22px !important;
+        }
+        .paddle-label {
+          font-size: 15px !important;
         }
         .touch-aux-pill {
-          height: 24px !important;
-          font-size: 10px !important;
+          width: 130px !important;
+          height: 30px !important;
+          font-size: 11.5px !important;
         }
-        #touch-actions-zone {
-          bottom: max(12px, calc(env(safe-area-inset-bottom, 0px) + 8px)) !important;
+        #touch-actions-zone,
+        #touch-right {
+          bottom: max(8px, calc(env(safe-area-inset-bottom, 0px) + 6px)) !important;
           right: max(10px, env(safe-area-inset-right, 10px)) !important;
-          gap: 4px !important;
+          gap: 6px !important;
         }
         .touch-tricks-cluster {
-          gap: 10px !important;
+          gap: 8px !important;
         }
         .touch-trick-btn {
-          width: 60px !important;
-          height: 40px !important;
-          font-size: 12.5px !important;
+          width: 78px !important;
+          height: 48px !important;
+          font-size: 14px !important;
         }
         .touch-trick-btn .trick-sub {
-          font-size: 6.8px !important;
+          font-size: 7.5px !important;
         }
         .touch-action-primary {
-          width: 130px !important;
-          height: 44px !important;
+          width: 164px !important;
+          height: 54px !important;
           padding: 2px 6px !important;
         }
         .touch-action-primary .primary-main,
         .touch-action-primary .ollie-main {
-          font-size: 16px !important;
+          font-size: 19px !important;
         }
         .touch-action-primary .primary-sub,
         .touch-action-primary .ollie-sub {
-          font-size: 7.5px !important;
+          font-size: 8px !important;
         }
         .hud-layer {
           padding: 8px 12px !important;
@@ -2416,6 +2460,271 @@
           transform: scale(0.85);
           transform-origin: top right;
         }
+      }
+
+      /* Help Modal Styles (#help-modal) */
+      .help-modal-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+      }
+      .help-modal-overlay.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .help-modal-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(8, 7, 6, 0.85);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+      .help-modal-card {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        max-width: 660px;
+        max-height: 90vh;
+        max-height: 90dvh;
+        display: flex;
+        flex-direction: column;
+        background: linear-gradient(145deg, rgba(26, 23, 20, 0.98), rgba(16, 14, 12, 0.98));
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-top: 3px solid var(--orange);
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(0, 0, 0, 0.6);
+        border-radius: 8px;
+        color: #f3f2ee;
+        overflow: hidden;
+      }
+      .help-header {
+        padding: 18px 24px 12px 24px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .help-header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .help-badge {
+        display: inline-block;
+        font-family: var(--font-hud);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        color: var(--yellow);
+        text-transform: uppercase;
+      }
+      .help-title {
+        font-family: var(--font-hud);
+        font-size: 26px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        line-height: 1.1;
+        margin: 0;
+        color: #ffffff;
+        text-transform: uppercase;
+      }
+      .help-tabs {
+        display: inline-flex;
+        gap: 6px;
+        margin-top: 4px;
+      }
+      .help-tab-btn {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #ddd;
+        padding: 5px 12px;
+        font-family: var(--font-hud);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transform: skewX(var(--skew));
+        transition: all 0.15s ease;
+      }
+      .help-tab-btn > span {
+        display: inline-block;
+        transform: skewX(calc(var(--skew) * -1));
+      }
+      .help-tab-btn.active {
+        background: var(--orange);
+        border-color: var(--yellow);
+        color: #111;
+      }
+      .help-close-btn {
+        position: absolute;
+        top: 14px;
+        right: 16px;
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.65);
+        font-size: 28px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 4px 8px;
+        transition: color 0.15s ease;
+        z-index: 5;
+      }
+      .help-close-btn:hover {
+        color: var(--yellow);
+      }
+      .help-content {
+        padding: 16px 24px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        -webkit-overflow-scrolling: touch;
+      }
+      .help-controls-section {
+        display: none;
+      }
+      .help-controls-section.active {
+        display: block;
+      }
+      .help-section-title {
+        font-family: var(--font-hud);
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        color: var(--yellow);
+        margin-bottom: 10px;
+        text-transform: uppercase;
+      }
+      .help-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 14px;
+      }
+      @media (max-width: 600px) {
+        .help-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .help-item {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 7px 10px;
+        border-radius: 4px;
+      }
+      .help-btn-tag,
+      .help-key-tag {
+        display: inline-flex;
+        align-items: center;
+        background: var(--dark-2);
+        border: 1px solid rgba(242, 204, 38, 0.5);
+        color: var(--yellow);
+        font-family: var(--font-hud);
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        padding: 2px 7px;
+        align-self: flex-start;
+        transform: skewX(var(--skew));
+      }
+      .help-item-desc {
+        font-family: var(--font-hud);
+        font-size: 12.5px;
+        line-height: 1.35;
+        color: rgba(245, 245, 245, 0.88);
+      }
+      .help-item-desc strong {
+        color: #ffffff;
+      }
+      .help-pro-tip {
+        background: rgba(242, 116, 31, 0.14);
+        border-left: 3px solid var(--orange);
+        padding: 10px 14px;
+        font-family: var(--font-hud);
+        font-size: 13px;
+        line-height: 1.4;
+        color: #f7f6f2;
+        border-radius: 2px;
+      }
+      .help-pro-tip strong {
+        color: var(--yellow);
+      }
+      .help-footer {
+        padding: 12px 24px 16px 24px;
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+        display: flex;
+        justify-content: flex-end;
+      }
+      .help-ok-btn {
+        background: var(--orange);
+        color: #100e0c;
+        border: none;
+        padding: 9px 24px;
+        font-family: var(--font-hud);
+        font-size: 15px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transform: skewX(var(--skew));
+        box-shadow: 0 4px 14px rgba(242, 116, 31, 0.4);
+        transition: transform 0.15s ease, background 0.15s ease;
+      }
+      .help-ok-btn:hover {
+        background: var(--yellow);
+        transform: skewX(var(--skew)) translateY(-1px);
+      }
+      .hud-help-btn {
+        pointer-events: auto;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--dark-1);
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        color: var(--white);
+        padding: 8px 12px;
+        transform: skewX(var(--skew));
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+        font-family: var(--font-hud);
+        font-size: 16px;
+        font-weight: 800;
+        line-height: 1;
+        transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+      }
+      .hud-help-btn > span {
+        display: inline-block;
+        transform: skewX(calc(var(--skew) * -1));
+      }
+      .hud-help-btn:hover {
+        background: var(--yellow);
+        color: #121212;
+        transform: skewX(var(--skew)) translateY(-2px);
+      }
+      body.reel-mode .hud-help-btn {
+        padding: 6px 9px;
+        font-size: 14px;
+      }
+
+      /* Dock Riding Controls toggle for PC vs Mobile */
+      #dock-riding-mobile {
+        display: none;
+      }
+      body.has-touch-controls #dock-riding-keyboard {
+        display: none !important;
+      }
+      body.has-touch-controls #dock-riding-mobile {
+        display: block !important;
       }
     </style>
   </head>
@@ -2434,6 +2743,9 @@
         <div class="landing-top-bar">
           <button id="landing-fullscreen-btn" type="button" class="landing-aux-pill" title="Toggle Fullscreen">
             ⛶ FULLSCREEN
+          </button>
+          <button id="landing-help-btn" type="button" class="landing-aux-pill" title="Controls &amp; Help">
+            ❓ CONTROLS
           </button>
           <button id="landing-terms-btn" type="button" class="landing-aux-pill" title="Terms &amp; Privacy Policy">
             📜 TERMS &amp; PRIVACY
@@ -2707,6 +3019,122 @@
             </div>
           </div>
         </div>
+
+        <!-- Help & Controls Modal (#help-modal) -->
+        <div id="help-modal" class="help-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="help-modal-title">
+          <div class="help-modal-backdrop" id="help-modal-backdrop"></div>
+          <div class="help-modal-card">
+            <button id="help-modal-close" class="help-close-btn" aria-label="Close Help">&times;</button>
+            
+            <div class="help-header">
+              <div class="help-header-top">
+                <span class="help-badge">HOW TO PLAY</span>
+              </div>
+              <h2 id="help-modal-title" class="help-title">STEUERUNG &amp; BOWL-GUIDE</h2>
+              <div class="help-tabs">
+                <button id="help-tab-mobile" class="help-tab-btn" type="button"><span>📱 Touch-Steuerung</span></button>
+                <button id="help-tab-keyboard" class="help-tab-btn" type="button"><span>⌨️ PC Tastatur</span></button>
+              </div>
+            </div>
+
+            <div class="help-content">
+              <!-- Mobile Touch Controls Section (#help-controls-mobile) -->
+              <div id="help-controls-mobile" class="help-controls-section">
+                <div class="help-section-title">📱 SMARTPHONE / TOUCH-STEUERUNG</div>
+                <div class="help-grid">
+                  <div class="help-item">
+                    <span class="help-btn-tag">◀ / ▶ CARVE</span>
+                    <div class="help-item-desc">
+                      <strong>Einlenken &amp; Bowl-Wände:</strong> In den Bowl-Wänden carven &amp; Schwung aufbauen
+                    </div>
+                  </div>
+                  <div class="help-item">
+                    <span class="help-btn-tag">▲ PUMP</span>
+                    <div class="help-item-desc">
+                      <strong>Schwung holen:</strong> Pushen aus dem Stand &amp; in der Transition pumpen für Speed
+                    </div>
+                  </div>
+                  <div class="help-item">
+                    <span class="help-btn-tag">▼ BRAKE</span>
+                    <div class="help-item-desc">
+                      <strong>Abbremsen:</strong> Kontrollieren &amp; Tempo drosseln
+                    </div>
+                  </div>
+                  <div class="help-item">
+                    <span class="help-btn-tag">OLLIE</span>
+                    <div class="help-item-desc">
+                      <strong>Abspringen:</strong> An der Lippe für Airs abspringen (in der Luft halten für Indy Grab)
+                    </div>
+                  </div>
+                  <div class="help-item">
+                    <span class="help-btn-tag">TRICK</span>
+                    <div class="help-item-desc">
+                      <strong>Surf-Manöver:</strong> In der Luft oder am Coping für Spins, Grabs &amp; Stalls
+                    </div>
+                  </div>
+                  <div class="help-item">
+                    <span class="help-btn-tag">COMPRESS</span>
+                    <div class="help-item-desc">
+                      <strong>Kompression:</strong> Tief in die Knie gehen (Speed aufbauen vor Transition / für Airs loslassen)
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- PC Keyboard Controls Section (#help-controls-keyboard) -->
+              <div id="help-controls-keyboard" class="help-controls-section">
+                <div class="help-section-title">⌨️ PC TASTATUR-STEUERUNG</div>
+                <div class="help-grid">
+                  <div class="help-item">
+                    <span class="help-key-tag">← / → oder A / D</span>
+                    <div class="help-item-desc">
+                      <strong>Carve &amp; Pump:</strong> In den Kurven carven &amp; rhythmisch pumpen für Speed
+                    </div>
+                  </div>
+                  <div class="help-item">
+                    <span class="help-key-tag">↑ oder W</span>
+                    <div class="help-item-desc">
+                      <strong>Push-Off:</strong> Aus dem Stand anrollen &amp; Schwung holen
+                    </div>
+                  </div>
+                  <div class="help-item">
+                    <span class="help-key-tag">↓ oder S / Shift</span>
+                    <div class="help-item-desc">
+                      <strong>Compress &amp; Brake:</strong> Kniebeuge für Speed in der Transition / Abbremsen
+                    </div>
+                  </div>
+                  <div class="help-item">
+                    <span class="help-key-tag">Space</span>
+                    <div class="help-item-desc">
+                      <strong>Ollie &amp; Grab:</strong> Abspringen an der Coping-Kante / Halten für Indy Grab
+                    </div>
+                  </div>
+                  <div class="help-item">
+                    <span class="help-key-tag">Q / W / A / S</span>
+                    <div class="help-item-desc">
+                      <strong>Surf-Tricks:</strong> Q = Snap, W = Layback, A = Bertslide, S = FS Reverse 360
+                    </div>
+                  </div>
+                  <div class="help-item">
+                    <span class="help-key-tag">1 / 2 / 3 / 4 / O</span>
+                    <div class="help-item-desc">
+                      <strong>Kamera:</strong> Follow Cam, Drohnen-Kamera oder 3D-Orbit
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- General Pro-Tip Footer -->
+              <div class="help-pro-tip">
+                💡 <strong>TIPP:</strong> Pumpe in den Kurven und nutze COMPRESS + OLLIE an den Bowl-Wänden für maximale Airtime &amp; Highscores!
+              </div>
+            </div>
+
+            <div class="help-footer">
+              <button id="help-modal-ok-btn" type="button" class="help-ok-btn">VERSTANDEN &amp; LOS</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Flow Line Dev Mode Export Modal -->
@@ -2770,6 +3198,9 @@
             <button class="hud-fullscreen-btn" id="btn-hud-fullscreen" type="button" title="Toggle Fullscreen">
               <span class="hud-fullscreen-icon">⛶</span>
             </button>
+            <button class="hud-help-btn" id="btn-hud-help" type="button" title="Steuerung &amp; Hilfe [?]">
+              <span>?</span>
+            </button>
             <button class="garage-toggle" id="btn-hud-garage" title="Back to Garage / Landing Page [ESC]">
               <span class="key-cap"><span id="hud-garage-key-label">ESC</span></span>
               <span class="toggle-label"><span>Garage</span></span>
@@ -2782,7 +3213,7 @@
 
         <!-- Bottom Row: speedo + flow + lean | combo | tricks & options dock -->
         <div class="hud-bottom">
-          <div class="bottom-left-cluster">
+          <div class="bottom-left-cluster" id="hud-bottom-left">
             <div class="speedo" id="hud-speedo">
               <span id="hud-speed">0</span>
               <span class="speedo-unit">KM/H</span>
@@ -2846,13 +3277,23 @@
 
                 <div class="dock-section-title">Riding</div>
                 <div id="dock-riding-list">
-                  <div class="ctrl-row"><span class="key">↑</span> one push-off from a standstill</div>
-                  <div class="ctrl-row"><span class="key">←</span><span class="key">→</span> carve — alternate in rhythm to pump</div>
-                  <div class="ctrl-row"><span class="key">↓</span><span class="key">⇧</span> compress on a wall drop = stronger pump</div>
-                  <div class="ctrl-row"><span class="key">␣</span> ollie</div>
-                  <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4/O</span> camera positions & 3D orbit</div>
-                  <div class="ctrl-row"><span class="key">Tab</span> switch to WASD driving</div>
-                  <div class="ctrl-row"><span class="key">M</span> mute music / <span class="key">N</span> next song</div>
+                  <div id="dock-riding-keyboard">
+                    <div class="ctrl-row"><span class="key">↑</span> one push-off from a standstill</div>
+                    <div class="ctrl-row"><span class="key">←</span><span class="key">→</span> carve — alternate in rhythm to pump</div>
+                    <div class="ctrl-row"><span class="key">↓</span><span class="key">⇧</span> compress on a wall drop = stronger pump</div>
+                    <div class="ctrl-row"><span class="key">␣</span> ollie</div>
+                    <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4/O</span> camera positions & 3D orbit</div>
+                    <div class="ctrl-row"><span class="key">Tab</span> switch to WASD driving</div>
+                    <div class="ctrl-row"><span class="key">M</span> mute music / <span class="key">N</span> next song</div>
+                  </div>
+                  <div id="dock-riding-mobile">
+                    <div class="ctrl-row"><span class="key">◀</span><span class="key">▶</span> carve — in den Bowl-Wänden carven</div>
+                    <div class="ctrl-row"><span class="key">▲</span> pump — Schwung holen &amp; pushen</div>
+                    <div class="ctrl-row"><span class="key">▼</span> brake — abbremsen &amp; kontrollieren</div>
+                    <div class="ctrl-row"><span class="key">OLLIE</span> abspringen an der Lippe / Airs</div>
+                    <div class="ctrl-row"><span class="key">TRICK</span> Snap, Bert, Layback &amp; 360</div>
+                    <div class="ctrl-row"><span class="key">COMPRESS</span> Kniebeuge vor Transition</div>
+                  </div>
                 </div>
 
                 <div class="dock-section-title">Options</div>

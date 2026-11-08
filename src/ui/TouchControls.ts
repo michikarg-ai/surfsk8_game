@@ -20,6 +20,7 @@ export class TouchControls {
   private paddleLeft: HTMLButtonElement;
   private paddleRight: HTMLButtonElement;
   private pushBtn: HTMLButtonElement;
+  private brakeBtn: HTMLButtonElement;
   private crouchBtn: HTMLButtonElement;
 
   private actionsZone: HTMLDivElement;
@@ -57,43 +58,47 @@ export class TouchControls {
 
     // Build the DOM
     this.container.innerHTML = `
-      <!-- Left zone: Ergonomic 3-Button Carve Rocker & Push (Push + Left + Right) -->
-      <div id="touch-carve-zone" class="touch-zone">
-        <button id="touch-btn-push" class="touch-aux-pill touch-push-pill" type="button" title="Push Off / Forward Pump">
-          <span>▲ PUSH</span>
+      <!-- Left zone: Ergonomic 4-Way Carve & Pump Steuerkreuz (#touch-left) -->
+      <div id="touch-carve-zone" class="touch-zone touch-left" data-alias="touch-left">
+        <button id="touch-btn-push" class="touch-aux-pill touch-push-pill touch-pump-btn" type="button" title="Push Off / Forward Pump (▲ PUMP)">
+          <span>▲ PUMP</span>
         </button>
 
         <div id="touch-carve-rocker" class="touch-carve-rocker" role="group" aria-label="Steering & Carve Pump">
-          <button id="touch-btn-left" class="touch-carve-paddle paddle-left" type="button" title="Carve Left">
-            <span class="paddle-arrow">◄</span>
-            <span class="paddle-label">LEFT</span>
+          <button id="touch-btn-left" class="touch-carve-paddle paddle-left touch-left-btn" type="button" title="Carve Left (◀ CARVE)">
+            <span class="paddle-arrow">◀</span>
+            <span class="paddle-label">CARVE</span>
           </button>
           <div class="rocker-divider"></div>
-          <button id="touch-btn-right" class="touch-carve-paddle paddle-right" type="button" title="Carve Right">
-            <span class="paddle-label">RIGHT</span>
-            <span class="paddle-arrow">►</span>
+          <button id="touch-btn-right" class="touch-carve-paddle paddle-right touch-right-btn" type="button" title="Carve Right (▶ CARVE)">
+            <span class="paddle-label">CARVE</span>
+            <span class="paddle-arrow">▶</span>
           </button>
         </div>
+
+        <button id="touch-btn-brake" class="touch-aux-pill touch-brake-pill touch-brake-btn" type="button" title="Brake / Slow Down / Compress (▼ BRAKE)">
+          <span>▼ BRAKE</span>
+        </button>
 
         <div class="touch-zone-label">CARVE &amp; PUMP</div>
       </div>
 
-      <!-- Right zone: Action & Trick Cluster -->
-      <div id="touch-actions-zone" class="touch-zone">
+      <!-- Right zone: Action & Trick Cluster (#touch-right) -->
+      <div id="touch-actions-zone" class="touch-zone touch-right" data-alias="touch-right">
         <!-- Ergonomic 2-Button Cluster: TRICK (SURF / 360) and OLLIE (AIR / GRAB) -->
         <div class="touch-tricks-cluster">
-          <button id="touch-btn-trick" class="touch-trick-btn touch-surf-trick-btn" type="button" title="Surf Trick (Snap, Bert Slide, Layback, Reverse 360)">
+          <button id="touch-btn-trick" class="touch-trick-btn touch-surf-trick-btn touch-trick" type="button" title="Surf Trick (Snap, Bert Slide, Layback, Reverse 360)">
             <span class="trick-main">TRICK</span>
             <span class="trick-sub">SURF / 360</span>
           </button>
-          <button id="touch-btn-ollie" class="touch-trick-btn touch-ollie-btn" type="button" title="Ollie / Hold for Indy Grab">
+          <button id="touch-btn-ollie" class="touch-trick-btn touch-ollie-btn touch-ollie" type="button" title="Ollie / Hold for Indy Grab">
             <span class="trick-main">OLLIE</span>
             <span class="trick-sub">AIR / GRAB</span>
           </button>
         </div>
 
         <!-- Large Primary Action Button: Compress / Bowl Pump -->
-        <button id="touch-btn-crouch" class="touch-action-primary touch-compress-primary" type="button" title="Compress / Crouch / Bowl Pump">
+        <button id="touch-btn-crouch" class="touch-action-primary touch-compress-primary touch-compress" type="button" title="Compress / Crouch / Bowl Pump">
           <span class="primary-main">COMPRESS</span>
           <span class="primary-sub">CROUCH &amp; PUMP</span>
         </button>
@@ -107,6 +112,7 @@ export class TouchControls {
     this.paddleLeft = this.container.querySelector('#touch-btn-left')!;
     this.paddleRight = this.container.querySelector('#touch-btn-right')!;
     this.pushBtn = this.container.querySelector('#touch-btn-push')!;
+    this.brakeBtn = this.container.querySelector('#touch-btn-brake')!;
 
     this.actionsZone = this.container.querySelector('#touch-actions-zone')!;
     this.crouchBtn = this.container.querySelector('#touch-btn-crouch')!;
@@ -125,6 +131,10 @@ export class TouchControls {
       (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) ||
       window.location.search.includes('touch=1')
     );
+  }
+
+  public isTouchActive(): boolean {
+    return this.isEnabled || TouchControls.isTouchDevice();
   }
 
   public setEnabled(enabled: boolean): void {
@@ -174,11 +184,12 @@ export class TouchControls {
     this.currentSteerDir = 0;
     this.isRockerCrouching = false;
     this.isButtonCrouching = false;
-    this.carveRocker.classList.remove('crouching');
-    this.paddleLeft.classList.remove('active');
-    this.paddleRight.classList.remove('active');
-    this.pushBtn.classList.remove('active');
-    this.crouchBtn.classList.remove('active');
+    this.carveRocker?.classList.remove('crouching');
+    this.paddleLeft?.classList.remove('active');
+    this.paddleRight?.classList.remove('active');
+    this.pushBtn?.classList.remove('active');
+    this.brakeBtn?.classList.remove('active');
+    this.crouchBtn?.classList.remove('active');
     this.trickBtn?.classList.remove('active');
     this.ollieBtn?.classList.remove('active');
   }
@@ -213,6 +224,7 @@ export class TouchControls {
     if (this.isRockerCrouching === active) return;
     this.isRockerCrouching = active;
     this.updateCrouchState();
+    this.brakeBtn?.classList.toggle('active', active);
     if (active) {
       this.triggerHaptic(14);
     }
@@ -227,72 +239,107 @@ export class TouchControls {
 
   private bindEvents(): void {
     // -------------------------------------------------------------------------
-    // 1. Dual-Paddle Carve Rocker (Left Thumb)
+    // 1. Unified Left Steuerkreuz Tracking (#touch-left / #touch-carve-zone)
     // Supports:
-    // - Direct tapping Left / Right
-    // - Continuous sliding left / right across the rocker to carve & pump
-    // - Sliding DOWN from the left/right buttons to compress/crouch
+    // - Direct tapping Left / Right paddles, ▲ PUMP, or ▼ BRAKE
+    // - Continuous sliding horizontally across center to carve & pump
+    // - Continuous sliding vertically to engage ▲ PUMP (up) or ▼ BRAKE (down)
+    // - Generous hit-slop so frantic left/right carving never drops input
     // -------------------------------------------------------------------------
-    const updateRockerPointer = (clientX: number, clientY: number) => {
-      const rect = this.carveRocker.getBoundingClientRect();
-      const midX = rect.left + rect.width * 0.5;
-      const deadzone = rect.width * 0.05;
+    const updateZonePointer = (clientX: number, clientY: number) => {
+      const rockerRect = this.carveRocker.getBoundingClientRect();
+      const midX = rockerRect.left + rockerRect.width * 0.5;
+      const deadzone = rockerRect.width * 0.04;
 
-      // Horizontal carve steering
-      if (clientX < midX - deadzone) {
+      // 1. Horizontal Steer Tracking (generous hit-slop / slide support):
+      const deltaX = clientX - midX;
+      if (deltaX < -deadzone) {
         this.setSteerDirection(-1);
-      } else if (clientX > midX + deadzone) {
+      } else if (deltaX > deadzone) {
         this.setSteerDirection(1);
+      } else {
+        this.setSteerDirection(0);
       }
 
-      // Vertical slide detection:
-      // When sliding down toward/past the bottom edge of the rocker into the crouch area,
-      // engage crouch/compression.
-      // Disengage with hysteresis when thumb moves back up toward center.
-      const crouchEngageY = rect.top + rect.height * 0.78;
-      const crouchDisengageY = rect.top + rect.height * 0.58;
+      // Smooth analog steer [-1.0 .. 1.0]
+      const halfWidth = rockerRect.width * 0.45;
+      this.state.analogSteer = Math.max(-1, Math.min(1, deltaX / Math.max(1, halfWidth)));
 
-      if (!this.isRockerCrouching && clientY > crouchEngageY) {
-        this.setCrouchFromRocker(true);
-      } else if (this.isRockerCrouching && clientY < crouchDisengageY) {
-        this.setCrouchFromRocker(false);
+      // 2. Vertical Slide & Hit-Slop (▲ PUMP on top, ▼ BRAKE on bottom):
+      const pumpThreshold = rockerRect.top - 2;
+      const brakeThreshold = rockerRect.bottom + 2;
+
+      if (clientY < pumpThreshold) {
+        // Upper region: ▲ PUMP active
+        if (!this.state.forwardPush) {
+          this.state.forwardPush = true;
+          this.pushBtn.classList.add('active');
+          this.triggerHaptic(16);
+        }
+        if (this.isRockerCrouching) {
+          this.setCrouchFromRocker(false);
+          this.brakeBtn?.classList.remove('active');
+        }
+      } else if (clientY > brakeThreshold) {
+        // Lower region: ▼ BRAKE active
+        if (this.state.forwardPush) {
+          this.state.forwardPush = false;
+          this.pushBtn.classList.remove('active');
+        }
+        if (!this.isRockerCrouching) {
+          this.setCrouchFromRocker(true);
+          this.brakeBtn?.classList.add('active');
+        }
+      } else {
+        // Middle rocker region: Carving only (neither pump nor brake active)
+        if (this.state.forwardPush) {
+          this.state.forwardPush = false;
+          this.pushBtn.classList.remove('active');
+        }
+        if (this.isRockerCrouching) {
+          this.setCrouchFromRocker(false);
+          this.brakeBtn?.classList.remove('active');
+        }
       }
     };
 
-    const handleRockerDown = (e: PointerEvent) => {
+    const handleZonePointerDown = (e: PointerEvent) => {
       e.preventDefault();
       e.stopPropagation();
       this.activeRockerPointerId = e.pointerId;
       try {
-        this.carveRocker.setPointerCapture?.(e.pointerId);
+        this.carveZone.setPointerCapture?.(e.pointerId);
       } catch (_) {}
-      updateRockerPointer(e.clientX, e.clientY);
+      updateZonePointer(e.clientX, e.clientY);
     };
 
-    const handleRockerMove = (e: PointerEvent) => {
+    const handleZonePointerMove = (e: PointerEvent) => {
       if (this.activeRockerPointerId !== e.pointerId) return;
       e.preventDefault();
-      updateRockerPointer(e.clientX, e.clientY);
+      updateZonePointer(e.clientX, e.clientY);
     };
 
-    const handleRockerUp = (e: PointerEvent) => {
+    const handleZonePointerUp = (e: PointerEvent) => {
       if (this.activeRockerPointerId !== e.pointerId) return;
       e.preventDefault();
       try {
-        this.carveRocker.releasePointerCapture?.(e.pointerId);
+        this.carveZone.releasePointerCapture?.(e.pointerId);
       } catch (_) {}
       this.activeRockerPointerId = null;
       this.setSteerDirection(0);
+      this.state.forwardPush = false;
+      this.pushBtn.classList.remove('active');
       this.setCrouchFromRocker(false);
+      this.brakeBtn?.classList.remove('active');
     };
 
-    this.carveRocker.addEventListener('pointerdown', handleRockerDown, { passive: false });
-    this.carveRocker.addEventListener('pointermove', handleRockerMove, { passive: false });
-    this.carveRocker.addEventListener('pointerup', handleRockerUp, { passive: false });
-    this.carveRocker.addEventListener('pointercancel', handleRockerUp, { passive: false });
+    this.carveZone.addEventListener('pointerdown', handleZonePointerDown, { passive: false });
+    this.carveZone.addEventListener('pointermove', handleZonePointerMove, { passive: false });
+    this.carveZone.addEventListener('pointerup', handleZonePointerUp, { passive: false });
+    this.carveZone.addEventListener('pointercancel', handleZonePointerUp, { passive: false });
 
     // -------------------------------------------------------------------------
-    // 2. Push & Crouch Aux Buttons (separated vertically, no slipping)
+    // 2. Action & Trick Cluster (Right Thumb): TRICK, OLLIE, COMPRESS
     // -------------------------------------------------------------------------
     const bindPressButton = (
       btn: HTMLButtonElement,
@@ -329,21 +376,6 @@ export class TouchControls {
       btn.addEventListener('pointerup', up, { passive: false });
       btn.addEventListener('pointercancel', up, { passive: false });
     };
-
-    bindPressButton(
-      this.pushBtn,
-      () => {
-        this.state.forwardPush = true;
-      },
-      () => {
-        this.state.forwardPush = false;
-      },
-      16
-    );
-
-    // -------------------------------------------------------------------------
-    // 3. Action & Trick Cluster (Right Thumb): TRICK, OLLIE, COMPRESS
-    // -------------------------------------------------------------------------
     bindPressButton(
       this.ollieBtn,
       () => {

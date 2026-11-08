@@ -255,9 +255,37 @@ class SurfskateMunichGame {
       });
     }
 
+    // Help & Controls Modal (#help-modal)
+    const btnHudHelp = document.getElementById('btn-hud-help');
+    const btnLandingHelp = document.getElementById('landing-help-btn');
+    const helpCloseBtn = document.getElementById('help-modal-close');
+    const helpBackdrop = document.getElementById('help-modal-backdrop');
+    const helpOkBtn = document.getElementById('help-modal-ok-btn');
+    const tabMobile = document.getElementById('help-tab-mobile');
+    const tabKeyboard = document.getElementById('help-tab-keyboard');
+
+    if (btnHudHelp) btnHudHelp.addEventListener('click', () => this.openHelpModal());
+    if (btnLandingHelp) btnLandingHelp.addEventListener('click', () => this.openHelpModal());
+    if (helpCloseBtn) helpCloseBtn.addEventListener('click', () => this.closeHelpModal());
+    if (helpBackdrop) helpBackdrop.addEventListener('click', () => this.closeHelpModal());
+    if (helpOkBtn) helpOkBtn.addEventListener('click', () => this.closeHelpModal());
+    if (tabMobile) tabMobile.addEventListener('click', () => this.switchHelpTab('mobile'));
+    if (tabKeyboard) tabKeyboard.addEventListener('click', () => this.switchHelpTab('keyboard'));
+
     window.addEventListener('keydown', (e) => {
       this.audio.initOnFirstGesture();
       const code = e.code;
+
+      if (e.key === '?' || (e.shiftKey && code === 'Slash')) {
+        e.preventDefault();
+        const helpModal = document.getElementById('help-modal');
+        if (helpModal && !helpModal.classList.contains('hidden')) {
+          this.closeHelpModal();
+        } else {
+          this.openHelpModal();
+        }
+        return;
+      }
 
       if (this.landingPage.isVisible) {
         if (code === 'Enter' || code === 'NumpadEnter') {
@@ -291,6 +319,11 @@ class SurfskateMunichGame {
       }
 
       if (code === 'Escape') {
+        const helpModal = document.getElementById('help-modal');
+        if (helpModal && !helpModal.classList.contains('hidden')) {
+          this.closeHelpModal();
+          return;
+        }
         if (this.flowLine.isExportModalOpen()) {
           this.flowLine.closeExportModal();
           return;
@@ -483,6 +516,36 @@ class SurfskateMunichGame {
   public toggleTouchControls(): void {
     this.touchControls.toggleEnabled();
     this.syncHUDButtons();
+  }
+
+  public openHelpModal(forceTab?: 'mobile' | 'keyboard'): void {
+    const modal = document.getElementById('help-modal');
+    if (!modal) return;
+    const isTouch = forceTab ? forceTab === 'mobile' : this.touchControls.isTouchActive();
+    this.switchHelpTab(isTouch ? 'mobile' : 'keyboard');
+    modal.classList.remove('hidden');
+  }
+
+  public closeHelpModal(): void {
+    const modal = document.getElementById('help-modal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+  }
+
+  public switchHelpTab(tab: 'mobile' | 'keyboard'): void {
+    const secMobile = document.getElementById('help-controls-mobile');
+    const secKeyboard = document.getElementById('help-controls-keyboard');
+    const tabMobile = document.getElementById('help-tab-mobile');
+    const tabKeyboard = document.getElementById('help-tab-keyboard');
+
+    if (secMobile && secKeyboard) {
+      secMobile.classList.toggle('active', tab === 'mobile');
+      secKeyboard.classList.toggle('active', tab === 'keyboard');
+    }
+    if (tabMobile && tabKeyboard) {
+      tabMobile.classList.toggle('active', tab === 'mobile');
+      tabKeyboard.classList.toggle('active', tab === 'keyboard');
+    }
   }
 
   public pauseGameAndOpenLanding(): void {
