@@ -34,12 +34,27 @@ interface LidarGridPayload {
 export class ParkSurface {
   public readonly copingSegments: CopingSegment[] = [];
   private lidarData: LidarGridPayload | null = null;
+  private parkId: string = 'im_gefilde';
 
   constructor() {
     this.buildCopingSegments();
   }
 
-  public async loadLidarGrid(url: string = '/models/im_gefilde_lidar.json'): Promise<void> {
+  public getParkId(): string {
+    return this.parkId;
+  }
+
+  public getBounds(): { xMin: number; xMax: number; zMin: number; zMax: number } | null {
+    if (!this.lidarData) return null;
+    const { xMin, xMax, zMin, zMax } = this.lidarData;
+    return { xMin, xMax, zMin, zMax };
+  }
+
+  public async loadLidarGrid(
+    url: string = '/models/im_gefilde_lidar.json',
+    parkId?: string
+  ): Promise<void> {
+    this.parkId = parkId || (url.includes('airport') ? 'airport_skatepark' : 'im_gefilde');
     try {
       const resp = await fetch(url);
       if (resp.ok) {
@@ -51,13 +66,15 @@ export class ParkSurface {
   }
 
   public evaluateHeight(x: number, z: number): number {
-    // 1. If the exact 3D photogrammetry + LiDAR heightmap (`im_gefilde_lidar.json` from `skatepark_multi.glb`) is loaded,
-    //    sample it directly via bilinear interpolation so the skater's wheels ride flush on `skatepark_multi.glb`!
+    // 1. If the exact 3D photogrammetry + LiDAR heightmap is loaded,
+    //    sample it directly via bilinear interpolation so the skater's wheels ride flush on the mesh!
     if (this.lidarData) {
       const { xMin, xMax, zMin, zMax, nx, nz, grid } = this.lidarData;
-      if (x >= xMin && x <= xMax && z >= zMin && z <= zMax) {
-        const u = ((x - xMin) / (xMax - xMin)) * (nx - 1);
-        const v = ((z - zMin) / (zMax - zMin)) * (nz - 1);
+      const sx = this.parkId === 'im_gefilde' ? x : Math.max(xMin, Math.min(xMax, x));
+      const sz = this.parkId === 'im_gefilde' ? z : Math.max(zMin, Math.min(zMax, z));
+      if (sx >= xMin && sx <= xMax && sz >= zMin && sz <= zMax) {
+        const u = ((sx - xMin) / (xMax - xMin)) * (nx - 1);
+        const v = ((sz - zMin) / (zMax - zMin)) * (nz - 1);
         const ix0 = Math.max(0, Math.min(nx - 2, Math.floor(u)));
         const iz0 = Math.max(0, Math.min(nz - 2, Math.floor(v)));
         const du = u - ix0;
@@ -179,10 +196,12 @@ export class ParkSurface {
     const zoneName = this.getZoneName(x, z, h);
 
     const isNearCoping =
-      (Math.hypot(x + 6.4, z + 14.5) < 5.8 && h > 1.55) ||
-      (Math.hypot(x - 16.5, z - 4.6) < 6.2 && h > 1.50) ||
-      (Math.hypot(x - 0.8, z - 11.2) < 5.0 && h > 1.20) ||
-      (Math.hypot(x - 11.6, z - 14.2) < 5.2 && h > 1.25);
+      this.parkId === 'im_gefilde'
+        ? (Math.hypot(x + 6.4, z + 14.5) < 5.8 && h > 1.55) ||
+          (Math.hypot(x - 16.5, z - 4.6) < 6.2 && h > 1.50) ||
+          (Math.hypot(x - 0.8, z - 11.2) < 5.0 && h > 1.20) ||
+          (Math.hypot(x - 11.6, z - 14.2) < 5.2 && h > 1.25)
+        : h > 0.35;
 
     return {
       height: h,
@@ -197,6 +216,12 @@ export class ParkSurface {
   }
 
   private getZoneName(x: number, z: number, h: number): string {
+    if (this.parkId === 'airport_skatepark') {
+      if (z < -8.0) return 'Graffiti Wall & Bowl';
+      if (h < -0.45) return 'Airport Deep Bowl';
+      if (h > 0.25) return 'Quarterpipe & Banks';
+      return 'Airport Street Plaza';
+    }
     if (Math.hypot(x + 6.4, z + 13.5) < 6.0) return 'NW Over-Vert Cradle';
     if (Math.hypot(x - 18.5, z - 4.6) < 6.2) return 'East Sunset Palm Mural Wall';
     if (Math.hypot(x - 7.6, z + 0.8) < 4.5) return 'Central Volcano Dome';

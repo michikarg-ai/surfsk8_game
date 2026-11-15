@@ -178,12 +178,18 @@ class SurfskateMunichGame {
     const loadingEl = document.getElementById('loading-overlay');
     try {
       const initialModel = this.landingPage.getSelectedSkaterModel();
+      const initialPark = this.landingPage.getSelectedPark();
       await Promise.all([
-        this.parkSurface.loadLidarGrid('/models/im_gefilde_lidar.json'),
-        this.worldScene.load('im_gefilde'),
+        this.parkSurface.loadLidarGrid(initialPark.lidarUrl || '/models/im_gefilde_lidar.json', initialPark.id),
+        this.worldScene.load(initialPark.id),
         this.skaterVisuals.load(initialModel),
         this.landingPage.load(),
       ]);
+      if (initialPark.id === 'airport_skatepark') {
+        this.controller.setSpawn(2.94, 11.32, -0.175);
+      } else {
+        this.controller.setSpawn(15.2, 4.2, 1.38);
+      }
       this.flowLine.refreshSurfaceHeights();
     } catch (err) {
       console.error('Error loading GLB/LiDAR assets:', err);
@@ -466,12 +472,15 @@ class SurfskateMunichGame {
     try {
       await Promise.all([
         this.worldScene.load(park.id),
-        this.parkSurface.loadLidarGrid(park.lidarUrl || '/models/im_gefilde_lidar.json'),
+        this.parkSurface.loadLidarGrid(park.lidarUrl || '/models/im_gefilde_lidar.json', park.id),
       ]);
       this.flowLine.refreshSurfaceHeights();
-      this.controller.position.set(16.0, 0.0, 5.0);
-      this.controller.velocity.set(0, 0, 0);
-      this.controller.speed = 0;
+      if (park.id === 'airport_skatepark') {
+        this.controller.setSpawn(2.94, 11.32, -0.175);
+      } else {
+        this.controller.setSpawn(15.2, 4.2, 1.38);
+      }
+      this.controller.resetToSpawn();
       this.surfCamera.reset(this.controller);
     } catch (e) {
       console.error('Error switching skatepark:', e);

@@ -229,17 +229,23 @@
   <aside class="sidebar">
     <div class="header">
       <h1>
-        Skatepark 3D Scan
+        Skatepark 3D Viewer
         <span class="badge">RealityKit</span>
       </h1>
-      <p>Fotorealistische 3D-Rekonstruktion aus 4K DJI-Drohnenaufnahmen („Im Gefilde“, München)</p>
+      <p>Fotorealistische 3D-Rekonstruktionen („Babenhausen“ 360°, „Im Gefilde“ & „Aschheim“)</p>
     </div>
 
     <div class="section">
       <div class="section-title">3D-Modell Auswahl</div>
       <select id="model-select">
-        <option value="/models/skatepark_multi.glb" id="opt-multi" selected>v2: Multi-Video Scan (Alle Videos – 95.978 Faces)</option>
-        <option value="/models/skatepark_v1_single.glb">v1: Single-Video Scan (DJI 363 – 48.829 Faces)</option>
+        <option value="/models/skatepark_multi.glb" id="opt-multi" selected>Skatepark Im Gefilde (Multi-Video Scan)</option>
+        <option value="/models/skatepark_multi.glb?tex=/textures/skatepark_multi_tex0_aigraffiti_test.jpg" id="opt-multi-aigraffiti">Im Gefilde (Test: AI-Graffiti Ersatz)</option>
+        <option value="/models/airport_skatepark_game.glb" id="opt-airport-game">Airport Skatepark (Hallbergmoos – Game-Ready)</option>
+        <option value="/models/airport_skatepark.glb" id="opt-airport">Airport Skatepark (Hallbergmoos – Raw 189 MB)</option>
+        <option value="/models/babenhausen_v2.glb" id="opt-bbh-v2">Babenhausen v2 (Neu: 105° Weitwinkel-Scan)</option>
+        <option value="/models/babenhausen_visual.glb" id="opt-bbh-v1">Babenhausen v1 (Erster 360° Test)</option>
+        <option value="/models/pumptrack_aschheim.glb" id="opt-aschheim">Pumptrack Aschheim (GoPro Scan)</option>
+        <option value="/models/skatepark_v1_single.glb">Skatepark Im Gefilde (Single-Video v1)</option>
         <option value="/models/im_gefilde.glb">Vergleich: Game-Park (LiDAR + Procedural)</option>
       </select>
     </div>
@@ -307,8 +313,8 @@
     <div class="section">
       <div class="section-title">Download & Apple QuickLook</div>
       <div class="downloads">
-        <a class="download-link" id="dl-glb" href="/models/skatepark_multi.glb" download>⬇ GLB (29 MB)</a>
-        <a class="download-link" id="dl-usdz" href="/models/skatepark_multi.usdz" rel="ar" download>⬇ USDZ (32 MB)</a>
+        <a class="download-link" id="dl-glb" href="/models/babenhausen_visual.glb" download>⬇ GLB (36 MB)</a>
+        <a class="download-link" id="dl-usdz" href="/models/babenhausen.usdz" rel="ar" download>⬇ USDZ (39 MB)</a>
       </div>
     </div>
   </aside>
@@ -370,6 +376,7 @@
     let wireframeEnabled = false;
     const originalMaterials = new Map();
     const loader = new GLTFLoader();
+    const texLoader = new THREE.TextureLoader();
 
     // Check if multi-video scan is already available
     fetch('/models/skatepark_multi.glb', { method: 'HEAD' }).then((res) => {
@@ -438,10 +445,21 @@
     async function loadGLB(url) {
       loadingBanner.style.display = 'flex';
       loadingSpinner.style.display = 'block';
-      loadingText.textContent = `Lade ${url.split('/').pop()}...`;
+      const [cleanUrl, queryPart] = url.split('?');
+      const queryParams = new URLSearchParams(queryPart || '');
+      const overrideTexUrl = queryParams.get('tex');
+      loadingText.textContent = `Lade ${cleanUrl.split('/').pop()}...`;
 
       try {
-        const gltf = await loader.loadAsync(url);
+        const [gltf, overrideTex] = await Promise.all([
+          loader.loadAsync(cleanUrl),
+          overrideTexUrl ? texLoader.loadAsync(overrideTexUrl) : Promise.resolve(null),
+        ]);
+        if (overrideTex) {
+          overrideTex.flipY = false;
+          overrideTex.colorSpace = THREE.SRGBColorSpace;
+          overrideTex.needsUpdate = true;
+        }
         if (currentModel) {
           scene.remove(currentModel);
         }
@@ -488,6 +506,10 @@
             }
             const mat = child.material;
             if (mat) {
+              if (overrideTex) {
+                mat.map = overrideTex;
+                mat.needsUpdate = true;
+              }
               if (mat.map) mat.map.anisotropy = maxAniso;
               if (mat.normalMap) mat.normalMap.anisotropy = maxAniso;
               if (mat.aoMap) mat.aoMap.anisotropy = maxAniso;
@@ -520,10 +542,34 @@
       const dlGlb = document.getElementById('dl-glb');
       const dlUsdz = document.getElementById('dl-usdz');
       dlGlb.href = val;
-      if (val.includes('multi')) {
+      if (val.includes('airport_skatepark_game')) {
+        dlGlb.textContent = '⬇ GLB (9.2 MB Game-Ready)';
+        dlUsdz.href = '/models/airport_skatepark.usdz';
+        dlUsdz.textContent = '⬇ USDZ (324 MB)';
+      } else if (val.includes('airport')) {
+        dlGlb.textContent = '⬇ GLB (189 MB)';
+        dlUsdz.href = '/models/airport_skatepark.usdz';
+        dlUsdz.textContent = '⬇ USDZ (324 MB)';
+      } else if (val.includes('babenhausen_v2')) {
+        dlGlb.textContent = '⬇ GLB (v2 Improved)';
+        dlUsdz.href = '/models/babenhausen_v2.usdz';
+        dlUsdz.textContent = '⬇ USDZ (v2)';
+      } else if (val.includes('babenhausen') || val.includes('bbh')) {
+        dlGlb.textContent = '⬇ GLB (36 MB)';
+        dlUsdz.href = '/models/babenhausen.usdz';
+        dlUsdz.textContent = '⬇ USDZ (39 MB)';
+      } else if (val.includes('aschheim')) {
+        dlGlb.textContent = '⬇ GLB (32 MB)';
+        dlUsdz.href = '/models/pumptrack_aschheim.usdz';
+        dlUsdz.textContent = '⬇ USDZ (34 MB)';
+      } else if (val.includes('multi')) {
+        dlGlb.textContent = '⬇ GLB (29 MB)';
         dlUsdz.href = '/models/skatepark_multi.usdz';
-      } else {
+        dlUsdz.textContent = '⬇ USDZ (32 MB)';
+      } else if (val.includes('v1')) {
+        dlGlb.textContent = '⬇ GLB (24 MB)';
         dlUsdz.href = '/models/skatepark_v1_single.usdz';
+        dlUsdz.textContent = '⬇ USDZ (26 MB)';
       }
     });
 
@@ -601,7 +647,15 @@
       renderer.render(scene, camera);
     }
 
-    loadGLB('/models/skatepark_multi.glb');
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramModel = urlParams.get('model') || '/models/skatepark_multi.glb';
+    const paramTex = urlParams.get('tex');
+    const initialModel = paramTex ? `${paramModel}?tex=${paramTex}` : paramModel;
+    const selectEl = document.getElementById('model-select');
+    if (selectEl) {
+      selectEl.value = initialModel;
+    }
+    loadGLB(initialModel);
     animate();
   </script>
 </body>

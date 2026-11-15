@@ -37,6 +37,15 @@ export const SKATEPARK_LOCATIONS: SkateparkLocation[] = [
     lidarUrl: '/models/im_gefilde_lidar.json',
     viewerUrl: '/viewer.html?model=/models/skatepark_multi.glb',
   },
+  {
+    id: 'airport_skatepark',
+    name: 'AIRPORT SKATEPARK',
+    subtitle: 'AIRPORT SKATEPARK - HALLBERGMOOS',
+    thumbUrl: '/textures/airport_thumb.png',
+    modelUrl: '/models/airport_skatepark_game.glb',
+    lidarUrl: '/models/airport_skatepark_lidar.json',
+    viewerUrl: '/viewer.html?model=/models/airport_skatepark_game.glb',
+  },
 ];
 
 export const SELECTOR_CATEGORIES: SelectorCategory[] = ['skater', 'skatepark', 'board'];
@@ -64,7 +73,10 @@ export class LandingPage {
     const s = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('skater') : null;
     return s === 'female' || s === 'sophie' || s === '1' ? 1 : 0;
   })();
-  public currentParkIndex = 0;
+  public currentParkIndex = (() => {
+    const p = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('park') : null;
+    return p === 'airport' || p === 'airport_skatepark' || p === '1' ? 1 : 0;
+  })();
 
   // In-slot notice views for skatepark & board selection
   private parkSubtitleEl: HTMLElement | null = null;
@@ -397,6 +409,15 @@ export class LandingPage {
         this.onSelectSkater(skater.modelUrl);
       }
       this.showInstagramPrompt('skater', btn || rowEl || undefined);
+    } else if (kind === 'skatepark') {
+      this.currentParkIndex =
+        (this.currentParkIndex + dir + SKATEPARK_LOCATIONS.length) % SKATEPARK_LOCATIONS.length;
+      const park = SKATEPARK_LOCATIONS[this.currentParkIndex];
+      this.updateParkDisplay();
+      this.revertParkView();
+      if (this.onSelectPark) {
+        this.onSelectPark(park);
+      }
     } else {
       this.showInstagramPrompt(kind, btn || rowEl || undefined);
     }

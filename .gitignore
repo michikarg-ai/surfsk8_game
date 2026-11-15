@@ -31,11 +31,21 @@ video/
 # Intermediate photogrammetry frame extraction dumps and raw temp textures
 data/frames_drone/
 data/frames_gopro/
+data/frames_airport_skatepark/
+data/frames_babenhausen_v2/
+data/frames_exif/
+data/extracted_frames_babenhausen/
+data/inspect_bbh/
+data/path_inspect/
+data/test_recon_60s/
 data/photogrammetry_input/
 data/baked_mesh_*.png
+data/babenhausen_preview.png
 geodata/multi_scan_ortho_4k.png
 
-# Superseded intermediate 3D models (game uses skatepark_multi.glb & skater.glb)
+# Superseded / raw intermediate 3D models (>100MB rejected by GitHub)
+public/models/airport_skatepark.glb
+public/models/babenhausen_v2.glb
 public/models/skatepark_photogrammetry.glb
 public/models/skatepark_multi_raw.glb
 public/models/skatepark_v1_single.glb

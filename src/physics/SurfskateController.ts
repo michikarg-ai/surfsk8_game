@@ -226,11 +226,21 @@ export class SurfskateController {
     return this.truckPreset;
   }
 
+  private spawnX = 15.2;
+  private spawnZ = 4.2;
+  private spawnHeading = 1.38;
+
+  public setSpawn(x: number, z: number, heading: number): void {
+    this.spawnX = x;
+    this.spawnZ = z;
+    this.spawnHeading = heading;
+  }
+
   public resetToSpawn(): void {
-    this.position.set(15.2, 0, 4.2);
+    this.position.set(this.spawnX, 0, this.spawnZ);
     this.currentSurface = this.park.sample(this.position.x, this.position.z);
     this.position.y = this.currentSurface.height;
-    this.heading = 1.38; // Facing West-North-West toward the Central Volcano & NW Over-Vert Cradle
+    this.heading = this.spawnHeading;
     this.speed = 0; // start standing still: one push-off, then pump!
     this.velocity.set(0, 0, 0);
     this.leanAngle = 0;
@@ -1183,6 +1193,31 @@ export class SurfskateController {
   }
 
   private constrainToParkBounds(dt = 0.016): void {
+    if (this.park.getParkId() !== 'im_gefilde') {
+      const bounds = this.park.getBounds();
+      if (bounds) {
+        const margin = 0.9;
+        const minX = bounds.xMin + margin;
+        const maxX = bounds.xMax - margin;
+        const minZ = bounds.zMin + margin;
+        const maxZ = bounds.zMax - margin;
+        let hit = false;
+        if (this.position.x < minX) { this.position.x = minX; hit = true; }
+        if (this.position.x > maxX) { this.position.x = maxX; hit = true; }
+        if (this.position.z < minZ) { this.position.z = minZ; hit = true; }
+        if (this.position.z > maxZ) { this.position.z = maxZ; hit = true; }
+        if (hit) {
+          const inwardAngle = Math.atan2(this.position.x, this.position.z);
+          let diff = inwardAngle - this.heading;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          this.heading += (Math.sign(diff) || 1) * Math.min(Math.abs(diff), 4.5 * dt);
+          this.sprayIntensity = 1.0;
+        }
+        return;
+      }
+    }
+
     // Allow full, unobstructed freedom across the ENTIRE multi-view 3D skatepark model!
     // Only at the extreme outer edge of the 3D scan (`maxRx = 33.5m, maxRz = 24.5m`) do we
     // keep the skater from riding off the outer boundary of the scanned mesh.

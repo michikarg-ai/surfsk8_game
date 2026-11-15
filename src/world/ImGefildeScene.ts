@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-export type AtmosphereMode = 'night';
+export type AtmosphereMode = 'night' | 'golden_hour';
 
 export class ImGefildeScene {
   public mode: AtmosphereMode = 'night';
@@ -21,6 +21,7 @@ export class ImGefildeScene {
 
   private pmremGenerator: THREE.PMREMGenerator;
   private nightEnvMap: THREE.Texture | null = null;
+  private goldenEnvMap: THREE.Texture | null = null;
 
   constructor(private scene: THREE.Scene, private renderer: THREE.WebGLRenderer) {
     this.scene.add(this.parkRoot);
@@ -62,6 +63,15 @@ export class ImGefildeScene {
     nightSkyTex.minFilter = THREE.LinearFilter;
     nightSkyTex.magFilter = THREE.LinearFilter;
 
+    const goldenSkyTex = texLoader.load('/textures/airport_golden_hour_bg.jpg?v=1');
+    goldenSkyTex.colorSpace = THREE.SRGBColorSpace;
+    goldenSkyTex.wrapS = THREE.RepeatWrapping;
+    goldenSkyTex.wrapT = THREE.ClampToEdgeWrapping;
+    goldenSkyTex.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+    goldenSkyTex.generateMipmaps = false;
+    goldenSkyTex.minFilter = THREE.LinearFilter;
+    goldenSkyTex.magFilter = THREE.LinearFilter;
+
     this.skyUniforms = {
       uMode: { value: 1.0 },
       uSunDir: { value: this.sunLight.position.clone().normalize() },
@@ -75,6 +85,7 @@ export class ImGefildeScene {
       uniforms: {
         ...this.skyUniforms,
         uSkyTex: { value: nightSkyTex },
+        uGoldenSkyTex: { value: goldenSkyTex },
       },
       vertexShader: /* glsl */ `
         varying vec3 vWorldPos;
@@ -87,17 +98,31 @@ export class ImGefildeScene {
         }
       `,
       fragmentShader: /* glsl */ `
+        uniform float uMode;
         uniform sampler2D uSkyTex;
+        uniform sampler2D uGoldenSkyTex;
         varying vec3 vWorldPos;
         varying vec2 vUv;
 
         void main() {
           vec3 dir = normalize(vWorldPos);
-          float elev = max(0.0, dir.y);
+          float az = atan(dir.z, dir.x) / (2.0 * 3.14159265) + 0.5;
 
+          if (uMode < 0.5) {
+            // Golden Hour 360 equirectangular upper-hemisphere sky + distant tree line
+            float elevNorm = clamp(asin(clamp(dir.y, -0.02, 1.0)) / (0.5 * 3.14159265), 0.0, 1.0);
+            vec2 skyUv = vec2(az, clamp(0.015 + elevNorm * 0.98, 0.005, 0.995));
+            vec3 texCol = texture2D(uGoldenSkyTex, skyUv).rgb;
+            vec3 goldenGround = vec3(0.09, 0.08, 0.065);
+            float horizonBlend = smoothstep(-0.04, 0.02, dir.y);
+            vec3 col = mix(goldenGround, texCol, horizonBlend);
+            gl_FragColor = vec4(col, 1.0);
+            return;
+          }
+
+          float elev = max(0.0, dir.y);
           // Sample the portrait night photo around the dome: 4 mirrored copies (90 deg each) keep its
           // proportions; the image bottom (mountains & fir trees) sits right on the horizon.
-          float az = atan(dir.z, dir.x) / (2.0 * 3.14159265) + 0.5;
           vec2 skyUv = vec2(az * 4.0, clamp(elev * 1.15 + 0.02, 0.01, 0.99));
           vec3 texCol = texture2D(uSkyTex, skyUv).rgb * 1.2;
 
@@ -137,6 +162,7 @@ export class ImGefildeScene {
     });
 
     this.nightEnvMap = this.buildNightIBL();
+    this.goldenEnvMap = this.buildGoldenIBL();
     this.setAtmosphereMode('night');
   }
 
@@ -157,6 +183,35 @@ export class ImGefildeScene {
         void main() {
           vec3 sky = mix(vec3(0.08, 0.14, 0.25), vec3(0.01, 0.02, 0.05), max(0.0, vDir.y));
           vec3 ground = vec3(0.12, 0.14, 0.18);
+          vec3 col = vDir.y >= 0.0 ? sky : ground;
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `,
+    });
+    envScene.add(new THREE.Mesh(geo, mat));
+    const rt = this.pmremGenerator.fromScene(envScene, 0.03);
+    geo.dispose();
+    mat.dispose();
+    return rt.texture;
+  }
+
+  private buildGoldenIBL(): THREE.Texture {
+    const envScene = new THREE.Scene();
+    const geo = new THREE.SphereGeometry(20, 32, 16);
+    const mat = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      vertexShader: /* glsl */ `
+        varying vec3 vDir;
+        void main() {
+          vDir = normalize(position);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        varying vec3 vDir;
+        void main() {
+          vec3 sky = mix(vec3(0.82, 0.62, 0.42), vec3(0.28, 0.48, 0.78), max(0.0, vDir.y));
+          vec3 ground = vec3(0.22, 0.19, 0.16);
           vec3 col = vDir.y >= 0.0 ? sky : ground;
           gl_FragColor = vec4(col, 1.0);
         }
@@ -190,6 +245,33 @@ export class ImGefildeScene {
         }
       });
       this.parkRoot.add(aschheimGltf.scene);
+    } else if (parkId === 'airport_skatepark') {
+      const [airportGltf, airportColorTex] = await Promise.all([
+        loader.loadAsync('/models/airport_skatepark_game.glb?v=2'),
+        texLoader.loadAsync('/textures/airport_skatepark_tex0.jpg?v=2'),
+      ]);
+
+      airportColorTex.flipY = false;
+      airportColorTex.colorSpace = THREE.SRGBColorSpace;
+      airportColorTex.anisotropy = maxAniso;
+      airportColorTex.needsUpdate = true;
+
+      airportGltf.scene.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const mesh = child as THREE.Mesh;
+          mesh.castShadow = false;
+          mesh.receiveShadow = true;
+          mesh.material = new THREE.MeshStandardMaterial({
+            map: airportColorTex,
+            color: 0xffffff,
+            roughness: 0.78,
+            metalness: 0.02,
+            envMapIntensity: 0.85,
+            side: THREE.FrontSide,
+          });
+        }
+      });
+      this.parkRoot.add(airportGltf.scene);
     } else {
       // Load the floor-flattened, wall-preserving Multi-Video 3D Gaussian Splatting model (`/models/skatepark_multi.glb`)
       // AND explicitly load the extracted 4K color texture (`/textures/skatepark_multi_tex0.jpg`) so it is
@@ -228,16 +310,19 @@ export class ImGefildeScene {
       this.parkRoot.add(multiGltf.scene);
     }
 
-    // Subtle dark night ground plane well beneath the scan perimeter (-1.2m) so it never overlaps low pockets
+    const isGolden = parkId === 'airport_skatepark';
+    this.setAtmosphereMode(isGolden ? 'golden_hour' : 'night');
+
+    // Subtle ground plane well beneath the scan perimeter (-1.5m) so it never overlaps low pockets
     const outerGroundGeo = new THREE.CircleGeometry(90, 64);
     outerGroundGeo.rotateX(-Math.PI / 2);
     const outerGroundMat = new THREE.MeshStandardMaterial({
-      color: 0x0c1018,
+      color: isGolden ? 0x242019 : 0x0c1018,
       roughness: 0.96,
       metalness: 0.02,
     });
     const outerGround = new THREE.Mesh(outerGroundGeo, outerGroundMat);
-    outerGround.position.set(0, -1.2, 0);
+    outerGround.position.set(0, -1.5, 0);
     outerGround.receiveShadow = true;
     this.parkRoot.add(outerGround);
   }
@@ -247,12 +332,35 @@ export class ImGefildeScene {
   }
 
   public toggleAtmosphere(): AtmosphereMode {
-    this.setAtmosphereMode('night');
+    this.setAtmosphereMode(this.mode === 'night' ? 'golden_hour' : 'night');
     return this.mode;
   }
 
-  public setAtmosphereMode(_mode: AtmosphereMode = 'night'): void {
-    this.mode = 'night';
+  public setAtmosphereMode(mode: AtmosphereMode = 'night'): void {
+    this.mode = mode;
+    if (mode === 'golden_hour') {
+      this.skyUniforms.uMode.value = 0.0;
+      this.scene.environment = this.goldenEnvMap;
+      this.scene.fog = new THREE.FogExp2(0xc8b294, 0.0014);
+      this.hemiLight.color.setHex(0x9ec4f0);
+      this.hemiLight.groundColor.setHex(0x6b533b);
+      this.hemiLight.intensity = 1.05;
+      // Low warm Golden Hour sun
+      this.sunLight.color.setHex(0xffc988);
+      this.sunLight.position.set(24, 11, -18);
+      this.sunLight.intensity = 1.95;
+      this.sunLight.castShadow = true;
+      this.fillLight.color.setHex(0x7aa4d6);
+      this.fillLight.intensity = 0.45;
+      this.nightCityBackdrop.visible = false;
+
+      this.floodLights.forEach((spot) => {
+        spot.intensity = 0.0;
+        spot.visible = false;
+      });
+      return;
+    }
+
     this.skyUniforms.uMode.value = 1.0;
     this.scene.environment = this.nightEnvMap;
     this.scene.fog = new THREE.FogExp2(0x050b16, 0.0028);
@@ -264,6 +372,7 @@ export class ImGefildeScene {
     this.sunLight.position.set(14, 22, -10);
     this.sunLight.intensity = 1.35;
     this.sunLight.castShadow = true;
+    this.fillLight.color.setHex(0x5278b8);
     this.fillLight.intensity = 0.38;
     this.nightCityBackdrop.visible = false;
 
@@ -274,6 +383,7 @@ export class ImGefildeScene {
   }
 
   public setQuality(quality: 'high' | 'medium' | 'low'): void {
+    const isGolden = this.mode === 'golden_hour';
     if (quality === 'high') {
       this.sunLight.castShadow = true;
       if (this.sunLight.shadow.mapSize.x !== 2048) {
@@ -281,12 +391,12 @@ export class ImGefildeScene {
         this.sunLight.shadow.map?.dispose();
         this.sunLight.shadow.map = null;
       }
-      this.hemiLight.intensity = 0.95;
-      this.sunLight.intensity = 1.35;
-      this.fillLight.intensity = 0.38;
+      this.hemiLight.intensity = isGolden ? 1.05 : 0.95;
+      this.sunLight.intensity = isGolden ? 1.95 : 1.35;
+      this.fillLight.intensity = isGolden ? 0.45 : 0.38;
       this.floodLights.forEach((spot) => {
-        spot.intensity = 15.0;
-        spot.visible = true;
+        spot.intensity = isGolden ? 0.0 : 15.0;
+        spot.visible = !isGolden;
       });
     } else if (quality === 'medium') {
       this.sunLight.castShadow = true;
@@ -295,12 +405,12 @@ export class ImGefildeScene {
         this.sunLight.shadow.map?.dispose();
         this.sunLight.shadow.map = null;
       }
-      this.hemiLight.intensity = 1.1;
-      this.sunLight.intensity = 1.45;
-      this.fillLight.intensity = 0.42;
+      this.hemiLight.intensity = isGolden ? 1.15 : 1.1;
+      this.sunLight.intensity = isGolden ? 2.05 : 1.45;
+      this.fillLight.intensity = isGolden ? 0.5 : 0.42;
       this.floodLights.forEach((spot, idx) => {
-        spot.visible = idx === 0 || idx === 2;
-        spot.intensity = 18.0;
+        spot.visible = !isGolden && (idx === 0 || idx === 2);
+        spot.intensity = isGolden ? 0.0 : 18.0;
       });
     } else {
       // 'low' (Performance mode: dynamic shadows & heavy spotlights off, boost ambient fill)
@@ -308,8 +418,8 @@ export class ImGefildeScene {
       this.sunLight.shadow.map?.dispose();
       this.sunLight.shadow.map = null;
       this.hemiLight.intensity = 1.35;
-      this.sunLight.intensity = 1.65;
-      this.fillLight.intensity = 0.55;
+      this.sunLight.intensity = isGolden ? 2.15 : 1.65;
+      this.fillLight.intensity = isGolden ? 0.6 : 0.55;
       this.floodLights.forEach((spot) => {
         spot.visible = false;
       });
