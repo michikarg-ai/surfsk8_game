@@ -691,7 +691,7 @@ class SurfskateMunichGame {
     (this.controller as unknown as { endlessMode?: boolean }).endlessMode = isZen;
     (this.controller as unknown as { hotSpotMultiplier?: number }).hotSpotMultiplier = 1.0;
     this.hud.endlessMode = isZen;
-    this.hotSpotZone.setEnabled(this.gameMode === 'jam' || this.gameMode === 'zen');
+    this.hotSpotZone.setEnabled(this.gameMode === 'jam');
     this.hotSpotZone.reset();
     this.progression.resetSessionCounters();
     this.controller.resetToSpawn();
