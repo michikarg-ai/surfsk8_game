@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SkaterVisuals } from '../entities/SkaterVisuals';
 import { ParkSurface } from '../physics/ParkSurface';
 import { SurfskateController } from '../physics/SurfskateController';
+import { GameModeId, SkaterRankInfo, SurfMission } from '../progression/SurfProgression';
 
 export type SelectorCategory = 'skater' | 'skatepark' | 'board';
 
@@ -92,7 +93,16 @@ export class LandingPage {
 
   public onCycleQuality?: () => void;
   public onToggleFullscreen?: () => void;
+  public onSelectGameMode?: (mode: GameModeId) => void;
   private fullscreenBtnEl: HTMLElement | null = null;
+  private selectedGameMode: GameModeId = (() => {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('surfsk8.gameMode') : null;
+    if (saved === 'jam' || saved === 'flow_cup' || saved === 'zen') return saved;
+    return 'jam';
+  })();
+  private modePillBtns: HTMLButtonElement[] = [];
+  private rankBadgeEl: HTMLElement | null = null;
+  private missionsListEl: HTMLElement | null = null;
 
   constructor(
     parkSurface: ParkSurface,
@@ -204,6 +214,47 @@ export class LandingPage {
     return SKATER_CHARACTERS[this.currentSkaterIndex].modelUrl;
   }
 
+  public getSelectedGameMode(): GameModeId {
+    return this.selectedGameMode;
+  }
+
+  public setGameMode(mode: GameModeId): void {
+    this.selectedGameMode = mode;
+    try {
+      localStorage.setItem('surfsk8.gameMode', mode);
+    } catch {}
+    this.syncModePills();
+    this.onSelectGameMode?.(mode);
+  }
+
+  private syncModePills(): void {
+    for (const btn of this.modePillBtns) {
+      btn.classList.toggle('active', btn.dataset.mode === this.selectedGameMode);
+    }
+  }
+
+  public updateProgressionDisplay(rank: SkaterRankInfo, missions: SurfMission[]): void {
+    if (this.rankBadgeEl) {
+      this.rankBadgeEl.textContent = rank.fullLabel;
+    }
+    if (this.missionsListEl) {
+      this.missionsListEl.innerHTML = missions
+        .map((m) => {
+          const check = m.completed ? '☑️' : '⬜';
+          const progStr = m.completed
+            ? 'DONE'
+            : `${m.progress.toLocaleString()}/${m.target.toLocaleString()}${m.unit ? ' ' + m.unit : ''}`;
+          return `
+            <div class="landing-mission-row ${m.completed ? 'done' : ''}">
+              <span>${check} ${m.shortTitle}</span>
+              <span class="m-prog">${progStr}</span>
+            </div>
+          `.trim();
+        })
+        .join('');
+    }
+  }
+
   private bindUIEvents(): void {
     // Selector arrows (< and >) for player, skatepark, and board
     const arrowBtns = this.overlayEl.querySelectorAll<HTMLButtonElement>('.sel-arrow');
@@ -293,6 +344,23 @@ export class LandingPage {
     };
     this.startBtnEl.addEventListener('click', triggerStart);
     this.startBtnEl.addEventListener('touchend', triggerStart, { passive: false });
+
+    this.rankBadgeEl = document.getElementById('landing-rank-badge');
+    this.missionsListEl = document.getElementById('landing-missions-list');
+    this.modePillBtns = Array.from(
+      this.overlayEl.querySelectorAll<HTMLButtonElement>('#landing-mode-selector .mode-pill-btn')
+    );
+    this.modePillBtns.forEach((btn) => {
+      const selectHandler = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const mode = (btn.dataset.mode || 'jam') as GameModeId;
+        this.setGameMode(mode);
+      };
+      btn.addEventListener('click', selectHandler);
+      btn.addEventListener('touchend', selectHandler, { passive: false });
+    });
+    this.syncModePills();
 
     this.qualityBtnEl = document.getElementById('landing-quality-btn');
     if (this.qualityBtnEl) {

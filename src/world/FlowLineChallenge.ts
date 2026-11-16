@@ -5,50 +5,59 @@ import { SurfAudio } from '../audio/SurfAudio';
 import { SurfskateController } from '../physics/SurfskateController';
 
 /**
- * Creates a high-contrast floating canvas billboard sprite for 3D world gates.
+ * 3-Tier difficulty system for "Follow the Flow" mode:
+ * - Tier 0 (Chill Line): Beginner flow carving line (+1500 PTS, generous distance window)
+ * - Tier 1 (Pro Line): Intermediate wall-to-wall bowl line (+3000 PTS)
+ * - Tier 2 (Sick Line): Expert full park marathon line (+5000 PTS, tighter track tolerance)
  */
-function createTextSprite(title: string, subtitle: string, accentColor: string): THREE.Sprite {
+export type FlowLineTier = 0 | 1 | 2;
+
+export interface FlowLineTierConfig {
+  tier: FlowLineTier;
+  id: 'chill' | 'pro' | 'sick';
+  name: string;
+  shortName: string;
+  desc: string;
+  accentColor: string;
+  hexColor: number;
+  emissiveColor: number;
+  maxAllowedDistance: number;
+  bonusPoints: number;
+  targetPaceSpeed: number; // m/s for virtual pace ghost
+}
+
+export interface GhostSample {
+  t: number;
+  x: number;
+  y: number;
+  z: number;
+  h: number;
+  lean: number;
+}
+
+export interface GhostRecord {
+  parkId: string;
+  tier: FlowLineTier;
+  bestTimeSec: number;
+  date: string;
+  isVirtualPace?: boolean;
+  samples: GhostSample[];
+}
+
+/**
+ * Creates or updates a high-contrast floating canvas billboard sprite for 3D world gates.
+ */
+function createTextSprite(
+  title: string,
+  subtitle: string,
+  accentColor: string
+): THREE.Sprite {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 144;
   const ctx = canvas.getContext('2d')!;
 
-  // Rounded rectangular card background
-  ctx.fillStyle = 'rgba(12, 16, 24, 0.45)';
-  ctx.beginPath();
-  if (typeof ctx.roundRect === 'function') {
-    ctx.roundRect(16, 16, 480, 112, 24);
-  } else {
-    const x = 16,
-      y = 16,
-      w = 480,
-      h = 112,
-      r = 24;
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-  }
-  ctx.fill();
-
-  // Glowing neon accent border
-  ctx.strokeStyle = accentColor;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  // Primary title text
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '900 36px "Barlow Condensed", "Impact", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(title, 256, 52);
-
-  // Subtitle readout / instructions
-  ctx.fillStyle = accentColor;
-  ctx.font = '700 22px "Barlow Condensed", sans-serif';
-  ctx.fillText(subtitle, 256, 94);
+  renderSpriteCard(ctx, canvas.width, canvas.height, title, subtitle, accentColor);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.minFilter = THREE.LinearFilter;
@@ -62,15 +71,130 @@ function createTextSprite(title: string, subtitle: string, accentColor: string):
   return sprite;
 }
 
+function updateTextSprite(
+  sprite: THREE.Sprite,
+  title: string,
+  subtitle: string,
+  accentColor: string
+): void {
+  if (!sprite?.material?.map) return;
+  const canvas = (sprite.material.map as THREE.CanvasTexture).image as HTMLCanvasElement;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  renderSpriteCard(ctx, canvas.width, canvas.height, title, subtitle, accentColor);
+  sprite.material.map.needsUpdate = true;
+}
+
+function renderSpriteCard(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  title: string,
+  subtitle: string,
+  accentColor: string
+): void {
+  ctx.clearRect(0, 0, w, h);
+
+  // Rounded rectangular card background
+  ctx.fillStyle = 'rgba(10, 16, 26, 0.60)';
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(16, 16, w - 32, h - 32, 24);
+  } else {
+    const rx = 16,
+      ry = 16,
+      rw = w - 32,
+      rh = h - 32,
+      r = 24;
+    ctx.moveTo(rx + r, ry);
+    ctx.arcTo(rx + rw, ry, rx + rw, ry + rh, r);
+    ctx.arcTo(rx + rw, ry + rh, rx, ry + rh, r);
+    ctx.arcTo(rx, ry + rh, rx, ry, r);
+    ctx.arcTo(rx, ry, rx + rw, ry, r);
+    ctx.closePath();
+  }
+  ctx.fill();
+
+  // Glowing neon accent border
+  ctx.strokeStyle = accentColor;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Primary title text
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 36px "Barlow Condensed", "Impact", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(title, w / 2, 52);
+
+  // Subtitle readout / instructions
+  ctx.fillStyle = accentColor;
+  ctx.font = '700 22px "Barlow Condensed", sans-serif';
+  ctx.fillText(subtitle, w / 2, 94);
+}
+
 /**
- * "Follow the Flow" Game Mode Challenge for Skatepark "Im Gefilde".
+ * "Follow the Flow" Game Mode Challenge for Skateparks:
+ * - Im Gefilde
+ * - Airport Skatepark
  *
- * The player enters the Starting Gate in front of the spawn point to activate the challenge.
- * A glowing 3D flow line appears across the park, guiding the skater through a continuous
- * wall-to-wall wave carve without stalling. Finishing the line awards +2000 points.
+ * Features:
+ * - 3 Progressive Difficulty Tiers (Chill, Pro, Sick)
+ * - Dynamic route loading per skatepark
+ * - Personal-Best & Target Pace Ghost-Skater visualization
+ * - Live HUD distance split against ghost
+ * - Automatic progression and record persistence in localStorage
  */
 export class FlowLineChallenge {
   public readonly group = new THREE.Group();
+  public readonly ghostGroup = new THREE.Group();
+
+  public currentTier: FlowLineTier = 0;
+  public currentParkId = 'im_gefilde';
+
+  public static readonly TIER_CONFIGS: Record<FlowLineTier, FlowLineTierConfig> = {
+    0: {
+      tier: 0,
+      id: 'chill',
+      name: '🟢 CHILL LINE — SOUL CARVE',
+      shortName: '🟢 CHILL LINE',
+      desc: 'SOUL CARVE',
+      accentColor: '#00f5d4',
+      hexColor: 0x00f5d4,
+      emissiveColor: 0x00d4f5,
+      maxAllowedDistance: 6.2,
+      bonusPoints: 1500,
+      targetPaceSpeed: 6.2,
+    },
+    1: {
+      tier: 1,
+      id: 'pro',
+      name: '🔵 PRO LINE — WALL-TO-WALL',
+      shortName: '🔵 PRO LINE',
+      desc: 'WALL-TO-WALL',
+      accentColor: '#00d4ff',
+      hexColor: 0x00b4d8,
+      emissiveColor: 0x0077b6,
+      maxAllowedDistance: 5.5,
+      bonusPoints: 3000,
+      targetPaceSpeed: 7.2,
+    },
+    2: {
+      tier: 2,
+      id: 'sick',
+      name: '🔴 SICK LINE — FULL PARK MARATHON',
+      shortName: '🔴 SICK LINE',
+      desc: 'PARK MARATHON',
+      accentColor: '#ff0055',
+      hexColor: 0xff0055,
+      emissiveColor: 0xd90429,
+      maxAllowedDistance: 4.8,
+      bonusPoints: 5000,
+      targetPaceSpeed: 8.0,
+    },
+  };
 
   /** Authentic LiDAR / aerial orthophoto flow waypoints around Skatepark "Im Gefilde". */
   public static readonly WAYPOINTS_2D: readonly THREE.Vector2[] = [
@@ -200,6 +324,236 @@ export class FlowLineChallenge {
     new THREE.Vector2(8.83, 0.84), // 124
   ];
 
+  /** Authentic Flow Waypoints for Airport Skatepark (Hallbergmoos). */
+  public static readonly AIRPORT_WAYPOINTS_TIER_0: readonly THREE.Vector2[] = [
+    new THREE.Vector2(2.90, 11.30), // 1 - Spawn
+    new THREE.Vector2(2.20, 9.80),  // 2
+    new THREE.Vector2(1.50, 8.50),  // 3
+    new THREE.Vector2(0.60, 7.20),  // 4
+    new THREE.Vector2(-0.50, 6.00), // 5
+    new THREE.Vector2(-1.80, 5.00), // 6
+    new THREE.Vector2(-3.20, 4.20), // 7
+    new THREE.Vector2(-4.50, 3.00), // 8
+    new THREE.Vector2(-5.20, 1.50), // 9
+    new THREE.Vector2(-5.00, -0.20),// 10
+    new THREE.Vector2(-4.00, -1.60),// 11
+    new THREE.Vector2(-2.50, -2.50),// 12
+    new THREE.Vector2(-0.80, -3.00),// 13
+    new THREE.Vector2(1.00, -3.20), // 14
+    new THREE.Vector2(2.80, -3.00), // 15
+    new THREE.Vector2(4.50, -2.20), // 16
+    new THREE.Vector2(5.80, -1.00), // 17
+    new THREE.Vector2(6.80, 0.50),  // 18
+    new THREE.Vector2(7.20, 2.20),  // 19
+    new THREE.Vector2(6.80, 4.00),  // 20
+    new THREE.Vector2(5.80, 5.60),  // 21
+    new THREE.Vector2(4.40, 7.00),  // 22
+    new THREE.Vector2(2.80, 8.20),  // 23
+    new THREE.Vector2(1.20, 9.20),  // 24
+    new THREE.Vector2(-0.50, 9.80), // 25
+    new THREE.Vector2(-2.20, 9.60), // 26
+    new THREE.Vector2(-3.80, 8.80), // 27
+    new THREE.Vector2(-5.00, 7.50), // 28
+    new THREE.Vector2(-5.80, 5.80), // 29
+    new THREE.Vector2(-6.00, 4.00), // 30
+    new THREE.Vector2(-5.50, 2.20), // 31
+    new THREE.Vector2(-4.40, 0.80), // 32
+    new THREE.Vector2(-3.00, -0.20),// 33
+    new THREE.Vector2(-1.20, -0.60),// 34
+    new THREE.Vector2(0.60, -0.40), // 35
+    new THREE.Vector2(2.40, 0.20),  // 36
+    new THREE.Vector2(4.00, 1.20),  // 37
+    new THREE.Vector2(5.20, 2.60),  // 38
+    new THREE.Vector2(5.80, 4.20),  // 39
+    new THREE.Vector2(5.60, 6.00),  // 40
+    new THREE.Vector2(4.80, 7.60),  // 41
+    new THREE.Vector2(3.60, 9.20),  // 42
+    new THREE.Vector2(2.50, 10.50), // 43
+  ];
+
+  public static readonly AIRPORT_WAYPOINTS_TIER_1: readonly THREE.Vector2[] = [
+    new THREE.Vector2(2.90, 11.30), // 1
+    new THREE.Vector2(2.20, 9.80),  // 2
+    new THREE.Vector2(1.50, 8.50),  // 3
+    new THREE.Vector2(0.60, 7.20),  // 4
+    new THREE.Vector2(-0.50, 6.00), // 5
+    new THREE.Vector2(-1.80, 5.00), // 6
+    new THREE.Vector2(-3.20, 4.20), // 7
+    new THREE.Vector2(-4.50, 3.00), // 8
+    new THREE.Vector2(-5.60, 1.80), // 9
+    new THREE.Vector2(-6.40, 0.20), // 10
+    new THREE.Vector2(-6.80, -1.60),// 11
+    new THREE.Vector2(-6.50, -3.40),// 12
+    new THREE.Vector2(-5.60, -5.00),// 13
+    new THREE.Vector2(-4.20, -6.50),// 14
+    new THREE.Vector2(-2.50, -7.80),// 15
+    new THREE.Vector2(-0.60, -8.60),// 16
+    new THREE.Vector2(1.50, -9.00), // 17
+    new THREE.Vector2(3.60, -8.80), // 18
+    new THREE.Vector2(5.50, -8.00), // 19
+    new THREE.Vector2(7.20, -6.80), // 20
+    new THREE.Vector2(8.40, -5.20), // 21
+    new THREE.Vector2(9.00, -3.40), // 22
+    new THREE.Vector2(8.80, -1.50), // 23
+    new THREE.Vector2(7.80, 0.20),  // 24
+    new THREE.Vector2(6.20, 1.80),  // 25
+    new THREE.Vector2(4.50, 3.00),  // 26
+    new THREE.Vector2(2.80, 4.20),  // 27
+    new THREE.Vector2(1.20, 5.60),  // 28
+    new THREE.Vector2(-0.20, 7.00), // 29
+    new THREE.Vector2(-1.80, 8.20), // 30
+    new THREE.Vector2(-3.50, 9.00), // 31
+    new THREE.Vector2(-5.20, 9.20), // 32
+    new THREE.Vector2(-6.80, 8.40), // 33
+    new THREE.Vector2(-8.00, 7.00), // 34
+    new THREE.Vector2(-8.60, 5.20), // 35
+    new THREE.Vector2(-8.40, 3.20), // 36
+    new THREE.Vector2(-7.50, 1.50), // 37
+    new THREE.Vector2(-6.00, 0.00), // 38
+    new THREE.Vector2(-4.20, -1.20),// 39
+    new THREE.Vector2(-2.50, -2.20),// 40
+    new THREE.Vector2(-0.80, -3.20),// 41
+    new THREE.Vector2(1.00, -4.00), // 42
+    new THREE.Vector2(2.80, -4.80), // 43
+    new THREE.Vector2(4.60, -5.20), // 44
+    new THREE.Vector2(6.40, -5.00), // 45
+    new THREE.Vector2(7.80, -4.20), // 46
+    new THREE.Vector2(8.80, -3.00), // 47
+    new THREE.Vector2(9.20, -1.50), // 48
+    new THREE.Vector2(8.60, 0.20),  // 49
+    new THREE.Vector2(7.20, 1.60),  // 50
+    new THREE.Vector2(5.50, 2.80),  // 51
+    new THREE.Vector2(3.60, 4.00),  // 52
+    new THREE.Vector2(1.80, 5.20),  // 53
+    new THREE.Vector2(0.20, 6.60),  // 54
+    new THREE.Vector2(-1.40, 7.80), // 55
+    new THREE.Vector2(-3.00, 8.80), // 56
+    new THREE.Vector2(-4.80, 9.00), // 57
+    new THREE.Vector2(-6.40, 8.20), // 58
+    new THREE.Vector2(-7.50, 6.80), // 59
+    new THREE.Vector2(-7.80, 5.00), // 60
+    new THREE.Vector2(-7.20, 3.20), // 61
+    new THREE.Vector2(-5.80, 1.80), // 62
+    new THREE.Vector2(-4.00, 0.80), // 63
+    new THREE.Vector2(-2.00, 0.20), // 64
+    new THREE.Vector2(0.00, 0.00),  // 65
+    new THREE.Vector2(2.00, 0.50),  // 66
+    new THREE.Vector2(3.80, 1.60),  // 67
+    new THREE.Vector2(5.20, 3.00),  // 68
+    new THREE.Vector2(6.00, 4.60),  // 69
+    new THREE.Vector2(6.20, 6.40),  // 70
+    new THREE.Vector2(5.60, 8.00),  // 71
+    new THREE.Vector2(4.50, 9.50),  // 72
+    new THREE.Vector2(3.20, 10.60), // 73
+    new THREE.Vector2(2.50, 11.20), // 74
+  ];
+
+  public static readonly AIRPORT_WAYPOINTS_TIER_2: readonly THREE.Vector2[] = [
+    new THREE.Vector2(2.90, 11.30), // 1
+    new THREE.Vector2(2.20, 9.80),  // 2
+    new THREE.Vector2(1.50, 8.50),  // 3
+    new THREE.Vector2(0.60, 7.20),  // 4
+    new THREE.Vector2(-0.50, 6.00), // 5
+    new THREE.Vector2(-1.80, 5.00), // 6
+    new THREE.Vector2(-3.20, 4.20), // 7
+    new THREE.Vector2(-4.50, 3.20), // 8
+    new THREE.Vector2(-5.80, 2.00), // 9
+    new THREE.Vector2(-7.00, 0.60), // 10
+    new THREE.Vector2(-7.80, -1.00),// 11
+    new THREE.Vector2(-8.20, -2.80),// 12
+    new THREE.Vector2(-8.00, -4.60),// 13
+    new THREE.Vector2(-7.20, -6.40),// 14
+    new THREE.Vector2(-6.00, -8.00),// 15
+    new THREE.Vector2(-4.50, -9.50),// 16
+    new THREE.Vector2(-2.80, -10.80),// 17
+    new THREE.Vector2(-0.80, -11.60),// 18
+    new THREE.Vector2(1.20, -11.80),// 19
+    new THREE.Vector2(3.20, -11.40),// 20
+    new THREE.Vector2(5.20, -10.40),// 21
+    new THREE.Vector2(7.00, -9.00), // 22
+    new THREE.Vector2(8.50, -7.20), // 23
+    new THREE.Vector2(9.50, -5.20), // 24
+    new THREE.Vector2(10.00, -3.20),// 25
+    new THREE.Vector2(9.80, -1.20), // 26
+    new THREE.Vector2(9.00, 0.80),  // 27
+    new THREE.Vector2(7.60, 2.60),  // 28
+    new THREE.Vector2(5.80, 4.20),  // 29
+    new THREE.Vector2(3.80, 5.50),  // 30
+    new THREE.Vector2(1.80, 6.80),  // 31
+    new THREE.Vector2(-0.20, 8.00), // 32
+    new THREE.Vector2(-2.20, 9.00), // 33
+    new THREE.Vector2(-4.20, 9.60), // 34
+    new THREE.Vector2(-6.20, 9.40), // 35
+    new THREE.Vector2(-8.00, 8.40), // 36
+    new THREE.Vector2(-9.20, 6.80), // 37
+    new THREE.Vector2(-9.80, 4.80), // 38
+    new THREE.Vector2(-9.60, 2.80), // 39
+    new THREE.Vector2(-8.80, 1.00), // 40
+    new THREE.Vector2(-7.40, -0.60),// 41
+    new THREE.Vector2(-5.80, -2.00),// 42
+    new THREE.Vector2(-4.00, -3.20),// 43
+    new THREE.Vector2(-2.20, -4.20),// 44
+    new THREE.Vector2(-0.40, -5.00),// 45
+    new THREE.Vector2(1.50, -5.60), // 46
+    new THREE.Vector2(3.50, -6.00), // 47
+    new THREE.Vector2(5.40, -6.00), // 48
+    new THREE.Vector2(7.20, -5.40), // 49
+    new THREE.Vector2(8.60, -4.20), // 50
+    new THREE.Vector2(9.40, -2.60), // 51
+    new THREE.Vector2(9.50, -0.80), // 52
+    new THREE.Vector2(8.80, 1.00),  // 53
+    new THREE.Vector2(7.50, 2.60),  // 54
+    new THREE.Vector2(5.80, 4.00),  // 55
+    new THREE.Vector2(3.80, 5.20),  // 56
+    new THREE.Vector2(1.80, 6.40),  // 57
+    new THREE.Vector2(-0.20, 7.60), // 58
+    new THREE.Vector2(-2.00, 8.60), // 59
+    new THREE.Vector2(-3.80, 9.20), // 60
+    new THREE.Vector2(-5.60, 9.00), // 61
+    new THREE.Vector2(-7.20, 8.00), // 62
+    new THREE.Vector2(-8.20, 6.50), // 63
+    new THREE.Vector2(-8.50, 4.80), // 64
+    new THREE.Vector2(-8.00, 3.00), // 65
+    new THREE.Vector2(-6.80, 1.50), // 66
+    new THREE.Vector2(-5.20, 0.20), // 67
+    new THREE.Vector2(-3.50, -1.00),// 68
+    new THREE.Vector2(-1.80, -2.00),// 69
+    new THREE.Vector2(0.00, -2.80), // 70
+    new THREE.Vector2(1.80, -3.40), // 71
+    new THREE.Vector2(3.60, -3.60), // 72
+    new THREE.Vector2(5.40, -3.20), // 73
+    new THREE.Vector2(7.00, -2.20), // 74
+    new THREE.Vector2(8.00, -0.80), // 75
+    new THREE.Vector2(8.40, 0.80),  // 76
+    new THREE.Vector2(8.00, 2.50),  // 77
+    new THREE.Vector2(7.00, 4.00),  // 78
+    new THREE.Vector2(5.40, 5.50),  // 79
+    new THREE.Vector2(3.50, 6.80),  // 80
+    new THREE.Vector2(1.50, 8.00),  // 81
+    new THREE.Vector2(-0.50, 9.00), // 82
+    new THREE.Vector2(-2.50, 9.60), // 83
+    new THREE.Vector2(-4.50, 9.40), // 84
+    new THREE.Vector2(-6.20, 8.50), // 85
+    new THREE.Vector2(-7.40, 7.00), // 86
+    new THREE.Vector2(-7.80, 5.20), // 87
+    new THREE.Vector2(-7.40, 3.50), // 88
+    new THREE.Vector2(-6.20, 2.00), // 89
+    new THREE.Vector2(-4.60, 0.80), // 90
+    new THREE.Vector2(-2.80, -0.20),// 91
+    new THREE.Vector2(-0.80, -0.80),// 92
+    new THREE.Vector2(1.20, -1.00), // 93
+    new THREE.Vector2(3.20, -0.80), // 94
+    new THREE.Vector2(5.00, 0.00),  // 95
+    new THREE.Vector2(6.60, 1.20),  // 96
+    new THREE.Vector2(7.60, 2.80),  // 97
+    new THREE.Vector2(7.80, 4.60),  // 98
+    new THREE.Vector2(7.20, 6.40),  // 99
+    new THREE.Vector2(6.00, 8.00),  // 100
+    new THREE.Vector2(4.50, 9.40),  // 101
+    new THREE.Vector2(3.20, 10.50), // 102
+    new THREE.Vector2(2.50, 11.20), // 103
+  ];
+
   public static readonly NUM_SAMPLE_POINTS = 372;
   public static readonly TUBULAR_SEGMENTS = FlowLineChallenge.NUM_SAMPLE_POINTS - 1; // 371
   public static readonly RADIAL_SEGMENTS = 8;
@@ -208,7 +562,7 @@ export class FlowLineChallenge {
   public static readonly VISIBLE_BEHIND_POINTS = 2; // ~1.0m behind skater
   public static readonly CHEVRON_STEP = 8;
   public static readonly START_TRIGGER_RADIUS = 1.2;
-  public static readonly MAX_ALLOWED_DISTANCE = 5.5;
+  public static readonly MAX_ALLOWED_DISTANCE = 5.5; // fallback
   public static readonly FINISH_TRIGGER_RADIUS = 3.0;
   public static readonly FINISH_MIN_PROGRESS = 0.95;
 
@@ -217,9 +571,15 @@ export class FlowLineChallenge {
   private recordedPoints: THREE.Vector2[] = [];
   private lastExportCode = '';
   public onRecordingStateChange?: (isRecording: boolean, pointCount: number) => void;
+  public onLineCompleted?: (
+    tier: FlowLineTier,
+    elapsedSec: number,
+    bonusPoints: number
+  ) => void;
 
   private progressIdx = 0;
   private retriggerCooldown = 0;
+  private runElapsedSec = 0;
 
   // 3D Spline and sampled points
   private curve!: THREE.CatmullRomCurve3;
@@ -246,6 +606,24 @@ export class FlowLineChallenge {
   private finishLabelSprite!: THREE.Sprite;
   private finishLight!: THREE.PointLight;
 
+  // 3D Ghost Skater state & sub-meshes
+  private ghostDeckGroup = new THREE.Group();
+  private ghostSurferGroup = new THREE.Group();
+  private ghostLabelSprite!: THREE.Sprite;
+  private ghostGroundGlow!: THREE.Mesh;
+  private ghostMaterials: THREE.Material[] = [];
+  private ghostRotMatrix = new THREE.Matrix4();
+
+  private activeGhostSamples: GhostSample[] = [];
+  private activeGhostTotalTime = 0;
+  private activeGhostType: 'PB' | 'PACE' = 'PACE';
+  private ghostSamplePlaybackIdx = 0;
+  private ghostProgressTimes: Float32Array = new Float32Array(0);
+
+  // Ghost Recording for current run
+  private ghostSampleTimer = 0;
+  private currentRunSamples: GhostSample[] = [];
+
   constructor(
     private scene: THREE.Scene,
     private parkSurface: ParkSurface,
@@ -258,18 +636,96 @@ export class FlowLineChallenge {
     this.group.add(this.startGateGroup);
     this.group.add(this.flowLineGroup);
     this.group.add(this.finishGateGroup);
+    this.group.add(this.ghostGroup);
 
-    this.buildCurveFromWaypoints(FlowLineChallenge.WAYPOINTS_2D);
+    const srfParkId = this.parkSurface?.getParkId?.();
+    if (srfParkId) {
+      this.currentParkId = srfParkId;
+    }
+
+    const pts = this.getWaypointsForParkAndTier(this.currentParkId, this.currentTier);
+    this.buildCurveFromWaypoints(pts);
     this.buildStartGateVisuals();
     this.buildFlowLineVisuals();
     this.buildFinishGateVisuals();
+    this.buildGhostSkater();
     this.ensureModalExists();
 
-    // Default state: only start gate is visible; flow line and finish gate remain hidden until start
+    this.updateStartGateVisuals();
+
+    // Default state: only start gate is visible
     this.startGateGroup.visible = true;
     this.flowLineGroup.visible = false;
     this.finishGateGroup.visible = false;
+    this.ghostGroup.visible = false;
     this.progressIdx = 0;
+  }
+
+  public getCurrentTierConfig(): FlowLineTierConfig {
+    return FlowLineChallenge.TIER_CONFIGS[this.currentTier] ?? FlowLineChallenge.TIER_CONFIGS[0];
+  }
+
+  public getPersonalBest(
+    parkId: string = this.currentParkId,
+    tier: FlowLineTier = this.currentTier
+  ): number | null {
+    try {
+      const raw = localStorage.getItem(`surfsk8.flowGhost.${parkId}_tier_${tier}`);
+      if (!raw) return null;
+      const data = JSON.parse(raw) as GhostRecord;
+      if (typeof data.bestTimeSec === 'number' && !isNaN(data.bestTimeSec)) {
+        return data.bestTimeSec;
+      }
+    } catch {
+      // Ignore localStorage error
+    }
+    return null;
+  }
+
+  public isTierCompleted(
+    parkId: string = this.currentParkId,
+    tier: FlowLineTier = this.currentTier
+  ): boolean {
+    try {
+      const raw = localStorage.getItem('surfsk8.flowLineCompleted');
+      if (!raw) return false;
+      const comp = JSON.parse(raw) as Record<string, boolean>;
+      return !!comp[`${parkId}_tier_${tier}`];
+    } catch {
+      return false;
+    }
+  }
+
+  public setTier(tier: FlowLineTier): void {
+    this.currentTier = tier;
+    this.rebuildCurrentTierCurve();
+  }
+
+  public cycleTier(): FlowLineTier {
+    const next = ((this.currentTier + 1) % 3) as FlowLineTier;
+    this.setTier(next);
+    return this.currentTier;
+  }
+
+  public rebuildCurrentTierCurve(): void {
+    const pts = this.getWaypointsForParkAndTier(this.currentParkId, this.currentTier);
+    this.buildCurveFromWaypoints(pts);
+    this.updateStartGateVisuals();
+  }
+
+  private getWaypointsForParkAndTier(
+    parkId: string,
+    tier: FlowLineTier
+  ): readonly THREE.Vector2[] {
+    if (parkId === 'airport_skatepark') {
+      if (tier === 0) return FlowLineChallenge.AIRPORT_WAYPOINTS_TIER_0;
+      if (tier === 1) return FlowLineChallenge.AIRPORT_WAYPOINTS_TIER_1;
+      return FlowLineChallenge.AIRPORT_WAYPOINTS_TIER_2;
+    }
+    // Default to im_gefilde
+    if (tier === 0) return FlowLineChallenge.WAYPOINTS_2D.slice(0, 45);
+    if (tier === 1) return FlowLineChallenge.WAYPOINTS_2D.slice(0, 85);
+    return FlowLineChallenge.WAYPOINTS_2D;
   }
 
   /**
@@ -338,7 +794,7 @@ export class FlowLineChallenge {
     const tubularSegments = sampleCount - 1;
     const sampled = rawCurve.getPoints(tubularSegments);
 
-    // Re-sample height exactly from park surface at every single point along the path so the line hugs the steep walls
+    // Re-sample height exactly from park surface at every single point along the path
     for (const p of sampled) {
       p.y = this.parkSurface.sample(p.x, p.z).height + 0.05;
     }
@@ -379,11 +835,12 @@ export class FlowLineChallenge {
 
     if (!this.curve || this.curvePoints.length < 2) return;
 
+    const cfg = this.getCurrentTierConfig();
     const chevronGeo = new THREE.ConeGeometry(0.08, 0.2, 3);
     chevronGeo.rotateX(Math.PI / 2);
     chevronGeo.scale(1.0, 0.3, 1.0);
     const chevronMat = new THREE.MeshBasicMaterial({
-      color: 0x00f5d4,
+      color: cfg.hexColor,
       transparent: true,
       opacity: 0.45,
       blending: THREE.AdditiveBlending,
@@ -407,13 +864,15 @@ export class FlowLineChallenge {
   }
 
   /**
-   * Builds the Starting Gate: glowing cyan/orange concentric ground rings, light beacon & floating label.
+   * Builds the Starting Gate: glowing concentric ground rings, light beacon & floating billboard label.
    */
   private buildStartGateVisuals(): void {
-    // 1. Outer glowing cyan ring
+    const cfg = this.getCurrentTierConfig();
+
+    // 1. Outer glowing ring
     const outerGeo = new THREE.TorusGeometry(0.52, 0.018, 8, 48);
     const outerMat = new THREE.MeshBasicMaterial({
-      color: 0x00f5d4,
+      color: cfg.hexColor,
       transparent: true,
       opacity: 0.32,
       blending: THREE.AdditiveBlending,
@@ -439,7 +898,7 @@ export class FlowLineChallenge {
     // 3. Ground contact glow decal disc
     const discGeo = new THREE.CircleGeometry(0.54, 36);
     const discMat = new THREE.MeshBasicMaterial({
-      color: 0x00f5d4,
+      color: cfg.hexColor,
       transparent: true,
       opacity: 0.07,
       blending: THREE.AdditiveBlending,
@@ -451,9 +910,9 @@ export class FlowLineChallenge {
     this.startGateGroup.add(disc);
 
     // 4. Vertical cylindrical light beacon
-    const beaconGeo = new THREE.CylinderGeometry(0.50, 0.50, 0.65, 32, 1, true);
+    const beaconGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.65, 32, 1, true);
     const beaconMat = new THREE.MeshBasicMaterial({
-      color: 0x00e5ff,
+      color: cfg.hexColor,
       transparent: true,
       opacity: 0.07,
       blending: THREE.AdditiveBlending,
@@ -464,16 +923,16 @@ export class FlowLineChallenge {
     this.startBeacon.position.y = 0.32;
     this.startGateGroup.add(this.startBeacon);
 
-    // 5. PointLight casting warm cyan radiance onto concrete
-    this.startLight = new THREE.PointLight(0x00f5d4, 0.6, 3.2);
+    // 5. PointLight casting warm radiance onto concrete
+    this.startLight = new THREE.PointLight(cfg.hexColor, 0.6, 3.2);
     this.startLight.position.set(0, 0.45, 0);
     this.startGateGroup.add(this.startLight);
 
-    // 6. Floating Canvas Label Sprite: "FLOW LINE START"
+    // 6. Floating Canvas Label Sprite
     this.startLabelSprite = createTextSprite(
-      '🌊 FLOW LINE START',
+      cfg.shortName,
       'SKATE HERE TO BEGIN',
-      '#00f5d4'
+      cfg.accentColor
     );
     this.startLabelSprite.position.set(0, 0.88, 0);
     this.startGateGroup.add(this.startLabelSprite);
@@ -485,6 +944,7 @@ export class FlowLineChallenge {
    * Builds the 3D neon flow line tube and animated pulse markers.
    */
   private buildFlowLineVisuals(): void {
+    const cfg = this.getCurrentTierConfig();
     const tubularSegments = Math.max(
       FlowLineChallenge.TUBULAR_SEGMENTS,
       this.curvePoints.length - 1
@@ -497,8 +957,8 @@ export class FlowLineChallenge {
       false
     );
     this.tubeMaterial = new THREE.MeshStandardMaterial({
-      color: 0x00f0ff,
-      emissive: 0x00d4f5,
+      color: cfg.hexColor,
+      emissive: cfg.emissiveColor,
       emissiveIntensity: 0.65,
       roughness: 0.18,
       metalness: 0.1,
@@ -532,6 +992,8 @@ export class FlowLineChallenge {
    * Builds the Finish Gate: glowing golden arch, light beam & floating bonus banner.
    */
   private buildFinishGateVisuals(): void {
+    const cfg = this.getCurrentTierConfig();
+
     // 1. Glowing golden finish arch
     const archGeo = new THREE.TorusGeometry(0.55, 0.022, 8, 32);
     const archMat = new THREE.MeshStandardMaterial({
@@ -562,16 +1024,199 @@ export class FlowLineChallenge {
     this.finishLight.position.set(0, 0.65, 0);
     this.finishGateGroup.add(this.finishLight);
 
-    // 4. Floating Canvas Label Sprite: "FINISH GATE (+2000)"
+    // 4. Floating Canvas Label Sprite: "FINISH GATE (+BONUS)"
     this.finishLabelSprite = createTextSprite(
       '🏁 FINISH GATE',
-      '+2000 FLOW BONUS',
+      `+${cfg.bonusPoints} FLOW BONUS`,
       '#ffd166'
     );
     this.finishLabelSprite.position.set(0, 0.95, 0);
     this.finishGateGroup.add(this.finishLabelSprite);
 
     this.updateFinishGatePosition();
+  }
+
+  /**
+   * Builds the 3D Ghost Skater: semi-transparent glowing surfskate deck with wheels,
+   * stylized surfer silhouette in deep carve stance, and floating overhead split banner.
+   */
+  private buildGhostSkater(): void {
+    const cfg = this.getCurrentTierConfig();
+    this.ghostGroup.name = 'FlowLineGhostSkater';
+
+    // Deck group rolls around board axis with leanAngle
+    this.ghostDeckGroup = new THREE.Group();
+    this.ghostGroup.add(this.ghostDeckGroup);
+
+    // 1. Deck Mesh (nose toward local -Z, tail toward local +Z)
+    const deckGeo = new THREE.BoxGeometry(0.24, 0.024, 0.82);
+    const deckMat = new THREE.MeshStandardMaterial({
+      color: cfg.hexColor,
+      emissive: cfg.emissiveColor,
+      emissiveIntensity: 0.65,
+      roughness: 0.25,
+      metalness: 0.1,
+      transparent: true,
+      opacity: 0.62,
+      depthWrite: false,
+    });
+    this.ghostMaterials.push(deckMat);
+    const deckMesh = new THREE.Mesh(deckGeo, deckMat);
+    deckMesh.position.set(0, 0.08, 0);
+    this.ghostDeckGroup.add(deckMesh);
+
+    // Grip accent line
+    const gripGeo = new THREE.PlaneGeometry(0.18, 0.74);
+    gripGeo.rotateX(-Math.PI / 2);
+    const gripMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.32,
+      depthWrite: false,
+    });
+    this.ghostMaterials.push(gripMat);
+    const gripMesh = new THREE.Mesh(gripGeo, gripMat);
+    gripMesh.position.set(0, 0.093, 0);
+    this.ghostDeckGroup.add(gripMesh);
+
+    // 4 Wheels
+    const wheelGeo = new THREE.CylinderGeometry(0.034, 0.034, 0.045, 12);
+    wheelGeo.rotateZ(Math.PI / 2);
+    const wheelMat = new THREE.MeshStandardMaterial({
+      color: cfg.hexColor,
+      emissive: cfg.emissiveColor,
+      emissiveIntensity: 0.8,
+      transparent: true,
+      opacity: 0.7,
+      depthWrite: false,
+    });
+    this.ghostMaterials.push(wheelMat);
+
+    const wheelOffsets: [number, number, number][] = [
+      [-0.12, 0.038, -0.26], // front-left
+      [0.12, 0.038, -0.26],  // front-right
+      [-0.12, 0.038, 0.26],  // rear-left
+      [0.12, 0.038, 0.26],   // rear-right
+    ];
+    for (const [wx, wy, wz] of wheelOffsets) {
+      const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+      wheel.position.set(wx, wy, wz);
+      this.ghostDeckGroup.add(wheel);
+    }
+
+    // 2. Stylized Surfer Silhouette in Carve Stance
+    this.ghostSurferGroup = new THREE.Group();
+    this.ghostDeckGroup.add(this.ghostSurferGroup);
+
+    const surferMat = new THREE.MeshStandardMaterial({
+      color: cfg.hexColor,
+      emissive: cfg.emissiveColor,
+      emissiveIntensity: 0.55,
+      roughness: 0.3,
+      metalness: 0.1,
+      transparent: true,
+      opacity: 0.5,
+      depthWrite: false,
+    });
+    this.ghostMaterials.push(surferMat);
+
+    // Feet on deck
+    const frontFoot = new THREE.Mesh(
+      new THREE.BoxGeometry(0.08, 0.04, 0.16),
+      surferMat
+    );
+    frontFoot.position.set(0.02, 0.11, -0.18);
+    this.ghostSurferGroup.add(frontFoot);
+
+    const rearFoot = new THREE.Mesh(
+      new THREE.BoxGeometry(0.08, 0.04, 0.16),
+      surferMat
+    );
+    rearFoot.position.set(-0.02, 0.11, 0.18);
+    this.ghostSurferGroup.add(rearFoot);
+
+    // Calves & Thighs (deep surf crouch)
+    const calfGeo = new THREE.CylinderGeometry(0.036, 0.04, 0.26, 8);
+    const frontCalf = new THREE.Mesh(calfGeo, surferMat);
+    frontCalf.position.set(0.02, 0.24, -0.16);
+    frontCalf.rotation.x = -0.2;
+    this.ghostSurferGroup.add(frontCalf);
+
+    const rearCalf = new THREE.Mesh(calfGeo, surferMat);
+    rearCalf.position.set(-0.02, 0.22, 0.15);
+    rearCalf.rotation.x = 0.35;
+    this.ghostSurferGroup.add(rearCalf);
+
+    const thighGeo = new THREE.CylinderGeometry(0.045, 0.048, 0.28, 8);
+    const frontThigh = new THREE.Mesh(thighGeo, surferMat);
+    frontThigh.position.set(0.02, 0.38, -0.08);
+    frontThigh.rotation.x = 0.35;
+    this.ghostSurferGroup.add(frontThigh);
+
+    const rearThigh = new THREE.Mesh(thighGeo, surferMat);
+    rearThigh.position.set(-0.02, 0.35, 0.06);
+    rearThigh.rotation.x = -0.45;
+    this.ghostSurferGroup.add(rearThigh);
+
+    // Torso / Pelvis
+    const torsoGeo = new THREE.CylinderGeometry(0.08, 0.065, 0.32, 8);
+    const torso = new THREE.Mesh(torsoGeo, surferMat);
+    torso.position.set(0, 0.54, 0.0);
+    torso.rotation.x = -0.2; // leaning into the carve
+    this.ghostSurferGroup.add(torso);
+
+    // Head
+    const headGeo = new THREE.SphereGeometry(0.075, 12, 8);
+    const head = new THREE.Mesh(headGeo, surferMat);
+    head.position.set(0, 0.74, -0.06);
+    this.ghostSurferGroup.add(head);
+
+    // Arms: trailing arm touching wave, lead arm reaching forward
+    const armGeo = new THREE.CylinderGeometry(0.026, 0.03, 0.26, 6);
+    const leadArm = new THREE.Mesh(armGeo, surferMat);
+    leadArm.position.set(-0.16, 0.56, -0.22);
+    leadArm.rotation.set(-0.7, 0, 0.5);
+    this.ghostSurferGroup.add(leadArm);
+
+    const trailArm = new THREE.Mesh(armGeo, surferMat);
+    trailArm.position.set(0.18, 0.34, 0.08);
+    trailArm.rotation.set(0.9, 0, -0.5);
+    this.ghostSurferGroup.add(trailArm);
+
+    // 3. Ground contact glow decal disc
+    const groundGlowGeo = new THREE.CircleGeometry(0.36, 18);
+    groundGlowGeo.rotateX(-Math.PI / 2);
+    const groundGlowMat = new THREE.MeshBasicMaterial({
+      color: cfg.hexColor,
+      transparent: true,
+      opacity: 0.25,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.ghostGroundGlow = new THREE.Mesh(groundGlowGeo, groundGlowMat);
+    this.ghostGroundGlow.position.set(0, 0.02, 0);
+    this.ghostGroup.add(this.ghostGroundGlow);
+
+    // 4. Overhead Floating Ghost Mini-Sprite
+    this.ghostLabelSprite = createTextSprite('👻 PB GHOST', '', cfg.accentColor);
+    this.ghostLabelSprite.scale.set(0.95, 0.26, 1.0);
+    this.ghostLabelSprite.position.set(0, 1.42, 0);
+    this.ghostGroup.add(this.ghostLabelSprite);
+  }
+
+  private updateGhostMaterials(): void {
+    const cfg = this.getCurrentTierConfig();
+    for (const m of this.ghostMaterials) {
+      if ('color' in m) {
+        (m as THREE.MeshStandardMaterial).color.setHex(cfg.hexColor);
+      }
+      if ('emissive' in m) {
+        (m as THREE.MeshStandardMaterial).emissive.setHex(cfg.emissiveColor);
+      }
+    }
+    if (this.ghostGroundGlow?.material) {
+      (this.ghostGroundGlow.material as THREE.MeshBasicMaterial).color.setHex(cfg.hexColor);
+    }
   }
 
   private updateStartGatePosition(): void {
@@ -596,43 +1241,68 @@ export class FlowLineChallenge {
     this.finishGateGroup.rotation.y = angle;
   }
 
+  private updateStartGateVisuals(): void {
+    const cfg = this.getCurrentTierConfig();
+    const pb = this.getPersonalBest(this.currentParkId, this.currentTier);
+    const subtitle =
+      pb !== null
+        ? `PB: ${pb.toFixed(1)}s • SKATE IN TO START`
+        : `${cfg.desc} • +${cfg.bonusPoints} PTS`;
+
+    updateTextSprite(this.startLabelSprite, cfg.shortName, subtitle, cfg.accentColor);
+
+    if (this.startOuterRing?.material) {
+      (this.startOuterRing.material as THREE.MeshBasicMaterial).color.setHex(cfg.hexColor);
+    }
+    if (this.startBeacon?.material) {
+      (this.startBeacon.material as THREE.MeshBasicMaterial).color.setHex(cfg.hexColor);
+    }
+    if (this.startLight) {
+      this.startLight.color.setHex(cfg.hexColor);
+    }
+    if (this.tubeMaterial) {
+      this.tubeMaterial.color.setHex(cfg.hexColor);
+      this.tubeMaterial.emissive.setHex(cfg.emissiveColor);
+    }
+    for (const c of this.chevronMarkers) {
+      (c.material as THREE.MeshBasicMaterial).color.setHex(cfg.hexColor);
+    }
+    if (this.finishLabelSprite) {
+      updateTextSprite(
+        this.finishLabelSprite,
+        '🏁 FINISH GATE',
+        `+${cfg.bonusPoints} FLOW BONUS`,
+        '#ffd166'
+      );
+    }
+    this.updateGhostMaterials();
+  }
+
   /**
    * Refreshes the curve and tube geometry to hug the exact LiDAR / C2 surface.
    * Called on initial LiDAR grid load and when switching skateparks.
    */
-  public refreshSurfaceHeights(): void {
-    for (const p of this.curvePoints) {
-      p.y = this.parkSurface.sample(p.x, p.z).height + 0.05;
-    }
-    this.curve = new THREE.CatmullRomCurve3(
-      this.curvePoints,
-      false,
-      'centripetal',
-      0.5
-    );
-
-    const tubularSegments = Math.max(
-      FlowLineChallenge.TUBULAR_SEGMENTS,
-      this.curvePoints.length - 1
-    );
-    if (this.tubeMesh) {
-      this.tubeMesh.geometry.dispose();
-      this.tubeMesh.geometry = new THREE.TubeGeometry(
-        this.curve,
-        tubularSegments,
-        0.034,
-        FlowLineChallenge.RADIAL_SEGMENTS,
-        false
-      );
+  public refreshSurfaceHeights(parkId?: string): void {
+    if (parkId) {
+      this.currentParkId = parkId;
+    } else {
+      const srfParkId = this.parkSurface?.getParkId?.();
+      if (srfParkId) {
+        this.currentParkId = srfParkId;
+      }
     }
 
-    this.buildChevrons();
-    this.updateStartGatePosition();
-    this.updateFinishGatePosition();
-    if (this.isActive || this.isRecording) {
+    if (this.isActive) {
+      this.failChallenge('PARK CHANGED');
+    }
+
+    this.rebuildCurrentTierCurve();
+
+    if (this.isRecording) {
       this.updateFlowLineVisibility(0);
     } else {
       this.flowLineGroup.visible = false;
+      this.startGateGroup.visible = true;
     }
   }
 
@@ -698,19 +1368,22 @@ export class FlowLineChallenge {
       }
 
       this.flowLineGroup.visible = false;
+      this.ghostGroup.visible = false;
 
       // Check if skater enters starting gate
-      const startPt = this.curvePoints[0];
-      const distToStart = Math.hypot(
-        controller.position.x - startPt.x,
-        controller.position.z - startPt.z
-      );
+      if (this.curvePoints.length > 0) {
+        const startPt = this.curvePoints[0];
+        const distToStart = Math.hypot(
+          controller.position.x - startPt.x,
+          controller.position.z - startPt.z
+        );
 
-      if (
-        this.retriggerCooldown <= 0 &&
-        distToStart < FlowLineChallenge.START_TRIGGER_RADIUS
-      ) {
-        this.startChallenge();
+        if (
+          this.retriggerCooldown <= 0 &&
+          distToStart < FlowLineChallenge.START_TRIGGER_RADIUS
+        ) {
+          this.startChallenge(controller);
+        }
       }
       return;
     }
@@ -752,29 +1425,57 @@ export class FlowLineChallenge {
     }
 
     const distToLine = Math.sqrt(minDistSq);
+    const cfg = this.getCurrentTierConfig();
 
-    // 3. Check if skater is too far away from the line
-    if (distToLine > FlowLineChallenge.MAX_ALLOWED_DISTANCE) {
+    // 3. Check if skater is too far away from the line (tier-dependent tolerance)
+    if (distToLine > cfg.maxAllowedDistance) {
       this.failChallenge('FLOW LINE ENDED — TOO FAR!');
       return;
     }
 
-    // 4. Dynamically update visible 10-15m window of tube, chevrons & pulse markers
-    this.updateFlowLineVisibility(timeSec);
-
-    // 5. Wave Flow Speed Assist: surfing an endless wave without stalling
-    if (controller.speed > 1.0 && controller.speed < 5.2) {
-      controller.speed = Math.min(5.8, controller.speed + dt * 1.1);
+    // 4. Update elapsed timer and record player samples at 10 Hz (every 0.10s)
+    this.runElapsedSec += dt;
+    this.ghostSampleTimer += dt;
+    if (this.ghostSampleTimer >= 0.1) {
+      this.ghostSampleTimer -= 0.1;
+      this.currentRunSamples.push({
+        t: Number(this.runElapsedSec.toFixed(2)),
+        x: Number(controller.position.x.toFixed(2)),
+        y: Number(controller.position.y.toFixed(2)),
+        z: Number(controller.position.z.toFixed(2)),
+        h: Number(controller.heading.toFixed(3)),
+        lean: Number(controller.leanAngle.toFixed(3)),
+      });
     }
 
-    // 6. Live HUD Progress Hint
-    const progressFrac =
-      this.progressIdx / (this.curvePoints.length - 1);
-    const pct = Math.round(progressFrac * 100);
-    this.hud.setFlowLineHint(`🌊 FOLLOW THE FLOW: ${pct}%`);
+    // 5. Update Ghost Skater 3D position & animation
+    this.updateGhostPlayback(timeSec, dt);
 
-    // 7. Finish Gate Visibility:
-    // Show finish gate once the track end enters the 15m visibility window (>= NUM_SAMPLE_POINTS - 30, ca. 90% progress)
+    // 6. Dynamically update visible 10-15m window of tube, chevrons & pulse markers
+    this.updateFlowLineVisibility(timeSec);
+
+    // 7. Wave Flow Speed Assist: surfing an endless wave without stalling
+    const minAssist = cfg.targetPaceSpeed * 0.72;
+    if (controller.speed > 1.0 && controller.speed < minAssist) {
+      controller.speed = Math.min(minAssist, controller.speed + dt * 1.15);
+    }
+
+    // 8. Live HUD Progress Hint with Ghost Split Time
+    const progressFrac =
+      this.progressIdx / Math.max(1, this.curvePoints.length - 1);
+    const pct = Math.round(progressFrac * 100);
+
+    const ghostT = this.ghostProgressTimes[this.progressIdx] ?? 0;
+    const splitSec = this.runElapsedSec - ghostT;
+    const splitStr =
+      splitSec <= 0
+        ? `-${Math.abs(splitSec).toFixed(1)}s`
+        : `+${splitSec.toFixed(1)}s`;
+
+    this.hud.setFlowLineHint(`${cfg.shortName}: ${pct}% | 👻 ${splitStr}`);
+
+    // 9. Finish Gate Visibility:
+    // Show finish gate once the track end enters the 15m visibility window
     const finishThreshold = Math.max(0, this.curvePoints.length - 1 - 30);
     this.finishGateGroup.visible = this.progressIdx >= finishThreshold;
 
@@ -784,7 +1485,7 @@ export class FlowLineChallenge {
         0.95 + Math.sin(timeSec * 2.6) * 0.04;
     }
 
-    // 8. Check Finish Gate completion
+    // 10. Check Finish Gate completion
     const finishPt = this.curvePoints[this.curvePoints.length - 1];
     const distToFinish = Math.hypot(
       controller.position.x - finishPt.x,
@@ -806,6 +1507,7 @@ export class FlowLineChallenge {
       this.isActive = false;
       this.startGateGroup.visible = false;
       this.finishGateGroup.visible = false;
+      this.ghostGroup.visible = false;
       this.flowLineGroup.visible = true;
 
       this.recordedPoints = [
@@ -878,7 +1580,7 @@ export class FlowLineChallenge {
       } else {
         this.hud.showTrickBanner('REC CANCELLED (NEED >= 3 PTS)', false);
         this.hud.setFlowLineHint(null);
-        this.buildCurveFromWaypoints(FlowLineChallenge.WAYPOINTS_2D);
+        this.rebuildCurrentTierCurve();
         this.startGateGroup.visible = true;
         this.flowLineGroup.visible = false;
         this.finishGateGroup.visible = false;
@@ -945,7 +1647,7 @@ export class FlowLineChallenge {
           </div>
           <div class="flowline-modal-body">
             <p class="flowline-desc">
-              Your custom Flow Line was recorded live in Skatepark "Im Wiesengrund"! Copy this snippet to chat or directly into <code class="flowline-code">FlowLineChallenge.WAYPOINTS_2D</code>:
+              Your custom Flow Line was recorded live in Skatepark! Copy this snippet to chat or directly into <code class="flowline-code">FlowLineChallenge.WAYPOINTS_2D</code>:
             </p>
             <textarea id="flowline-export-textarea" class="flowline-textarea" readonly spellcheck="false"></textarea>
           </div>
@@ -1086,25 +1788,241 @@ export class FlowLineChallenge {
     }
   }
 
-  private startChallenge(): void {
+  public startChallenge(controller?: SurfskateController): void {
     this.isActive = true;
     this.progressIdx = 0;
+    this.runElapsedSec = 0;
+    this.ghostSampleTimer = 0;
+    this.ghostSamplePlaybackIdx = 0;
+    this.currentRunSamples = [];
+
+    const cfg = this.getCurrentTierConfig();
+
+    if (controller) {
+      this.currentRunSamples.push({
+        t: 0,
+        x: Number(controller.position.x.toFixed(2)),
+        y: Number(controller.position.y.toFixed(2)),
+        z: Number(controller.position.z.toFixed(2)),
+        h: Number(controller.heading.toFixed(3)),
+        lean: Number(controller.leanAngle.toFixed(3)),
+      });
+    } else if (this.curvePoints.length > 0) {
+      const p = this.curvePoints[0];
+      const tangent = this.curve.getTangentAt(0);
+      const h = Math.atan2(-tangent.x, -tangent.z);
+      this.currentRunSamples.push({
+        t: 0,
+        x: Number(p.x.toFixed(2)),
+        y: Number(p.y.toFixed(2)),
+        z: Number(p.z.toFixed(2)),
+        h: Number(h.toFixed(3)),
+        lean: 0,
+      });
+    }
 
     this.startGateGroup.visible = false;
     this.flowLineGroup.visible = true;
     this.finishGateGroup.visible = false;
 
+    this.setupGhostForRun();
     this.updateFlowLineVisibility(0);
 
-    this.hud.showTrickBanner('🌊 FOLLOW THE FLOW!', true);
-    this.hud.setFlowLineHint('🌊 FOLLOW THE FLOW: 0%');
+    this.hud.showTrickBanner(`🌊 ${cfg.name}!`, true);
+    this.hud.setFlowLineHint(`🌊 ${cfg.shortName}: 0% | 👻 ±0.0s`);
     this.audio.playManeuverChime();
   }
 
-  private failChallenge(reason: string): void {
+  private setupGhostForRun(): void {
+    const cfg = this.getCurrentTierConfig();
+    const storageKey = `surfsk8.flowGhost.${this.currentParkId}_tier_${this.currentTier}`;
+    let loadedRecord: GhostRecord | null = null;
+
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as GhostRecord;
+        if (
+          parsed &&
+          Array.isArray(parsed.samples) &&
+          parsed.samples.length >= 3 &&
+          typeof parsed.bestTimeSec === 'number'
+        ) {
+          loadedRecord = parsed;
+        }
+      }
+    } catch {
+      // LocalStorage error fallback
+    }
+
+    if (loadedRecord) {
+      this.activeGhostSamples = loadedRecord.samples;
+      this.activeGhostTotalTime = loadedRecord.bestTimeSec;
+      this.activeGhostType = 'PB';
+      updateTextSprite(
+        this.ghostLabelSprite,
+        '👻 PB GHOST',
+        `${loadedRecord.bestTimeSec.toFixed(1)}s`,
+        cfg.accentColor
+      );
+    } else {
+      // Generate virtual target pace ghost
+      const totalLen = this.curve.getLength();
+      const totalTime = totalLen / cfg.targetPaceSpeed;
+      this.activeGhostTotalTime = totalTime;
+      this.activeGhostType = 'PACE';
+
+      const numSamples = Math.max(10, Math.ceil(totalTime * 10)); // 10 Hz
+      const generated: GhostSample[] = [];
+
+      for (let i = 0; i <= numSamples; i++) {
+        const frac = i / numSamples;
+        const t = Number((frac * totalTime).toFixed(2));
+        const pos = this.curve.getPointAt(frac);
+        const tangent = this.curve.getTangentAt(frac);
+        const h = Math.atan2(-tangent.x, -tangent.z);
+
+        // Procedural carve lean based on curve turn rate
+        const nextFrac = Math.min(1.0, frac + 0.02);
+        const nextTangent = this.curve.getTangentAt(nextFrac);
+        const cross = tangent.x * nextTangent.z - tangent.z * nextTangent.x;
+        const lean = Math.max(-0.55, Math.min(0.55, cross * 25));
+
+        const groundH = this.parkSurface.sample(pos.x, pos.z).height;
+
+        generated.push({
+          t,
+          x: Number(pos.x.toFixed(2)),
+          y: Number((groundH + 0.05).toFixed(2)),
+          z: Number(pos.z.toFixed(2)),
+          h: Number(h.toFixed(3)),
+          lean: Number(lean.toFixed(3)),
+        });
+      }
+
+      this.activeGhostSamples = generated;
+      updateTextSprite(
+        this.ghostLabelSprite,
+        '👻 TARGET PACE',
+        `${cfg.targetPaceSpeed.toFixed(1)} m/s`,
+        cfg.accentColor
+      );
+    }
+
+    this.buildGhostProgressLookup();
+    this.ghostSamplePlaybackIdx = 0;
+    this.ghostGroup.visible = true;
+    this.updateGhostPlayback(0, 0);
+  }
+
+  private buildGhostProgressLookup(): void {
+    const n = this.curvePoints.length;
+    if (this.ghostProgressTimes.length !== n) {
+      this.ghostProgressTimes = new Float32Array(n);
+    }
+
+    if (this.activeGhostType === 'PACE') {
+      const totalTime = this.activeGhostTotalTime;
+      for (let i = 0; i < n; i++) {
+        this.ghostProgressTimes[i] = (i / Math.max(1, n - 1)) * totalTime;
+      }
+      return;
+    }
+
+    // For PB Ghost: forward search closest sample timestamp
+    let lastG = 0;
+    for (let i = 0; i < n; i++) {
+      const pt = this.curvePoints[i];
+      let bestIdx = lastG;
+      let bestDistSq = Infinity;
+      const searchMax = Math.min(this.activeGhostSamples.length - 1, lastG + 25);
+      for (let g = lastG; g <= searchMax; g++) {
+        const s = this.activeGhostSamples[g];
+        const dx = pt.x - s.x;
+        const dz = pt.z - s.z;
+        const dSq = dx * dx + dz * dz;
+        if (dSq < bestDistSq) {
+          bestDistSq = dSq;
+          bestIdx = g;
+        }
+      }
+      lastG = bestIdx;
+      this.ghostProgressTimes[i] = this.activeGhostSamples[bestIdx].t;
+    }
+  }
+
+  private updateGhostPlayback(timeSec: number, _dt: number): void {
+    if (!this.activeGhostSamples.length) return;
+
+    const t = this.runElapsedSec;
+
+    // If ghost finished more than 2.0s ago, hide it
+    if (t > this.activeGhostTotalTime + 2.0) {
+      this.ghostGroup.visible = false;
+      return;
+    }
+    this.ghostGroup.visible = true;
+
+    // Advance playback index
+    while (
+      this.ghostSamplePlaybackIdx < this.activeGhostSamples.length - 2 &&
+      this.activeGhostSamples[this.ghostSamplePlaybackIdx + 1].t < t
+    ) {
+      this.ghostSamplePlaybackIdx++;
+    }
+
+    const s0 = this.activeGhostSamples[this.ghostSamplePlaybackIdx];
+    const s1 =
+      this.activeGhostSamples[
+        Math.min(this.activeGhostSamples.length - 1, this.ghostSamplePlaybackIdx + 1)
+      ];
+
+    const span = Math.max(0.0001, s1.t - s0.t);
+    const alpha = Math.max(0, Math.min(1, (t - s0.t) / span));
+
+    // Position lerp
+    const gx = s0.x + (s1.x - s0.x) * alpha;
+    const gz = s0.z + (s1.z - s0.z) * alpha;
+
+    // Sample surface at ghost position for accurate slope alignment
+    const srf = this.parkSurface.sample(gx, gz);
+    const gy = srf.height + 0.05;
+
+    // Heading lerp with angle wrap-around
+    let dh = s1.h - s0.h;
+    while (dh > Math.PI) dh -= 2 * Math.PI;
+    while (dh < -Math.PI) dh += 2 * Math.PI;
+    const gh = s0.h + dh * alpha;
+
+    // Lean lerp
+    const glean = s0.lean + (s1.lean - s0.lean) * alpha;
+
+    // Orientation along surface normal and heading
+    const forward = new THREE.Vector3(-Math.sin(gh), 0, -Math.cos(gh)).normalize();
+    const up = srf.normal.clone().lerp(new THREE.Vector3(0, 1, 0), 0.28).normalize();
+    const right = new THREE.Vector3().crossVectors(forward, up).normalize();
+    const orthoForward = new THREE.Vector3().crossVectors(up, right).normalize();
+
+    this.ghostRotMatrix.makeBasis(right, up, orthoForward.clone().negate());
+    this.ghostGroup.quaternion.setFromRotationMatrix(this.ghostRotMatrix);
+    this.ghostGroup.position.set(gx, gy, gz);
+
+    // Deck roll around longitudinal axis
+    this.ghostDeckGroup.rotation.z = glean;
+
+    // Procedural subtle surfing motion
+    const bob = Math.sin(timeSec * 6) * 0.015;
+    this.ghostSurferGroup.position.y = bob;
+
+    // Floating label stays above deck
+    this.ghostLabelSprite.position.set(0, 1.42 + bob * 0.5, 0);
+  }
+
+  public failChallenge(reason: string): void {
     this.isActive = false;
     this.retriggerCooldown = 1.5;
     this.progressIdx = 0;
+    this.ghostGroup.visible = false;
 
     this.startGateGroup.visible = true;
     this.flowLineGroup.visible = false;
@@ -1118,18 +2036,67 @@ export class FlowLineChallenge {
     }
   }
 
-  private completeChallenge(): void {
+  public completeChallenge(): void {
+    const elapsed = this.runElapsedSec;
     this.isActive = false;
     this.retriggerCooldown = 2.0;
     this.progressIdx = 0;
+    this.ghostGroup.visible = false;
 
     this.startGateGroup.visible = true;
     this.flowLineGroup.visible = false;
     this.finishGateGroup.visible = false;
-
     this.hud.setFlowLineHint(null);
-    this.hud.awardBonusPoints(2000, 'FLOW LINE COMPLETE! +2000');
+
+    const cfg = this.getCurrentTierConfig();
+    const prevPB = this.getPersonalBest(this.currentParkId, this.currentTier);
+    const isNewRecord = prevPB === null || elapsed < prevPB;
+
+    if (isNewRecord) {
+      const record: GhostRecord = {
+        parkId: this.currentParkId,
+        tier: this.currentTier,
+        bestTimeSec: Number(elapsed.toFixed(2)),
+        date: new Date().toISOString(),
+        isVirtualPace: false,
+        samples: this.currentRunSamples,
+      };
+      try {
+        localStorage.setItem(
+          `surfsk8.flowGhost.${this.currentParkId}_tier_${this.currentTier}`,
+          JSON.stringify(record)
+        );
+      } catch (err) {
+        console.warn('Failed to save ghost record:', err);
+      }
+      this.hud.awardBonusPoints(
+        cfg.bonusPoints,
+        `🏆 NEW RECORD! ${elapsed.toFixed(1)}s (+${cfg.bonusPoints} PTS)`
+      );
+    } else {
+      this.hud.awardBonusPoints(
+        cfg.bonusPoints,
+        `FLOW LINE COMPLETE! ${elapsed.toFixed(1)}s (+${cfg.bonusPoints} PTS)`
+      );
+    }
+
+    // Save completed tier in localStorage
+    try {
+      const raw = localStorage.getItem('surfsk8.flowLineCompleted');
+      const comp = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+      comp[`${this.currentParkId}_tier_${this.currentTier}`] = true;
+      localStorage.setItem('surfsk8.flowLineCompleted', JSON.stringify(comp));
+    } catch (err) {
+      console.warn('Failed to save completed flow line status:', err);
+    }
+
+    // Notify listeners (missions, achievements)
+    this.onLineCompleted?.(this.currentTier, elapsed, cfg.bonusPoints);
     this.audio.playPretzelPickup(true);
+
+    // Auto-advance to next difficulty tier (0 -> 1 -> 2 -> 0)
+    const nextTier = ((this.currentTier + 1) % 3) as FlowLineTier;
+    this.setTier(nextTier);
   }
 
   public reset(): void {
@@ -1137,7 +2104,11 @@ export class FlowLineChallenge {
     this.isRecording = false;
     this.progressIdx = 0;
     this.retriggerCooldown = 0;
+    this.runElapsedSec = 0;
+    this.ghostSampleTimer = 0;
+    this.currentRunSamples = [];
 
+    this.ghostGroup.visible = false;
     this.startGateGroup.visible = true;
     this.flowLineGroup.visible = false;
     this.finishGateGroup.visible = false;

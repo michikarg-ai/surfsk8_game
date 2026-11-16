@@ -129,6 +129,25 @@ export class SurfskateController {
   public airRotation = 0;
   public maxAirHeight = 0;
 
+  // Session timer, Overtime & Endless Mode state
+  public endlessMode = false;
+  public sessionTimer = 120.0;
+  public sessionOvertime = false;
+  public sessionFinished = false;
+  public comboCount = 0;
+  public comboScore = 0;
+  public hotSpotMultiplier = 1.0;
+
+  // Surf-Zone Overdrive (>= 80% Flow) & Perfect Pump state
+  public isSurfZoneActive = false;
+  public surfZoneTimer = 0;
+  public perfectPumpFlashTimer = 0;
+  private perfectPumpCooldown = 0;
+  private surfZoneOverdriveCooldown = 0;
+  private prevSurfZoneActive = false;
+  private prevCompressInput = false;
+  private prevSinT = 0;
+
   // Bail / Wipeout state (triggered when landing not aligned or holding grab)
   public isBailing = false;
   public bailTimer = 0;
@@ -236,6 +255,20 @@ export class SurfskateController {
     this.spawnHeading = heading;
   }
 
+  /** Top speed cap (m/s), boosted by +8% during Surf-Zone Overdrive (>= 80% Flow). */
+  public get maxSpeedLimit(): number {
+    return this.isSurfZoneActive ? MAX_SPEED * 1.08 : MAX_SPEED;
+  }
+
+  /**
+   * Apply Surf-Zone Overdrive (1.5x) and Hot-Spot multiplier to trick / maneuver points.
+   */
+  public applyScoreMultipliers(basePoints: number): number {
+    if (basePoints <= 0) return 0;
+    const surfZoneMult = this.isSurfZoneActive ? 1.5 : 1.0;
+    return Math.round(basePoints * surfZoneMult * this.hotSpotMultiplier);
+  }
+
   public resetToSpawn(): void {
     this.position.set(this.spawnX, 0, this.spawnZ);
     this.currentSurface = this.park.sample(this.position.x, this.position.z);
@@ -270,6 +303,21 @@ export class SurfskateController {
     this.bailTimer = 0;
     this.lastPumpDir = 0;
     this.timeSincePumpSwitch = 99;
+
+    // Reset session timer, overtime, Surf-Zone & Perfect Pump state
+    this.sessionTimer = 120.0;
+    this.sessionOvertime = false;
+    this.sessionFinished = false;
+    this.surfZoneTimer = 0;
+    this.comboCount = 0;
+    this.comboScore = 0;
+    this.isSurfZoneActive = false;
+    this.prevSurfZoneActive = false;
+    this.surfZoneOverdriveCooldown = 0;
+    this.perfectPumpCooldown = 0;
+    this.perfectPumpFlashTimer = 0;
+    this.prevCompressInput = false;
+    this.prevSinT = 0;
   }
 
   public update(dt: number, input: InputState, onManeuver: (ev: ManeuverEvent) => void): void {
@@ -306,6 +354,65 @@ export class SurfskateController {
       }
       return;
     }
+
+    // -------------------------------------------------------------------------
+    // Session Timer, Overtime & Endless Mode
+    // -------------------------------------------------------------------------
+    if (!this.endlessMode) {
+      if (this.sessionTimer > 0) {
+        this.sessionTimer = Math.max(0, this.sessionTimer - clampedDt);
+      }
+      if (this.sessionTimer <= 0) {
+        const isInComboOrAir =
+          this.comboCount > 0 ||
+          this.comboScore > 0 ||
+          !this.isGrounded ||
+          this.isGrinding;
+        if (isInComboOrAir) {
+          this.sessionOvertime = true;
+        } else {
+          this.sessionOvertime = false;
+          this.sessionFinished = true;
+        }
+      }
+    } else {
+      this.sessionTimer = 120.0;
+      this.sessionOvertime = false;
+      this.sessionFinished = false;
+    }
+
+    // Cooldown & feedback timers
+    if (this.perfectPumpCooldown > 0) {
+      this.perfectPumpCooldown = Math.max(0, this.perfectPumpCooldown - clampedDt);
+    }
+    if (this.perfectPumpFlashTimer > 0) {
+      this.perfectPumpFlashTimer = Math.max(0, this.perfectPumpFlashTimer - clampedDt);
+    }
+    if (this.surfZoneOverdriveCooldown > 0) {
+      this.surfZoneOverdriveCooldown = Math.max(0, this.surfZoneOverdriveCooldown - clampedDt);
+    }
+
+    // -------------------------------------------------------------------------
+    // Surf-Zone Overdrive State (>= 80% Flow)
+    // -------------------------------------------------------------------------
+    if (this.flowMeter >= 80) {
+      this.isSurfZoneActive = true;
+      this.surfZoneTimer += clampedDt;
+    } else {
+      this.isSurfZoneActive = false;
+    }
+
+    if (this.isSurfZoneActive && !this.prevSurfZoneActive && this.surfZoneOverdriveCooldown <= 0) {
+      this.surfZoneOverdriveCooldown = 6.0;
+      onManeuver({
+        name: '🔥 SURF-ZONE OVERDRIVE (1.5x)!',
+        points: this.applyScoreMultipliers(200),
+        zone: this.currentSurface.zoneName,
+        quality: 'PERFECT',
+        isSpecial: true,
+      });
+    }
+    this.prevSurfZoneActive = this.isSurfZoneActive;
 
     for (const key of Object.keys(this.maneuverCooldowns)) {
       this.maneuverCooldowns[key] = Math.max(0, this.maneuverCooldowns[key] - clampedDt);
@@ -516,6 +623,31 @@ export class SurfskateController {
         this.pumpSyncQuality = active ? 'PERFECT PUMP!' : 'FLOW PUMP';
         this.pumpQualityTimer = 0.4;
         this.flowMeter = Math.min(100, this.flowMeter + (active ? 16.0 : 12.0) * clampedDt);
+
+        // Perfect Pump in transitions:
+        // When dropping down a wall (h0 > 0.35, sinT < -0.08) at the optimal moment
+        const compressPressed = input.compressCrouch && !this.prevCompressInput;
+        const apexDropPump = input.compressCrouch && (this.wasClimbingTransition || this.prevSinT >= -0.05) && sinT < -0.08;
+        if (
+          this.perfectPumpCooldown <= 0 &&
+          h0 > 0.35 &&
+          sinT < -0.08 &&
+          (compressPressed || apexDropPump)
+        ) {
+          this.perfectPumpCooldown = 2.5;
+          this.speed = Math.min(this.maxSpeedLimit, this.speed + 0.85);
+          this.flowMeter = Math.min(100, this.flowMeter + 12);
+          this.perfectPumpFlashTimer = 0.45;
+          this.pumpSyncQuality = 'PERFECT PUMP!';
+          this.pumpQualityTimer = 0.8;
+          this.pumpPulse = 1.0;
+          onManeuver({
+            name: '⚡ PERFECT PUMP!',
+            points: this.applyScoreMultipliers(150),
+            zone: this.currentSurface.zoneName,
+            quality: 'PERFECT',
+          });
+        }
       }
 
       this.detectSurfManeuvers(input, grade, onManeuver);
@@ -568,7 +700,7 @@ export class SurfskateController {
           this.position.z = prevZ;
           this.speed = 0;
         } else {
-          this.speed = Math.min(MAX_SPEED, Math.sqrt(Math.max(0, v1Sq)));
+          this.speed = Math.min(this.maxSpeedLimit, Math.sqrt(Math.max(0, v1Sq)));
         }
 
         // Stall on a wall: at very low speed gravity pulls the nose down the fall line
@@ -707,7 +839,7 @@ export class SurfskateController {
         this.indyGrabAmount = 0;
         this.indyGrabReady = false;
 
-        this.speed = Math.min(MAX_SPEED, tangentVel.length());
+        this.speed = Math.min(this.maxSpeedLimit, tangentVel.length());
         if (Math.hypot(tangentVel.x, tangentVel.z) > 0.2) {
           this.heading = Math.atan2(-tangentVel.x, -tangentVel.z);
         }
@@ -720,6 +852,11 @@ export class SurfskateController {
     if (this.speed < 1.05) {
       this.flowMeter = Math.max(0, this.flowMeter - 4.0 * clampedDt);
     }
+
+    // Save previous inputs & slope for next frame
+    this.prevCompressInput = input.compressCrouch;
+    const currentGrade = this.gradeAlongHeading;
+    this.prevSinT = currentGrade / Math.sqrt(1 + currentGrade * currentGrade);
   }
 
   /** Signed grade (dh/ds) along the current heading, sampled from the raw heightfield. */
@@ -811,7 +948,7 @@ export class SurfskateController {
     this.setCooldown('TopTurn', 1.5);
     onManeuver({
       name: perfect ? 'PERFECT SNAP!' : 'SNAP!',
-      points: perfect ? 1500 : 900,
+      points: this.applyScoreMultipliers(perfect ? 1500 : 900),
       zone: this.currentSurface.zoneName,
       isSnap: true,
       trick: 'SNAP',
@@ -899,13 +1036,13 @@ export class SurfskateController {
         this.coachHintTimer = 1.8;
       }
     } else if (interval >= PUMP_PERFECT_MIN && interval <= PUMP_PERFECT_MAX) {
-      this.speed = Math.min(MAX_SPEED, this.speed + PUMP_GAIN_PERFECT * taper);
+      this.speed = Math.min(this.maxSpeedLimit, this.speed + PUMP_GAIN_PERFECT * taper);
       this.pumpSyncQuality = 'PERFECT PUMP!';
       this.pumpQualityTimer = 0.7;
       this.pumpPulse = 1;
       this.flowMeter = Math.min(100, this.flowMeter + 4);
     } else {
-      this.speed = Math.min(MAX_SPEED, this.speed + PUMP_GAIN_GOOD * taper);
+      this.speed = Math.min(this.maxSpeedLimit, this.speed + PUMP_GAIN_GOOD * taper);
       this.pumpSyncQuality = 'FLOW PUMP';
       this.pumpQualityTimer = 0.6;
       this.pumpPulse = 0.7;
@@ -974,7 +1111,7 @@ export class SurfskateController {
     this.flowMeter = Math.min(100, this.flowMeter + 20);
     onManeuver({
       name,
-      points,
+      points: this.applyScoreMultipliers(points),
       zone: this.currentSurface.zoneName,
       trick,
       isSpecial: true,
@@ -1267,7 +1404,13 @@ export class SurfskateController {
     isSpecial = false,
     quality: 'PERFECT' | 'STYLISH' | 'FLOW' | 'SCRUB' = 'FLOW'
   ): void {
-    cb({ name, points, zone, isSpecial, quality });
+    cb({
+      name,
+      points: this.applyScoreMultipliers(points),
+      zone,
+      isSpecial,
+      quality,
+    });
   }
 
   /** Whether the skater is currently eligible to perform a Bert Slide (speed & lean threshold). */

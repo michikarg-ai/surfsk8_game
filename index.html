@@ -2828,6 +2828,636 @@
           display: block !important;
         }
       }
+
+      /* =====================================================================
+         PHASE 1A / 2A / 3B: OVERTIME, SURF-ZONE, MISSIONS, MODES & SUMMARY MODAL
+         ===================================================================== */
+      .stat-block.session-block.overtime {
+        background: linear-gradient(135deg, #dc2626 0%, #f59e0b 100%);
+        box-shadow: 0 0 18px rgba(245, 158, 11, 0.75);
+      }
+      .stat-block.session-block.overtime .stat-label {
+        color: #ffffff;
+      }
+      #hud-timer.overtime {
+        color: #fef08a;
+        font-size: 23px;
+        letter-spacing: 0.04em;
+        text-shadow: 0 0 12px rgba(254, 240, 138, 0.9);
+        animation: pulseOvertime 0.36s infinite alternate;
+      }
+      @keyframes pulseOvertime {
+        from { transform: skewX(calc(var(--skew) * -1)) scale(1.0); opacity: 1; }
+        to { transform: skewX(calc(var(--skew) * -1)) scale(1.07); opacity: 0.82; }
+      }
+      .stat-block.session-block.zen-mode {
+        background: linear-gradient(135deg, #0d9488 0%, #0284c7 100%);
+      }
+      .stat-block.session-block.zen-mode .stat-label,
+      .stat-block.session-block.zen-mode .stat-value {
+        color: #f8fafc;
+      }
+
+      /* Surf-Zone 1.5X (>= 80% Flow) */
+      .flow-card.surf-zone .flow-title {
+        color: #00f5d4;
+        text-shadow: 0 0 12px rgba(0, 245, 212, 0.8);
+      }
+      .flow-card.surf-zone #hud-flow-pct {
+        color: #fef08a;
+        text-shadow: 0 0 14px rgba(250, 204, 21, 0.9);
+      }
+      .flow-bar-track.surf-zone .flow-seg.filled {
+        background: linear-gradient(90deg, #00f5d4 0%, #facc15 100%);
+        box-shadow: 0 0 10px rgba(0, 245, 212, 0.75);
+      }
+
+      /* Top-left stack: Score Card + Compact Missions & Hot-Spot Pill */
+      .hud-top-left-stack {
+        justify-self: start;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .hud-status-pills {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .hud-hotspot-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: linear-gradient(135deg, rgba(220, 38, 38, 0.92), rgba(234, 88, 12, 0.92));
+        border: 1.5px solid #fef08a;
+        color: #ffffff;
+        padding: 4px 12px;
+        transform: skewX(var(--skew));
+        font-family: var(--font-hud);
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        box-shadow: 0 6px 18px rgba(234, 88, 12, 0.55);
+      }
+      .hud-hotspot-pill > span {
+        transform: skewX(calc(var(--skew) * -1));
+      }
+      .hud-hotspot-pill.inside {
+        background: linear-gradient(135deg, #059669, #00d6c3);
+        border-color: #ffffff;
+        color: #081210;
+        box-shadow: 0 0 20px rgba(0, 245, 212, 0.85);
+      }
+      .hud-hotspot-pill.hidden {
+        display: none !important;
+      }
+
+      /* Compact HUD Missions Widget */
+      .hud-missions-mini {
+        display: inline-flex;
+        flex-direction: column;
+        gap: 3px;
+        background: rgba(18, 16, 14, 0.82);
+        border-left: 3px solid var(--yellow);
+        padding: 5px 12px 6px;
+        transform: skewX(var(--skew));
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+        max-width: 340px;
+      }
+      .hud-missions-mini > * {
+        transform: skewX(calc(var(--skew) * -1));
+      }
+      .hud-missions-rank-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        color: var(--yellow);
+        text-transform: uppercase;
+      }
+      .hud-missions-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .hud-mission-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 700;
+        color: rgba(245, 245, 245, 0.9);
+        line-height: 1.2;
+      }
+      .hud-mission-item.done {
+        color: #34d399;
+        text-decoration: line-through;
+        opacity: 0.82;
+      }
+      .hud-mission-prog {
+        font-weight: 900;
+        font-variant-numeric: tabular-nums;
+        color: var(--yellow);
+        font-size: 11.5px;
+      }
+      .hud-mission-item.done .hud-mission-prog {
+        color: #34d399;
+      }
+      @media (max-width: 767px), (max-height: 520px) {
+        .hud-missions-mini {
+          display: none;
+        }
+      }
+      body.reel-mode .hud-missions-mini {
+        display: none;
+      }
+
+      /* Golden Mission Complete / Rank Up Toast Banner */
+      #hud-mission-toast {
+        position: absolute;
+        left: 50%;
+        top: 11%;
+        transform: translateX(-50%) skewX(-11deg) translateY(-16px);
+        background: linear-gradient(135deg, rgba(20, 18, 14, 0.96), rgba(45, 35, 12, 0.96));
+        border: 2px solid #facc15;
+        color: #fef08a;
+        padding: 8px 24px;
+        font-family: var(--font-hud);
+        font-size: clamp(16px, 2.2vw, 24px);
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75), 0 0 24px rgba(250, 204, 21, 0.45);
+        z-index: 65;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.2, 1.3, 0.4, 1);
+        white-space: nowrap;
+      }
+      #hud-mission-toast.visible {
+        opacity: 1;
+        transform: translateX(-50%) skewX(-11deg) translateY(0);
+      }
+
+      /* Landing Page: Skater Rank & 3 Missions Box inside .landing-select-board */
+      .landing-progression-box {
+        background: rgba(18, 17, 15, 0.92);
+        color: #f5f5f5;
+        border-radius: 6px;
+        padding: 8px 11px;
+        border: 1.5px solid rgba(242, 116, 31, 0.55);
+        margin-top: 4px;
+      }
+      .landing-rank-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        margin-bottom: 5px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+      }
+      .landing-rank-badge {
+        font-family: var(--font-hud);
+        font-size: 14px;
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        color: var(--yellow);
+        text-transform: uppercase;
+      }
+      .landing-rank-sub {
+        font-family: var(--font-hud);
+        font-size: 10.5px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        color: #00d6c3;
+        text-transform: uppercase;
+      }
+      .landing-missions-list {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .landing-mission-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        font-family: var(--font-hud);
+        font-size: 12px;
+        font-weight: 700;
+        color: #e5e7eb;
+      }
+      .landing-mission-row.done {
+        color: #34d399;
+      }
+      .landing-mission-row .m-prog {
+        font-weight: 900;
+        color: var(--yellow);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .landing-mission-row.done .m-prog {
+        color: #34d399;
+      }
+
+      /* Landing Page: Game Mode Selector Pills (2-MIN JAM | FLOW CUP | FREE SURF) */
+      .landing-mode-selector {
+        position: absolute;
+        z-index: 6;
+        right: clamp(24px, 4.5%, 72px);
+        bottom: clamp(72px, 11vh, 110px);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .mode-pill-btn {
+        background: rgba(16, 15, 14, 0.86);
+        border: 1.5px solid rgba(255, 255, 255, 0.32);
+        color: #e5e7eb;
+        padding: 7px 14px;
+        border-radius: 6px;
+        font-family: var(--font-hud);
+        font-size: clamp(13px, 1.15vw, 16px);
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transform: skewX(var(--skew));
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.65);
+        transition: all 0.15s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        line-height: 1.05;
+      }
+      .mode-pill-btn > span {
+        display: block;
+        transform: skewX(calc(var(--skew) * -1));
+      }
+      .mode-pill-btn .mode-sub {
+        font-size: 9.5px;
+        font-weight: 700;
+        color: #9ca3af;
+        letter-spacing: 0.05em;
+        margin-top: 2px;
+      }
+      .mode-pill-btn:hover {
+        border-color: var(--yellow);
+        color: #ffffff;
+        transform: skewX(var(--skew)) translateY(-2px);
+      }
+      .mode-pill-btn.active {
+        background: linear-gradient(135deg, #f2741f 0%, #d9460f 100%);
+        border-color: var(--yellow);
+        color: #ffffff;
+        box-shadow: 0 6px 20px rgba(242, 116, 31, 0.55);
+      }
+      .mode-pill-btn.active .mode-sub {
+        color: #fef08a;
+      }
+
+      @media (max-width: 820px), (orientation: portrait) {
+        .landing-select-board {
+          bottom: calc(max(12px, env(safe-area-inset-bottom)) + 104px);
+          max-height: calc(100% - 216px);
+        }
+        .landing-mode-selector {
+          left: max(12px, env(safe-area-inset-left));
+          right: max(12px, env(safe-area-inset-right));
+          bottom: calc(max(12px, env(safe-area-inset-bottom)) + 56px);
+          width: auto;
+          max-width: 420px;
+          margin: 0 auto;
+          justify-content: space-between;
+          gap: 5px;
+        }
+        .mode-pill-btn {
+          flex: 1 1 0;
+          padding: 5px 6px;
+          font-size: 12px;
+        }
+        .mode-pill-btn .mode-sub {
+          font-size: 8px;
+        }
+      }
+      body.reel-mode .landing-select-board {
+        bottom: 118px;
+      }
+      body.reel-mode .landing-mode-selector {
+        left: 12px;
+        right: 12px;
+        bottom: 68px;
+        width: auto;
+        max-width: 420px;
+        margin: 0 auto;
+        justify-content: space-between;
+        gap: 5px;
+      }
+      body.reel-mode .mode-pill-btn {
+        flex: 1 1 0;
+        padding: 5px 6px;
+        font-size: 12px;
+      }
+      body.reel-mode .mode-pill-btn .mode-sub {
+        font-size: 8px;
+      }
+      @media (max-height: 640px) and (orientation: landscape), (pointer: coarse) and (orientation: landscape) and (max-height: 720px) {
+        .landing-mode-selector {
+          right: max(20px, env(safe-area-inset-right));
+          bottom: calc(max(12px, env(safe-area-inset-bottom)) + 52px);
+          left: auto;
+          gap: 5px;
+        }
+        .mode-pill-btn {
+          padding: 4px 8px;
+          font-size: 11px;
+        }
+        .mode-pill-btn .mode-sub {
+          display: none;
+        }
+      }
+
+      /* =====================================================================
+         SESSION SUMMARY MODAL (#session-summary-modal — Issue #17 & #19)
+         ===================================================================== */
+      .session-summary-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 9500;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.24s ease, visibility 0.24s ease;
+      }
+      .session-summary-overlay.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .session-summary-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(6, 8, 12, 0.84);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+      .session-summary-card {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        max-width: 540px;
+        max-height: 92dvh;
+        overflow-y: auto;
+        background: linear-gradient(155deg, rgba(26, 23, 20, 0.98) 0%, rgba(14, 13, 12, 0.99) 100%);
+        border: 1.5px solid rgba(255, 255, 255, 0.22);
+        border-top: 4px solid var(--orange);
+        border-radius: 10px;
+        padding: 20px 24px;
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.9), 0 0 36px rgba(242, 116, 31, 0.22);
+        color: #f5f5f5;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .summary-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        padding-bottom: 12px;
+      }
+      .summary-medal-wrap {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .summary-medal-icon {
+        font-size: 46px;
+        line-height: 1;
+        filter: drop-shadow(0 4px 12px rgba(250, 204, 21, 0.45));
+      }
+      .summary-title-col {
+        display: flex;
+        flex-direction: column;
+      }
+      .summary-kicker {
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+      .summary-medal-title {
+        font-size: 28px;
+        font-weight: 900;
+        font-style: italic;
+        letter-spacing: 0.04em;
+        color: var(--yellow);
+        line-height: 1.05;
+        text-transform: uppercase;
+      }
+      .summary-highscore-badge {
+        background: linear-gradient(135deg, #facc15, #f97316);
+        color: #111111;
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        padding: 4px 10px;
+        transform: skewX(var(--skew));
+        text-transform: uppercase;
+        box-shadow: 0 0 16px rgba(250, 204, 21, 0.65);
+      }
+      .summary-highscore-badge.hidden {
+        display: none !important;
+      }
+
+      .summary-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+      .summary-stat-box {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        padding: 8px 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .summary-stat-label {
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+      .summary-stat-val {
+        font-size: 26px;
+        font-weight: 900;
+        color: #ffffff;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.1;
+        margin-top: 2px;
+      }
+      .summary-stat-val.gold {
+        color: var(--yellow);
+      }
+
+      /* Near-Miss Motivation Box */
+      .summary-nearmiss-box {
+        background: linear-gradient(135deg, rgba(250, 204, 21, 0.16), rgba(242, 116, 31, 0.18));
+        border: 1.5px solid rgba(250, 204, 21, 0.65);
+        border-left: 4px solid var(--yellow);
+        border-radius: 6px;
+        padding: 10px 14px;
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+        color: #fef08a;
+        line-height: 1.3;
+      }
+
+      /* Rank & 3 Missions Progress inside Summary Modal */
+      .summary-missions-section {
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 6px;
+        padding: 10px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .summary-rank-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 6px;
+      }
+      .summary-rank-label {
+        font-size: 15px;
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        color: var(--yellow);
+        text-transform: uppercase;
+      }
+      .summary-rank-sub {
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        color: #00d6c3;
+        text-transform: uppercase;
+      }
+      .summary-mission-card {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .summary-mission-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 13.5px;
+        font-weight: 700;
+        color: #f3f4f6;
+      }
+      .summary-mission-card.done .summary-mission-top {
+        color: #34d399;
+      }
+      .summary-mission-bar-bg {
+        width: 100%;
+        height: 5px;
+        background: rgba(255, 255, 255, 0.12);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .summary-mission-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--orange), var(--yellow));
+        transition: width 0.3s ease;
+      }
+      .summary-mission-card.done .summary-mission-bar-fill {
+        background: #10b981;
+      }
+
+      /* Summary Action Buttons */
+      .summary-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 2px;
+      }
+      .summary-btn {
+        flex: 1;
+        padding: 12px 16px;
+        font-family: var(--font-hud);
+        font-size: 17px;
+        font-weight: 900;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        border-radius: 6px;
+        cursor: pointer;
+        transform: skewX(var(--skew));
+        transition: all 0.15s ease;
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+      .summary-btn > span {
+        transform: skewX(calc(var(--skew) * -1));
+      }
+      .summary-btn-primary {
+        background: linear-gradient(135deg, #faa41a 0%, #f25514 100%);
+        color: #ffffff;
+        border: 2px solid #ffffff;
+        box-shadow: 0 6px 20px rgba(242, 85, 20, 0.5);
+      }
+      .summary-btn-primary:hover {
+        background: linear-gradient(135deg, #fbbf24 0%, #f97316 100%);
+        transform: skewX(var(--skew)) translateY(-2px);
+      }
+      .summary-btn-secondary {
+        background: rgba(255, 255, 255, 0.1);
+        color: #f3f4f6;
+        border: 1.5px solid rgba(255, 255, 255, 0.28);
+      }
+      .summary-btn-secondary:hover {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: var(--yellow);
+        color: var(--yellow);
+        transform: skewX(var(--skew)) translateY(-2px);
+      }
+      @media (max-width: 560px) {
+        .summary-actions {
+          flex-direction: column;
+          gap: 8px;
+        }
+        .session-summary-card {
+          padding: 14px 16px;
+          gap: 10px;
+        }
+        .summary-medal-title {
+          font-size: 22px;
+        }
+        .summary-stat-val {
+          font-size: 20px;
+        }
+      }
     </style>
   </head>
   <body>
@@ -3044,6 +3674,17 @@
             </div>
           </div>
 
+          <hr class="sel-divider" />
+
+          <!-- 4. Skater Rank & Active Surf-Challenges (Issue #19) -->
+          <div class="landing-progression-box" id="landing-progression-box">
+            <div class="landing-rank-header">
+              <span class="landing-rank-badge" id="landing-rank-badge">🥉 LVL 1 • GROM</span>
+              <span class="landing-rank-sub">SURF-CHALLENGES</span>
+            </div>
+            <div class="landing-missions-list" id="landing-missions-list"></div>
+          </div>
+
           <div class="sel-footer-hint" aria-hidden="true">
             <span class="key-pill">&#8593;</span><span class="key-pill">&#8595;</span> ROW &nbsp;&bull;&nbsp; <span class="key-pill">&#8592;</span><span class="key-pill">&#8594;</span> SELECT
           </div>
@@ -3053,6 +3694,22 @@
         <div id="landing-ig-note" role="status" aria-live="polite">
           <button id="landing-ig-note-close" title="Close" aria-label="Close">&times;</button>
           <div id="landing-ig-note-text"></div>
+        </div>
+
+        <!-- Game Mode Selection Pills (Issue #21) -->
+        <div class="landing-mode-selector" id="landing-mode-selector" role="group" aria-label="Select Game Mode">
+          <button type="button" class="mode-pill-btn active" data-mode="jam">
+            <span>⏱️ 2-MIN JAM</span>
+            <span class="mode-sub">HIGHSCORE &amp; HOT-SPOTS</span>
+          </button>
+          <button type="button" class="mode-pill-btn" data-mode="flow_cup">
+            <span>🌊 FLOW CUP</span>
+            <span class="mode-sub">FOLLOW THE FLOW</span>
+          </button>
+          <button type="button" class="mode-pill-btn" data-mode="zen">
+            <span>🌅 FREE SURF (ZEN)</span>
+            <span class="mode-sub">∞ ENDLESS CRUISE</span>
+          </button>
         </div>
 
         <button id="landing-start-btn" type="button" aria-label="Start Game">
@@ -3267,25 +3924,96 @@
         </div>
       </div>
 
+      <!-- Interactive Session Summary Modal (Issue #17 & #19) -->
+      <div class="session-summary-overlay hidden" id="session-summary-modal" role="dialog" aria-modal="true" aria-labelledby="summary-medal-title">
+        <div class="session-summary-backdrop" id="session-summary-backdrop"></div>
+        <div class="session-summary-card">
+          <div class="summary-header">
+            <div class="summary-medal-wrap">
+              <span class="summary-medal-icon" id="summary-medal-icon">🥇</span>
+              <div class="summary-title-col">
+                <span class="summary-kicker" id="summary-kicker">2-MINUTE SESSION COMPLETE</span>
+                <h2 class="summary-medal-title" id="summary-medal-title">GOLD MEDAILLE</h2>
+              </div>
+            </div>
+            <span class="summary-highscore-badge hidden" id="summary-highscore-badge">★ NEW HIGH SCORE!</span>
+          </div>
+
+          <div class="summary-stats-grid">
+            <div class="summary-stat-box">
+              <span class="summary-stat-label">FINAL SCORE</span>
+              <span class="summary-stat-val gold" id="summary-final-score">0</span>
+            </div>
+            <div class="summary-stat-box">
+              <span class="summary-stat-label">BEST LINE COMBO</span>
+              <span class="summary-stat-val" id="summary-best-combo">0</span>
+            </div>
+            <div class="summary-stat-box">
+              <span class="summary-stat-label">BREZELN</span>
+              <span class="summary-stat-val" id="summary-pretzels">🥨 0/5</span>
+            </div>
+          </div>
+
+          <div class="summary-nearmiss-box" id="summary-nearmiss-box">
+            🔥 NUR NOCH 1.150 PUNKTE BIS GOLD! Versuch's direkt nochmal!
+          </div>
+
+          <div class="summary-missions-section">
+            <div class="summary-rank-row">
+              <span class="summary-rank-label" id="summary-rank-label">🥉 LVL 1 • GROM</span>
+              <span class="summary-rank-sub">SURF-CHALLENGES</span>
+            </div>
+            <div id="summary-missions-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+          </div>
+
+          <div class="summary-actions">
+            <button type="button" class="summary-btn summary-btn-primary" id="summary-btn-retry">
+              <span>↻ NOCHMAL FAHREN (SPACE)</span>
+            </button>
+            <button type="button" class="summary-btn summary-btn-secondary" id="summary-btn-garage">
+              <span>🏠 GARAGE &amp; MODUS WÄHLEN</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="hud-mission-toast">🎯 MISSION COMPLETE!</div>
+
       <div class="hud-layer">
         <!-- Top Row: SESSION | SCORE | BEST LINE on top-left -->
         <div class="hud-top">
-          <div class="score-card">
-            <div class="stat-block session-block">
-              <span class="stat-label">Session</span>
-              <span class="stat-value" id="hud-timer">2:00.0</span>
+          <div class="hud-top-left-stack">
+            <div class="score-card">
+              <div class="stat-block session-block" id="hud-session-block">
+                <span class="stat-label" id="hud-session-label">Session</span>
+                <span class="stat-value" id="hud-timer">2:00.0</span>
+              </div>
+              <div class="stat-block score-block">
+                <span class="stat-label">Score</span>
+                <span class="stat-value" id="hud-score">0</span>
+              </div>
+              <div class="stat-block best-block">
+                <span class="stat-label">Best Line</span>
+                <span class="stat-value" id="hud-best-combo">0</span>
+              </div>
+              <div class="stat-block pretzel-block" id="hud-pretzel-block" title="Munich Bretzeln (+50 pts each, +500 all)">
+                <span class="stat-label">Bretzeln</span>
+                <span class="stat-value pretzel-value" id="hud-pretzel-count">🥨 0/5</span>
+              </div>
             </div>
-            <div class="stat-block score-block">
-              <span class="stat-label">Score</span>
-              <span class="stat-value" id="hud-score">0</span>
+
+            <div class="hud-status-pills">
+              <div class="hud-hotspot-pill hidden" id="hud-hotspot-pill">
+                <span id="hud-hotspot-pill-text">🔥 HOT SPOT: CENTRAL VOLCANO (2X — 18s)</span>
+              </div>
             </div>
-            <div class="stat-block best-block">
-              <span class="stat-label">Best Line</span>
-              <span class="stat-value" id="hud-best-combo">0</span>
-            </div>
-            <div class="stat-block pretzel-block" id="hud-pretzel-block" title="Munich Bretzeln (+50 pts each, +500 all)">
-              <span class="stat-label">Bretzeln</span>
-              <span class="stat-value pretzel-value" id="hud-pretzel-count">🥨 0/5</span>
+
+            <div class="hud-missions-mini" id="hud-missions-mini">
+              <div class="hud-missions-rank-row">
+                <span id="hud-rank-label">🥉 LVL 1 • GROM</span>
+                <span>CHALLENGES</span>
+              </div>
+              <div class="hud-missions-list" id="hud-missions-list"></div>
             </div>
           </div>
 
@@ -3328,9 +4056,9 @@
               <span class="speedo-unit">KM/H</span>
             </div>
 
-            <div class="flow-card">
+            <div class="flow-card" id="hud-flow-card">
               <div class="flow-header">
-                <span class="flow-title">Flow</span>
+                <span class="flow-title" id="hud-flow-title">Flow</span>
                 <span id="hud-flow-pct">25%</span>
               </div>
               <div class="flow-bar-track" id="hud-flow-track">
@@ -3375,6 +4103,9 @@
             </button>
             <div class="dock-body">
               <div>
+                <div class="dock-section-title" id="dock-rank-title">Surf-Challenges • 🥉 LVL 1 GROM</div>
+                <div id="dock-missions-list" style="margin-bottom:8px;"></div>
+
                 <div class="dock-section-title">Tricks</div>
                 <div id="dock-tricks-list">
                   <div id="dock-tricks-keyboard">

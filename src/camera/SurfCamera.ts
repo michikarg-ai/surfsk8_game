@@ -295,13 +295,23 @@ export class SurfCamera {
     this.camera.position.copy(this.currentPos);
     this.camera.lookAt(this.currentLookAt);
 
-    // Dynamic FOV boost with speed & Flow Meter (narrowed during a SNAP zoom)
+    // Dynamic FOV boost with speed & Surf-Zone Overdrive (+6° to +8°) / Perfect Pump Kick
     const baseFov = this.cameraStyle === 'filmer' ? 76 : this.aspectMode === '9:16' ? 70 : 60;
     const speedFovBoost = Math.min(12, ctrl.speed * 0.75);
-    const targetFov = (baseFov + speedFovBoost) * (1 - 0.22 * this.snapZoom);
+
+    let surfZoneFovKick = 0;
+    if (ctrl.isSurfZoneActive) {
+      surfZoneFovKick += 6.5;
+    }
+    if (ctrl.perfectPumpFlashTimer > 0) {
+      surfZoneFovKick += 4.0 * (ctrl.perfectPumpFlashTimer / 0.45);
+    }
+    surfZoneFovKick = Math.min(8.0, surfZoneFovKick);
+
+    const targetFov = (baseFov + speedFovBoost + surfZoneFovKick) * (1 - 0.22 * this.snapZoom);
     if (Math.abs(targetFov - this.camera.fov) > 0.05) {
-      const fovRate = this.snapZoom > 0.01 ? 14.0 : 6.0;
-      this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, fovRate * clampedDt);
+      const fovRate = this.snapZoom > 0.01 ? 14.0 : ctrl.perfectPumpFlashTimer > 0 ? 10.0 : 6.0;
+      this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFov, Math.min(1, fovRate * clampedDt));
       this.camera.updateProjectionMatrix();
     }
   }

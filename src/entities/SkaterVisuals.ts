@@ -117,6 +117,7 @@ export class SkaterVisuals {
   // Dual urethane wheel carve ribbon trail on the concrete
   public trailMesh: THREE.Mesh;
   private trailPositions: Float32Array;
+  private trailColors: Float32Array;
   private readonly maxTrailSegments = 90;
   private trailHead = 0;
 
@@ -216,8 +217,14 @@ export class SkaterVisuals {
     this.particleMesh.frustumCulled = false;
     scene.add(this.particleMesh);
 
-    // Initialize urethane carve line ribbon
+    // Initialize urethane carve line ribbon with vertex colors for thanelines & overdrive shimmer
     this.trailPositions = new Float32Array(this.maxTrailSegments * 2 * 3);
+    this.trailColors = new Float32Array(this.maxTrailSegments * 2 * 3);
+    for (let i = 0; i < this.maxTrailSegments * 2; i++) {
+      this.trailColors[i * 3] = 0.11;
+      this.trailColors[i * 3 + 1] = 0.12;
+      this.trailColors[i * 3 + 2] = 0.14;
+    }
     const tGeo = new THREE.BufferGeometry();
     const indices: number[] = [];
     for (let i = 0; i < this.maxTrailSegments - 1; i++) {
@@ -229,10 +236,11 @@ export class SkaterVisuals {
     }
     tGeo.setIndex(indices);
     tGeo.setAttribute('position', new THREE.BufferAttribute(this.trailPositions, 3));
+    tGeo.setAttribute('color', new THREE.BufferAttribute(this.trailColors, 3));
     const tMat = new THREE.MeshBasicMaterial({
-      color: 0x1b1e22,
+      vertexColors: true,
       transparent: true,
-      opacity: 0.16,
+      opacity: 0.5,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
@@ -880,7 +888,7 @@ export class SkaterVisuals {
     this.updateParticlesAndTrail(dt, ctrl, right, up);
   }
 
-  /** Spawn one particle of the given kind at the board's rail / tail. */
+  /** Spawn one particle of the given kind at the board's rail / tail / wheels. */
   private emitParticle(
     kind: 0 | 1 | 2,
     ctrl: SurfskateController,
@@ -894,13 +902,18 @@ export class SkaterVisuals {
     const i3 = i * 3;
     const r = Math.random;
 
-    // Origin: along the outside rail, biased toward the tail
-    const along = -0.32 + r() * 0.42;
+    const isPumpFlash = kind === 2 && ctrl.perfectPumpFlashTimer > 0;
+
+    // Origin: along the outside rail, biased toward the tail, or near wheels during pump flash
+    const along = isPumpFlash
+      ? (r() < 0.5 ? 0.24 : -0.24) + (r() - 0.5) * 0.08
+      : -0.32 + r() * 0.42;
+    const wheelTrack = isPumpFlash ? 0.10 : 0.12;
     const p = ctrl.position
       .clone()
       .addScaledVector(fwd, along)
-      .addScaledVector(right, side * (0.12 + r() * 0.05))
-      .addScaledVector(up, 0.05 + r() * 0.04);
+      .addScaledVector(right, side * (wheelTrack + r() * 0.05))
+      .addScaledVector(up, (isPumpFlash ? 0.035 : 0.05) + r() * 0.04);
     this.particlePositions[i3] = p.x;
     this.particlePositions[i3 + 1] = p.y;
     this.particlePositions[i3 + 2] = p.z;
@@ -909,7 +922,10 @@ export class SkaterVisuals {
     const speedCarry = Math.min(1.5, ctrl.speed * 0.15);
     let out: number, lift: number, back: number, jitter: number;
     if (kind === 2) {
-      out = (r() - 0.5) * 3; lift = 0.8 + r() * 2.2; back = 1.5 + r() * 2.5; jitter = 1.2;
+      out = (r() - 0.5) * 3;
+      lift = (isPumpFlash ? 1.2 : 0.8) + r() * 2.2;
+      back = (isPumpFlash ? 1.0 : 1.5) + r() * 2.5 + speedCarry;
+      jitter = 1.2;
     } else if (kind === 1) {
       out = 0.6 + r() * 1.2; lift = 0.3 + r() * 0.8; back = 0.3 + r() * 0.6; jitter = 0.5;
     } else {
@@ -926,9 +942,13 @@ export class SkaterVisuals {
 
     let cr: number, cg: number, cb: number, size: number, life: number, alpha: number;
     if (kind === 2) {
-      // Hot golden-orange coping sparks
-      cr = 1.0; cg = 0.55 + r() * 0.35; cb = 0.12;
-      size = 0.035 + r() * 0.03; life = 0.25 + r() * 0.25; alpha = 1.0;
+      // Hot golden-orange coping / perfect-pump sparks
+      cr = 1.0;
+      cg = isPumpFlash ? 0.82 + r() * 0.18 : 0.55 + r() * 0.35;
+      cb = isPumpFlash ? 0.28 : 0.12;
+      size = (isPumpFlash ? 0.048 : 0.035) + r() * 0.035;
+      life = (isPumpFlash ? 0.32 : 0.25) + r() * 0.25;
+      alpha = 1.0;
     } else if (kind === 1) {
       // Warm sunset-orange glow puff
       cr = 1.0; cg = 0.42 + r() * 0.12; cb = 0.1;
@@ -975,6 +995,18 @@ export class SkaterVisuals {
       for (let i = 0; i < mist; i++) this.emitParticle(1, ctrl, fwd, right, up, side);
     }
     this.prevSpray = spray;
+
+    // Golden sparks & glow burst at the wheels during Perfect Pump flash!
+    if (ctrl.perfectPumpFlashTimer > 0) {
+      const flashCount = this.currentQuality === 'low' ? 2 : 4;
+      for (let i = 0; i < flashCount; i++) {
+        const wheelSide = Math.random() < 0.5 ? -1 : 1;
+        this.emitParticle(2, ctrl, fwd, right, up, wheelSide);
+      }
+      if (Math.random() < 0.35) {
+        this.emitParticle(1, ctrl, fwd, right, up, Math.random() < 0.5 ? -1 : 1);
+      }
+    }
 
     for (let i = 0; i < this.maxParticles; i++) {
       if (this.particleLife[i] <= 0) {
@@ -1023,12 +1055,78 @@ export class SkaterVisuals {
       const pL = ctrl.position.clone().addScaledVector(right, -halfW).add(lift);
       const pR = ctrl.position.clone().addScaledVector(right, halfW).add(lift);
 
-      // Shift trail vertices down
+      // Determine Thaneline / Overdrive color for new vertices
+      const isBertOrLayback = ctrl.bertSlideActive || ctrl.laybackActive;
+      const isSnapOrReverse = ctrl.snapActive || ctrl.reverseActive;
+      const isSlideTrick = isBertOrLayback || isSnapOrReverse;
+      const isSurfZone = ctrl.isSurfZoneActive;
+      const isPumpFlash = ctrl.perfectPumpFlashTimer > 0;
+
+      // Base: subtle dark urethane track on concrete
+      let lR = 0.11, lG = 0.12, lB = 0.14;
+      let rR = 0.11, rG = 0.12, rB = 0.14;
+
+      if (isBertOrLayback) {
+        // Sunset-Orange Thanelines (#ff6a1a)
+        lR = 1.0; lG = 0.416; lB = 0.102;
+        rR = 1.0; rG = 0.416; rB = 0.102;
+      } else if (isSnapOrReverse) {
+        // Electric-Cyan Thanelines (#00e5ff)
+        lR = 0.0; lG = 0.898; lB = 1.0;
+        rR = 0.0; rG = 0.898; rB = 1.0;
+      }
+
+      if (isSurfZone) {
+        // Cyan-Gold Overdrive Shimmer under the board
+        const shimmer = Math.sin(performance.now() * 0.009) * 0.5 + 0.5;
+        const cyanR = 0.0, cyanG = 0.9, cyanB = 1.0;
+        const goldR = 1.0, goldG = 0.82, goldB = 0.12;
+
+        if (isSlideTrick) {
+          // Slide trick in Surf-Zone: vivid dual-tone electric boost!
+          lR = THREE.MathUtils.lerp(lR, cyanR, 0.45);
+          lG = THREE.MathUtils.lerp(lG, cyanG, 0.45);
+          lB = THREE.MathUtils.lerp(lB, cyanB, 0.45);
+
+          rR = THREE.MathUtils.lerp(rR, goldR, 0.45);
+          rG = THREE.MathUtils.lerp(rG, goldG, 0.45);
+          rB = THREE.MathUtils.lerp(rB, goldB, 0.45);
+        } else {
+          // Pure shimmering overdrive ribbon
+          lR = THREE.MathUtils.lerp(cyanR, goldR, shimmer);
+          lG = THREE.MathUtils.lerp(cyanG, goldG, shimmer);
+          lB = THREE.MathUtils.lerp(cyanB, goldB, shimmer);
+
+          rR = THREE.MathUtils.lerp(goldR, cyanR, shimmer);
+          rG = THREE.MathUtils.lerp(goldG, cyanG, shimmer);
+          rB = THREE.MathUtils.lerp(goldB, cyanB, shimmer);
+        }
+      }
+
+      if (isPumpFlash) {
+        // Radiant golden spark flash pulse at wheels
+        const flashFactor = Math.min(1.0, ctrl.perfectPumpFlashTimer / 0.45);
+        lR = THREE.MathUtils.lerp(lR, 1.0, flashFactor);
+        lG = THREE.MathUtils.lerp(lG, 0.92, flashFactor);
+        lB = THREE.MathUtils.lerp(lB, 0.25, flashFactor);
+
+        rR = THREE.MathUtils.lerp(rR, 1.0, flashFactor);
+        rG = THREE.MathUtils.lerp(rG, 0.92, flashFactor);
+        rB = THREE.MathUtils.lerp(rB, 0.25, flashFactor);
+      }
+
+      // Dynamically adjust trail mesh opacity
+      const trailMat = this.trailMesh.material as THREE.MeshBasicMaterial;
+      const targetOpacity = (isSlideTrick || isSurfZone || isPumpFlash) ? 0.92 : 0.42;
+      trailMat.opacity = THREE.MathUtils.lerp(trailMat.opacity, targetOpacity, Math.min(1, 8.0 * dt));
+
+      // Shift trail vertices and colors down
       for (let i = this.maxTrailSegments - 1; i > 0; i--) {
         const dst = i * 6;
         const src = (i - 1) * 6;
         for (let k = 0; k < 6; k++) {
           this.trailPositions[dst + k] = this.trailPositions[src + k];
+          this.trailColors[dst + k] = this.trailColors[src + k] * 0.982; // smooth fade towards tail
         }
       }
       this.trailPositions[0] = pL.x;
@@ -1037,8 +1135,20 @@ export class SkaterVisuals {
       this.trailPositions[3] = pR.x;
       this.trailPositions[4] = pR.y;
       this.trailPositions[5] = pR.z;
+
+      this.trailColors[0] = lR;
+      this.trailColors[1] = lG;
+      this.trailColors[2] = lB;
+      this.trailColors[3] = rR;
+      this.trailColors[4] = rG;
+      this.trailColors[5] = rB;
+
       this.trailHead++;
       this.trailMesh.geometry.attributes.position.needsUpdate = true;
+      this.trailMesh.geometry.attributes.color.needsUpdate = true;
+    } else {
+      const trailMat = this.trailMesh.material as THREE.MeshBasicMaterial;
+      trailMat.opacity = THREE.MathUtils.lerp(trailMat.opacity, 0.35, Math.min(1, 4.0 * dt));
     }
   }
 

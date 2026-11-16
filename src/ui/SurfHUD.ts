@@ -1,6 +1,7 @@
 import { ManeuverEvent, SurfskateController, TruckFeelPreset } from '../physics/SurfskateController';
 import { AspectMode, CameraStyle } from '../camera/SurfCamera';
 import { AtmosphereMode } from '../world/ImGefildeScene';
+import { SessionSummaryData, SkaterRankInfo, SurfMission } from '../progression/SurfProgression';
 
 export type DriveControlMode = 'arrows' | 'wasd';
 
@@ -29,16 +30,23 @@ export class SurfHUD {
 
   public sessionTimeRemaining = 120.0; // 2-minute THPS session timer
   public sessionEnded = false;
+  public endlessMode = false;
+  public isOvertime = false;
+  public onSessionComplete?: () => void;
 
   private scoreEl: HTMLElement;
   private bestComboEl: HTMLElement;
   private pretzelCountEl: HTMLElement | null = null;
   private pretzelBlockEl: HTMLElement | null = null;
   private timerEl: HTMLElement;
+  private sessionBlockEl: HTMLElement | null = null;
+  private sessionLabelEl: HTMLElement | null = null;
   private speedEl: HTMLElement;
   private speedoEl: HTMLElement;
   private dockEl: HTMLElement;
   private static readonly SPEEDO_MAX_KMH = 40;
+  private flowCardEl: HTMLElement | null = null;
+  private flowTitleEl: HTMLElement | null = null;
   private flowFillEl: HTMLElement;
   private flowTrackEl: HTMLElement;
   private flowSegEls: HTMLElement[];
@@ -50,6 +58,19 @@ export class SurfHUD {
   private comboTimerBarEl: HTMLElement;
   private truckDialFrontEl: HTMLElement;
   private leanReadoutEl: HTMLElement;
+
+  // Progression, Hot-Spot & Summary Modal elements
+  private hotSpotPillEl: HTMLElement | null = null;
+  private hotSpotPillTextEl: HTMLElement | null = null;
+  private hudRankLabelEl: HTMLElement | null = null;
+  private hudMissionsListEl: HTMLElement | null = null;
+  private dockRankTitleEl: HTMLElement | null = null;
+  private dockMissionsListEl: HTMLElement | null = null;
+  private missionToastEl: HTMLElement | null = null;
+  private missionToastTimeout: number | null = null;
+  private summaryModalEl: HTMLElement | null = null;
+  private summaryRetryCallback: (() => void) | null = null;
+  private summaryGarageCallback: (() => void) | null = null;
 
   public controlMode: DriveControlMode = 'arrows';
   private btnControlsEl: HTMLButtonElement | null = null;
@@ -92,8 +113,39 @@ export class SurfHUD {
     this.pretzelCountEl = document.getElementById('hud-pretzel-count');
     this.pretzelBlockEl = document.getElementById('hud-pretzel-block');
     this.timerEl = document.getElementById('hud-timer')!;
+    this.sessionBlockEl = document.getElementById('hud-session-block');
+    this.sessionLabelEl = document.getElementById('hud-session-label');
     this.speedEl = document.getElementById('hud-speed')!;
     this.speedoEl = document.getElementById('hud-speedo')!;
+    this.flowCardEl = document.getElementById('hud-flow-card');
+    this.flowTitleEl = document.getElementById('hud-flow-title');
+    this.hotSpotPillEl = document.getElementById('hud-hotspot-pill');
+    this.hotSpotPillTextEl = document.getElementById('hud-hotspot-pill-text');
+    this.hudRankLabelEl = document.getElementById('hud-rank-label');
+    this.hudMissionsListEl = document.getElementById('hud-missions-list');
+    this.dockRankTitleEl = document.getElementById('dock-rank-title');
+    this.dockMissionsListEl = document.getElementById('dock-missions-list');
+    this.missionToastEl = document.getElementById('hud-mission-toast');
+    this.summaryModalEl = document.getElementById('session-summary-modal');
+
+    const btnRetry = document.getElementById('summary-btn-retry');
+    const btnGarage = document.getElementById('summary-btn-garage');
+    if (btnRetry) {
+      btnRetry.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cb = this.summaryRetryCallback;
+        this.closeSessionSummary();
+        cb?.();
+      });
+    }
+    if (btnGarage) {
+      btnGarage.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cb = this.summaryGarageCallback;
+        this.closeSessionSummary();
+        cb?.();
+      });
+    }
 
     // Foldable tricks & options dock (bottom-right): folded by default, state remembered across reloads
     this.dockEl = document.getElementById('hud-dock')!;
@@ -178,25 +230,15 @@ export class SurfHUD {
   }
 
   public update(dt: number, ctrl: SurfskateController): void {
-    // 1. Session Timer (2:00 countdown)
-    if (!this.sessionEnded) {
-      this.sessionTimeRemaining = Math.max(0, this.sessionTimeRemaining - dt);
-      if (this.sessionTimeRemaining === 0) {
-        this.bankCombo();
-        this.sessionEnded = true;
-      }
-    }
-    const mins = Math.floor(this.sessionTimeRemaining / 60);
-    const secs = Math.floor(this.sessionTimeRemaining % 60);
-    const tenths = Math.floor((this.sessionTimeRemaining % 1) * 10);
-    this.timerEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}.${tenths}`;
-    if (this.sessionTimeRemaining < 15) {
-      this.timerEl.classList.add('urgent');
-    } else {
-      this.timerEl.classList.remove('urgent');
-    }
+    const ctrlAny = ctrl as unknown as {
+      endlessMode?: boolean;
+      sessionOvertime?: boolean;
+      sessionFinished?: boolean;
+      isSurfZoneActive?: boolean;
+    };
+    const isZen = this.endlessMode || Boolean(ctrlAny.endlessMode);
 
-    // 2. Active Combo Timeout & Banking
+    // 1. Active Combo Timeout & Banking
     if (this.comboTimeout > 0) {
       // Keep combo alive slightly longer while actively carving or grinding
       const decayRate = ctrl.isGrinding || Math.abs(ctrl.leanAngle) > 0.25 ? 0.55 : 1.0;
@@ -209,14 +251,75 @@ export class SurfHUD {
       }
     }
 
+    // 2. Session Timer (2:00 countdown, Overtime-Combo, or Endless Zen)
+    if (isZen) {
+      this.timerEl.textContent = '∞ ZEN SURF';
+      this.timerEl.classList.remove('urgent', 'overtime');
+      this.sessionBlockEl?.classList.remove('overtime');
+      this.sessionBlockEl?.classList.add('zen-mode');
+      if (this.sessionLabelEl) this.sessionLabelEl.textContent = 'Free Surf';
+    } else {
+      this.sessionBlockEl?.classList.remove('zen-mode');
+      if (!this.sessionEnded) {
+        this.sessionTimeRemaining = Math.max(0, this.sessionTimeRemaining - dt);
+        if (this.sessionTimeRemaining === 0) {
+          const comboStillAlive =
+            !ctrl.isBailing &&
+            (this.comboMultiplier > 0 ||
+              this.comboTimeout > 0 ||
+              !ctrl.isGrounded ||
+              ctrl.isGrinding ||
+              Boolean(ctrlAny.sessionOvertime));
+
+          if (comboStillAlive) {
+            this.isOvertime = true;
+          } else {
+            if (!ctrl.isBailing && this.comboMultiplier > 0) {
+              this.bankCombo();
+            }
+            this.isOvertime = false;
+            this.sessionEnded = true;
+            this.onSessionComplete?.();
+          }
+        }
+      }
+
+      if (this.isOvertime && !this.sessionEnded) {
+        this.timerEl.textContent = '🔥 OVERTIME!';
+        this.timerEl.classList.remove('urgent');
+        this.timerEl.classList.add('overtime');
+        this.sessionBlockEl?.classList.add('overtime');
+        if (this.sessionLabelEl) this.sessionLabelEl.textContent = 'Keep Combo Alive!';
+      } else {
+        this.timerEl.classList.remove('overtime');
+        this.sessionBlockEl?.classList.remove('overtime');
+        if (this.sessionLabelEl) this.sessionLabelEl.textContent = 'Session';
+        const mins = Math.floor(this.sessionTimeRemaining / 60);
+        const secs = Math.floor(this.sessionTimeRemaining % 60);
+        const tenths = Math.floor((this.sessionTimeRemaining % 1) * 10);
+        this.timerEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}.${tenths}`;
+        if (this.sessionTimeRemaining < 15 && this.sessionTimeRemaining > 0) {
+          this.timerEl.classList.add('urgent');
+        } else {
+          this.timerEl.classList.remove('urgent');
+        }
+      }
+    }
+
     // 3. Speed, Zone, and Surf-Adapter Telemetry
     this.updateSpeedo(ctrl.speed * 3.6);
 
     const flowPct = Math.round(ctrl.flowMeter);
+    const inSurfZone = Boolean(ctrlAny.isSurfZoneActive) || flowPct >= 80;
     this.flowFillEl.style.width = `${flowPct}%`;
     this.flowPctEl.textContent = `${flowPct}%`;
     this.flowFillEl.classList.toggle('special-ready', flowPct >= 99);
     this.flowTrackEl.classList.toggle('special-ready', flowPct >= 99);
+    this.flowTrackEl.classList.toggle('surf-zone', inSurfZone);
+    this.flowCardEl?.classList.toggle('surf-zone', inSurfZone);
+    if (this.flowTitleEl) {
+      this.flowTitleEl.textContent = inSurfZone ? '🔥 SURF-ZONE 1.5X' : 'Flow';
+    }
     const activeSegs = Math.round((flowPct / 100) * this.flowSegEls.length);
     for (let i = 0; i < this.flowSegEls.length; i++) {
       this.flowSegEls[i].classList.toggle('filled', i < activeSegs);
@@ -497,11 +600,145 @@ export class SurfHUD {
     this.comboTimeout = 0;
     this.sessionTimeRemaining = 120.0;
     this.sessionEnded = false;
+    this.isOvertime = false;
     this.flowLineHint = null;
     this.scoreEl.textContent = '0';
     this.bestComboEl.textContent = '0';
+    this.timerEl.classList.remove('urgent', 'overtime');
+    this.sessionBlockEl?.classList.remove('overtime');
     this.comboContainerEl.classList.remove('active');
     this.updatePretzelCount(0, 5);
+    this.updateHotSpotStatus(null, 0, false);
+    this.closeSessionSummary();
+  }
+
+  public getCurrentOrBestComboScore(): number {
+    const active = this.activeComboBase * this.comboMultiplier;
+    return Math.max(this.bestCombo, active);
+  }
+
+  public updateHotSpotStatus(
+    spotName: string | null,
+    remainingSec: number,
+    isInside: boolean
+  ): void {
+    if (!this.hotSpotPillEl || !this.hotSpotPillTextEl) return;
+    if (!spotName || remainingSec <= 0) {
+      this.hotSpotPillEl.classList.add('hidden');
+      this.hotSpotPillEl.classList.remove('inside');
+      return;
+    }
+    this.hotSpotPillEl.classList.remove('hidden');
+    this.hotSpotPillEl.classList.toggle('inside', isInside);
+    const secStr = `${Math.ceil(remainingSec)}s`;
+    this.hotSpotPillTextEl.textContent = isInside
+      ? `🔥 2X HOT SPOT ACTIVE • ${spotName} (${secStr})`
+      : `🔥 HOT SPOT: ${spotName} (2X SCORE — ${secStr})`;
+  }
+
+  public updateMissionsWidget(rank: SkaterRankInfo, missions: SurfMission[]): void {
+    if (this.hudRankLabelEl) {
+      this.hudRankLabelEl.textContent = rank.fullLabel;
+    }
+    if (this.dockRankTitleEl) {
+      this.dockRankTitleEl.textContent = `Surf-Challenges • ${rank.fullLabel}`;
+    }
+
+    const html = missions
+      .map((m) => {
+        const check = m.completed ? '☑️' : '⬜';
+        const progStr = m.completed
+          ? 'DONE'
+          : `${m.progress.toLocaleString()}/${m.target.toLocaleString()}${m.unit ? ' ' + m.unit : ''}`;
+        return `
+          <div class="hud-mission-item ${m.completed ? 'done' : ''}">
+            <span>${check} ${m.shortTitle}</span>
+            <span class="hud-mission-prog">${progStr}</span>
+          </div>
+        `.trim();
+      })
+      .join('');
+
+    if (this.hudMissionsListEl) {
+      this.hudMissionsListEl.innerHTML = html;
+    }
+    if (this.dockMissionsListEl) {
+      this.dockMissionsListEl.innerHTML = html;
+    }
+  }
+
+  public showMissionToast(text: string): void {
+    if (!this.missionToastEl) return;
+    this.missionToastEl.textContent = text;
+    this.missionToastEl.classList.add('visible');
+    if (this.missionToastTimeout !== null) {
+      window.clearTimeout(this.missionToastTimeout);
+    }
+    this.missionToastTimeout = window.setTimeout(() => {
+      this.missionToastEl?.classList.remove('visible');
+    }, 3400);
+  }
+
+  public openSessionSummary(
+    summary: SessionSummaryData,
+    onRetry: () => void,
+    onGarage: () => void
+  ): void {
+    if (!this.summaryModalEl) return;
+    this.summaryRetryCallback = onRetry;
+    this.summaryGarageCallback = onGarage;
+
+    const iconEl = document.getElementById('summary-medal-icon');
+    const titleEl = document.getElementById('summary-medal-title');
+    const hsBadgeEl = document.getElementById('summary-highscore-badge');
+    const scoreEl = document.getElementById('summary-final-score');
+    const comboEl = document.getElementById('summary-best-combo');
+    const pretzelsEl = document.getElementById('summary-pretzels');
+    const nearMissEl = document.getElementById('summary-nearmiss-box');
+    const rankEl = document.getElementById('summary-rank-label');
+    const missionsListEl = document.getElementById('summary-missions-list');
+
+    if (iconEl) iconEl.textContent = summary.medal.icon;
+    if (titleEl) titleEl.textContent = summary.medal.label;
+    if (hsBadgeEl) hsBadgeEl.classList.toggle('hidden', !summary.isNewHighScore);
+    if (scoreEl) scoreEl.textContent = summary.score.toLocaleString();
+    if (comboEl) comboEl.textContent = summary.bestCombo.toLocaleString();
+    if (pretzelsEl) pretzelsEl.textContent = `🥨 ${summary.pretzels}/5`;
+    if (nearMissEl) nearMissEl.textContent = summary.nearMissHint;
+    if (rankEl) rankEl.textContent = summary.rank.fullLabel;
+
+    if (missionsListEl) {
+      missionsListEl.innerHTML = summary.missions
+        .map((m) => {
+          const pct = Math.min(100, Math.round((m.progress / Math.max(1, m.target)) * 100));
+          const check = m.completed ? '☑️' : '⬜';
+          const progStr = m.completed
+            ? 'COMPLETE!'
+            : `${m.progress.toLocaleString()} / ${m.target.toLocaleString()}${m.unit ? ' ' + m.unit : ''}`;
+          return `
+            <div class="summary-mission-card ${m.completed ? 'done' : ''}">
+              <div class="summary-mission-top">
+                <span>${check} ${m.title}</span>
+                <span>${progStr}</span>
+              </div>
+              <div class="summary-mission-bar-bg">
+                <div class="summary-mission-bar-fill" style="width:${pct}%"></div>
+              </div>
+            </div>
+          `.trim();
+        })
+        .join('');
+    }
+
+    this.summaryModalEl.classList.remove('hidden');
+  }
+
+  public closeSessionSummary(): void {
+    this.summaryModalEl?.classList.add('hidden');
+  }
+
+  public isSummaryModalOpen(): boolean {
+    return Boolean(this.summaryModalEl && !this.summaryModalEl.classList.contains('hidden'));
   }
 
   public setControlMode(mode: DriveControlMode): void {

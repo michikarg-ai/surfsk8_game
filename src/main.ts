@@ -12,6 +12,8 @@ import { PretzelCollectibles } from './world/PretzelCollectibles';
 import { FlowLineChallenge } from './world/FlowLineChallenge';
 import { AirportFlyover } from './world/AirportFlyover';
 import { ScooterRiderNPC } from './world/ScooterRiderNPC';
+import { HotSpotZone } from './world/HotSpotZone';
+import { GameModeId, SurfProgression } from './progression/SurfProgression';
 import { inject, track } from '@vercel/analytics';
 
 // Initialize Vercel Web Analytics
@@ -37,6 +39,10 @@ class SurfskateMunichGame {
   public flowLine: FlowLineChallenge;
   public airportFlyover: AirportFlyover;
   public scooterRider: ScooterRiderNPC;
+  public hotSpotZone: HotSpotZone;
+  public progression: SurfProgression;
+  public gameMode: GameModeId = 'jam';
+  private summaryShownForSession = false;
 
   public controlMode: DriveControlMode =
     (localStorage.getItem('surfsk8.controlMode') as DriveControlMode) || 'arrows';
@@ -134,11 +140,44 @@ class SurfskateMunichGame {
       onToggleFullscreen: () => this.toggleFullscreen(),
     });
     this.hud.setControlMode(this.controlMode);
+    this.hud.onSessionComplete = () => {
+      this.showSessionSummaryModal();
+    };
+    this.progression = new SurfProgression();
+    this.progression.onMissionCompleted = (mission) => {
+      this.hud.showMissionToast(`🎯 MISSION COMPLETE: ${mission.shortTitle}!`);
+      this.syncProgressionUI();
+    };
+    this.progression.onRankUp = (newRank) => {
+      this.hud.showMissionToast(`👑 RANK UP: ${newRank.fullLabel}!`);
+      this.hud.showTrickBanner(`RANK UP: ${newRank.title}!`, true);
+      this.syncProgressionUI();
+    };
+
     this.pretzels = new PretzelCollectibles(this.scene, this.hud, this.audio);
     this.flowLine = new FlowLineChallenge(this.scene, this.parkSurface, this.hud, this.audio);
     this.flowLine.onRecordingStateChange = () => {
       this.syncFlowRecorderUI();
     };
+    (this.flowLine as unknown as {
+      onLineCompleted?: (tier: number, elapsedSec: number, bonusPoints: number) => void;
+    }).onLineCompleted = (tier: number) => {
+      this.progression.onFlowLineCompleted();
+      this.syncProgressionUI();
+      if (this.gameMode === 'flow_cup' && tier < 2) {
+        (this.flowLine as unknown as { setTier?: (t: 0 | 1 | 2) => void }).setTier?.(
+          (tier + 1) as 0 | 1 | 2
+        );
+      }
+    };
+
+    this.hotSpotZone = new HotSpotZone(this.scene, this.parkSurface);
+    this.hotSpotZone.onHotSpotActivated = (spot, durationSec) => {
+      this.hud.showMissionToast(
+        `🔥 HOT SPOT: ${spot.name} (2X SCORE — ${Math.round(durationSec)}s)!`
+      );
+    };
+
     this.airportFlyover = new AirportFlyover(this.scene, this.audio);
     this.scooterRider = new ScooterRiderNPC(this.scene, this.parkSurface, this.hud, this.audio);
     this.landingPage = new LandingPage(
@@ -147,13 +186,21 @@ class SurfskateMunichGame {
         if (TouchControls.isTouchDevice() && !this.isFullscreen()) {
           this.toggleFullscreen();
         }
+        this.gameMode = this.landingPage.getSelectedGameMode();
         this.resetSession();
+        if (this.gameMode === 'flow_cup') {
+          (this.flowLine as unknown as { setTier?: (t: 0 | 1 | 2) => void }).setTier?.(0);
+          this.hud.showTrickBanner('🌊 FLOW CUP — FOLLOW THE LINE!', true);
+        }
         this.audio.resume();
         this.lastTime = performance.now();
         this.touchControls.setVisible(true);
         this.syncHUDButtons();
         try {
-          track('game_start', { skater: this.landingPage.getSelectedSkaterName() });
+          track('game_start', {
+            skater: this.landingPage.getSelectedSkaterName(),
+            mode: this.gameMode,
+          });
         } catch {}
       },
       (modelUrl) => {
@@ -168,6 +215,11 @@ class SurfskateMunichGame {
     );
     this.landingPage.onCycleQuality = () => this.cycleGraphicsQuality();
     this.landingPage.onToggleFullscreen = () => this.toggleFullscreen();
+    this.landingPage.onSelectGameMode = (mode) => {
+      this.gameMode = mode;
+    };
+    this.gameMode = this.landingPage.getSelectedGameMode();
+    this.syncProgressionUI();
 
     this.audio.onTrackChange = () => {
       this.syncHUDButtons();
@@ -196,7 +248,10 @@ class SurfskateMunichGame {
       } else {
         this.controller.setSpawn(15.2, 4.2, 1.38);
       }
-      this.flowLine.refreshSurfaceHeights();
+      (this.flowLine as unknown as { refreshSurfaceHeights: (parkId?: string) => void }).refreshSurfaceHeights(
+        initialPark.id
+      );
+      this.hotSpotZone.setPark(initialPark.id);
     } catch (err) {
       console.error('Error loading GLB/LiDAR assets:', err);
     }
@@ -329,6 +384,22 @@ class SurfskateMunichGame {
           this.toggleMusic();
         } else if (code === 'KeyU' || code === 'KeyQ') {
           this.cycleGraphicsQuality();
+        }
+        return;
+      }
+
+      if (this.hud.isSummaryModalOpen()) {
+        if (code === 'Space' || code === 'Enter' || code === 'NumpadEnter') {
+          e.preventDefault();
+          this.hud.closeSessionSummary();
+          window.setTimeout(() => this.resetSession(), 80);
+          return;
+        }
+        if (code === 'Escape') {
+          e.preventDefault();
+          this.hud.closeSessionSummary();
+          this.pauseGameAndOpenLanding();
+          return;
         }
         return;
       }
@@ -480,7 +551,10 @@ class SurfskateMunichGame {
         this.worldScene.load(park.id),
         this.parkSurface.loadLidarGrid(park.lidarUrl || '/models/im_gefilde_lidar.json', park.id),
       ]);
-      this.flowLine.refreshSurfaceHeights();
+      (this.flowLine as unknown as { refreshSurfaceHeights: (parkId?: string) => void }).refreshSurfaceHeights(
+        park.id
+      );
+      this.hotSpotZone.setPark(park.id);
       if (park.id === 'airport_skatepark') {
         this.controller.setSpawn(2.94, 11.32, -0.175);
       } else {
@@ -569,11 +643,13 @@ class SurfskateMunichGame {
 
   public pauseGameAndOpenLanding(): void {
     if (this.landingPage.isVisible) return;
+    this.hud.closeSessionSummary();
     this.keys.clear();
     this.touchControls.setVisible(false);
     this.audio.pause();
     this.audio.playGarageMusic();
     this.slowMoTimer = 0;
+    this.syncProgressionUI();
     this.syncHUDButtons();
     this.landingPage.show();
   }
@@ -615,12 +691,64 @@ class SurfskateMunichGame {
   }
 
   public resetSession(): void {
+    this.summaryShownForSession = false;
+    const isZen = this.gameMode === 'zen';
+    (this.controller as unknown as { endlessMode?: boolean }).endlessMode = isZen;
+    (this.controller as unknown as { hotSpotMultiplier?: number }).hotSpotMultiplier = 1.0;
+    this.hud.endlessMode = isZen;
+    this.hotSpotZone.setEnabled(this.gameMode === 'jam' || this.gameMode === 'zen');
+    this.hotSpotZone.reset();
+    this.progression.resetSessionCounters();
     this.controller.resetToSpawn();
     this.surfCamera.reset(this.controller);
     this.hud.resetSession();
     this.pretzels.reset();
     this.flowLine.reset();
+    this.syncProgressionUI();
     this.syncFlowRecorderUI();
+  }
+
+  public syncProgressionUI(): void {
+    const rank = this.progression.getRankInfo();
+    const missions = this.progression.missions;
+    this.hud.updateMissionsWidget(rank, missions);
+    if (this.landingPage) {
+      this.landingPage.updateProgressionDisplay(rank, missions);
+    }
+  }
+
+  private isOvertimeWait(): boolean {
+    if (this.controller.isBailing) return false;
+    return (
+      this.hud.comboMultiplier > 0 ||
+      this.hud.comboTimeout > 0 ||
+      !this.controller.isGrounded ||
+      this.controller.isGrinding ||
+      Boolean((this.controller as unknown as { sessionOvertime?: boolean }).sessionOvertime)
+    );
+  }
+
+  private showSessionSummaryModal(): void {
+    if (this.summaryShownForSession || this.hud.endlessMode) return;
+    this.summaryShownForSession = true;
+    this.keys.clear();
+    const activeParkId = this.landingPage.getSelectedPark().id;
+    const summary = this.progression.getSessionSummary(
+      activeParkId,
+      this.hud.totalScore,
+      this.hud.bestCombo,
+      this.pretzels.collectedCount
+    );
+    this.syncProgressionUI();
+    this.hud.openSessionSummary(
+      summary,
+      () => {
+        window.setTimeout(() => this.resetSession(), 80);
+      },
+      () => {
+        this.pauseGameAndOpenLanding();
+      }
+    );
   }
 
   public toggleFlowLineRecording(): void {
@@ -850,9 +978,23 @@ class SurfskateMunichGame {
     }
     const dt = realDt * timeScale;
 
+    const activeParkId = this.landingPage.getSelectedPark().id;
+    this.hotSpotZone.update(dt, timeSec, this.controller.position, activeParkId);
+    const inHotSpot = this.hotSpotZone.isSkaterInside(this.controller.position);
+    (this.controller as unknown as { hotSpotMultiplier?: number }).hotSpotMultiplier = inHotSpot
+      ? 2.0
+      : 1.0;
+    this.hud.updateHotSpotStatus(
+      this.hotSpotZone.activeSpot?.name ?? null,
+      this.hotSpotZone.activeTimer,
+      inHotSpot
+    );
+
     const input = this.buildInputState(timeSec);
     this.controller.update(dt, input, (ev) => {
       this.hud.onManeuver(ev);
+      this.progression.onManeuver(ev, inHotSpot);
+      this.syncProgressionUI();
       if (ev.trick) {
         // Every scoring trick: big swoosh, slow motion, zoom-in and its name on screen
         const perfect = ev.quality === 'PERFECT';
@@ -873,13 +1015,35 @@ class SurfskateMunichGame {
     this.pretzels.update(dt, this.controller.position);
     this.flowLine.update(dt, timeSec, this.controller);
 
-    const activeParkId = this.landingPage.getSelectedPark().id;
     this.airportFlyover.update(dt, activeParkId);
     this.scooterRider.update(dt, timeSec, activeParkId);
 
     this.surfCamera.update(realDt, this.controller);
     this.hud.update(dt, this.controller);
+    this.progression.update(
+      dt,
+      this.controller,
+      this.hud.totalScore,
+      this.hud.getCurrentOrBestComboScore(),
+      this.pretzels.collectedCount
+    );
     this.audio.update(this.controller);
+
+    const ctrlAny = this.controller as unknown as {
+      sessionTimer?: number;
+      sessionFinished?: boolean;
+    };
+    if (
+      !this.hud.endlessMode &&
+      !this.summaryShownForSession &&
+      (this.hud.sessionEnded ||
+        Boolean(ctrlAny.sessionFinished) ||
+        (typeof ctrlAny.sessionTimer === 'number' &&
+          ctrlAny.sessionTimer <= 0 &&
+          !this.isOvertimeWait()))
+    ) {
+      this.showSessionSummaryModal();
+    }
 
     // FPS measurement & live HUD counter
     this.frameTimes.push(realDt);
@@ -893,6 +1057,7 @@ class SurfskateMunichGame {
     if (this.fpsDisplayTimer >= 0.35) {
       this.fpsDisplayTimer = 0;
       this.hud.updateFPS(this.currentFps);
+      this.syncProgressionUI();
     }
 
     // Auto-quality watchdog: automatically step down if hardware struggles (<46 / <40 FPS)
