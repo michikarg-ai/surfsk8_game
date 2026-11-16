@@ -149,7 +149,7 @@ export class SurfHUD {
 
     // Foldable tricks & options dock (bottom-right): folded by default, state remembered across reloads
     this.dockEl = document.getElementById('hud-dock')!;
-    this.dockEl.classList.toggle('collapsed', localStorage.getItem('surfsk8.dockCollapsed') !== '0');
+    this.setDockOpen(false);
     document.getElementById('dock-toggle')!.addEventListener('click', () => this.toggleDock());
     window.addEventListener('keydown', (e) => {
       if (e.code === 'KeyH') this.toggleDock();
@@ -592,6 +592,7 @@ export class SurfHUD {
   }
 
   public resetSession(): void {
+    this.setDockOpen(false);
     this.totalScore = 0;
     this.bestCombo = 0;
     this.activeComboBase = 0;

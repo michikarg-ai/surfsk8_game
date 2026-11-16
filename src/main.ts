@@ -178,6 +178,7 @@ class SurfskateMunichGame {
     this.landingPage = new LandingPage(
       this.parkSurface,
       () => {
+        this.hud.setDockOpen(false);
         if (TouchControls.isTouchDevice() && !this.isFullscreen()) {
           this.toggleFullscreen();
         }

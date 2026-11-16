@@ -204,6 +204,7 @@ export class SurfskateController {
   private bertHold = 0;
   private bertScored = false;
   private prevBertInput = false;
+  private bertSlideAccumulatedYaw = 0;
   private bertKeyReleased = true;
 
   // FS Reverse 360
@@ -304,6 +305,7 @@ export class SurfskateController {
     this.bertSlideAmount = 0;
     this.bertHold = 0;
     this.bertScored = false;
+    this.bertSlideAccumulatedYaw = 0;
     this.bertKeyReleased = true;
     this.reverseActive = false;
     this.boardYawOffset = 0;
@@ -585,9 +587,15 @@ export class SurfskateController {
 
         let trickMultiplier = this.bertSlideActive ? 2.2 : this.laybackActive ? 1.35 : 1.0;
 
-        // Capping Layback turn rate near 180° (Math.PI radians) to prevent doughnuts
+        // Capping Layback & Bert Slide turn rate near 180° (Math.PI radians) to prevent doughnuts
         if (this.laybackActive) {
           const yawProgress = this.laybackAccumulatedYaw;
+          if (yawProgress >= 2.4) {
+            const dampFactor = Math.max(0, 1 - (yawProgress - 2.4) / (Math.PI - 2.4));
+            trickMultiplier *= dampFactor;
+          }
+        } else if (this.bertSlideActive) {
+          const yawProgress = this.bertSlideAccumulatedYaw;
           if (yawProgress >= 2.4) {
             const dampFactor = Math.max(0, 1 - (yawProgress - 2.4) / (Math.PI - 2.4));
             trickMultiplier *= dampFactor;
@@ -598,7 +606,10 @@ export class SurfskateController {
         this.smoothedYawRate +=
           (targetYawRate - this.smoothedYawRate) * Math.min(1, (rawSteer === 0 ? 38.0 : 34.0) * clampedDt);
 
-        if (this.laybackActive && this.laybackAccumulatedYaw >= Math.PI * 0.98) {
+        if (
+          (this.laybackActive && this.laybackAccumulatedYaw >= Math.PI * 0.98) ||
+          (this.bertSlideActive && this.bertSlideAccumulatedYaw >= Math.PI * 0.98)
+        ) {
           this.smoothedYawRate = 0;
         }
 
@@ -607,6 +618,9 @@ export class SurfskateController {
 
         if (this.laybackActive) {
           this.laybackAccumulatedYaw += frameYawDelta;
+        }
+        if (this.bertSlideActive) {
+          this.bertSlideAccumulatedYaw += frameYawDelta;
         }
       }
 
@@ -1117,6 +1131,7 @@ export class SurfskateController {
     this.laybackAccumulatedYaw = 0;
     this.bertSlideActive = false;
     this.bertHold = 0;
+    this.bertSlideAccumulatedYaw = 0;
     this.reverseActive = false;
     this.boardYawOffset = 0;
   }
@@ -1232,49 +1247,70 @@ export class SurfskateController {
       this.bertKeyReleased = true;
     }
 
-    if (input.snapSlide && !this.bertSlideActive) {
-      if (bertPressed && this.slideTrickCooldown > 0) {
-        this.trickFail('BERT SLIDE: reset line before next slide!');
-      } else if (bertPressed && this.speed < BERT_MIN_SPEED) {
-        this.trickFail(`BERT SLIDE: need speed (${BERT_MIN_SPEED.toFixed(1)}+ m/s) — pump harder!`);
-      } else if (bertPressed && Math.abs(this.leanAngle) < 0.22) {
-        this.trickFail('BERT SLIDE: carve deeper into turn (← or →) first!');
-      } else if (bertPressed && !this.canPerformBertSlide()) {
-        this.trickFail('BERT SLIDE: carve on a bank or deep turn!');
-      } else if (this.bertKeyReleased && this.canPerformBertSlide()) {
-        this.bertSlideActive = true;
-        this.bertHold = 0;
-        this.bertScored = false;
-        this.bertSlideHandSide = Math.sign(this.leanAngle) || 1;
-        this.laybackActive = false;
-        this.bertKeyReleased = false;
+    if (input.snapSlide && !this.laybackActive) {
+      if (!this.bertSlideActive) {
+        if (bertPressed && this.slideTrickCooldown > 0) {
+          this.trickFail('BERT SLIDE: reset line before next slide!');
+        } else if (bertPressed && this.speed < BERT_MIN_SPEED) {
+          this.trickFail(`BERT SLIDE: need speed (${BERT_MIN_SPEED.toFixed(1)}+ m/s) — pump harder!`);
+        } else if (bertPressed && Math.abs(this.leanAngle) < 0.22) {
+          this.trickFail('BERT SLIDE: carve deeper into turn (← or →) first!');
+        } else if (bertPressed && !this.canPerformBertSlide()) {
+          this.trickFail('BERT SLIDE: carve on a bank or deep turn!');
+        } else if (this.bertKeyReleased && this.canPerformBertSlide()) {
+          this.bertSlideActive = true;
+          this.bertHold = 0;
+          this.bertScored = false;
+          this.bertSlideAccumulatedYaw = 0;
+          this.bertSlideHandSide = Math.sign(this.leanAngle) || 1;
+          this.laybackActive = false;
+          this.bertKeyReleased = false;
+        }
+      }
+    } else {
+      if (this.bertSlideActive) {
+        this.slideTrickCooldown = 1.5;
+        if (this.bertHold >= 0.50 || this.bertSlideAccumulatedYaw >= 2.0) {
+          if (!this.bertScored) {
+            this.bertScored = true;
+            this.speed = Math.max(2.6, this.speed * 0.82);
+            this.emitTrick(onManeuver, 'BERTSLIDE', 'BERTSLIDE!', 900, false);
+          } else {
+            this.speed = Math.max(2.6, this.speed * 0.82);
+          }
+        } else if (!this.bertScored) {
+          this.trickFail('BERT SLIDE: hold V through the slide!');
+        }
+        this.bertSlideActive = false;
       }
     }
+
     if (this.bertSlideActive) {
       this.bertHold += dt;
       // Keep speed fluid: never stall mid-trick
       this.speed = Math.max(2.4, this.speed);
       this.sprayIntensity = 1.0;
-      if (!input.snapSlide && this.bertHold < BERT_HOLD_TIME) {
+
+      if (this.bertSlideAccumulatedYaw >= 3.05 || this.bertHold >= 0.85) {
+        // Turn completed: maximum 180° rotation (no doughnuts!) or hold limit reached
         this.bertSlideActive = false;
         this.slideTrickCooldown = 1.5;
-        if (!this.bertScored) this.trickFail('BERT SLIDE: hold V through the slide!');
-      } else if ((!input.snapSlide && this.bertHold >= 0.55) || this.bertHold >= 1.2) {
-        this.bertSlideActive = false;
-        this.slideTrickCooldown = 1.5;
-        if (this.bertScored) {
-          // Moderate exit scrub (~18% speed loss)
-          this.speed = Math.max(2.6, this.speed * 0.82);
+        this.speed = Math.max(2.6, this.speed * 0.82);
+        if (!this.bertScored) {
+          this.bertScored = true;
+          this.emitTrick(onManeuver, 'BERTSLIDE', 'BERTSLIDE 180°!', 1200, true);
         }
+      } else if (!this.bertScored && (this.bertHold >= BERT_HOLD_TIME || this.bertSlideAccumulatedYaw >= 2.4)) {
+        this.bertScored = true;
+        this.emitTrick(onManeuver, 'BERTSLIDE', 'BERTSLIDE 180°!', 1200, true);
       }
-      // Tail swings out wide around the planted hand
+    }
+
+    // Tail swings out wide around the planted hand
+    if (this.bertSlideActive) {
       const slideEnv = Math.sin(Math.min(1, this.bertHold / 0.22) * (Math.PI * 0.5));
       const target = -this.bertSlideHandSide * 0.96 * slideEnv;
       this.boardYawOffset += (target - this.boardYawOffset) * Math.min(1, dt * 14);
-      if (!this.bertScored && this.bertHold >= BERT_HOLD_TIME && this.bertSlideActive) {
-        this.bertScored = true;
-        this.emitTrick(onManeuver, 'BERTSLIDE', 'BERTSLIDE!', 900, true);
-      }
     } else {
       this.boardYawOffset += (0 - this.boardYawOffset) * Math.min(1, dt * 10);
     }

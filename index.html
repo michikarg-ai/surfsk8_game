@@ -1104,9 +1104,16 @@
         transition: border-color 0.18s ease, background 0.18s ease;
       }
       .sel-section.focused-row,
+      .landing-mode-section.focused-row,
+      #landing-start-btn.focused-row,
       .sel-section:hover {
         border-color: rgba(242, 116, 31, 0.7);
         background: rgba(30, 26, 22, 0.85);
+      }
+      .landing-mode-section.focused-row,
+      #landing-start-btn.focused-row {
+        border-color: var(--yellow) !important;
+        box-shadow: 0 0 16px rgba(242, 204, 38, 0.45) !important;
       }
       .sel-row-label {
         font-family: var(--font-hud);

@@ -5,6 +5,8 @@ import { SurfskateController } from '../physics/SurfskateController';
 import { GameModeId, SkaterRankInfo, SurfMission } from '../progression/SurfProgression';
 
 export type SelectorCategory = 'skater' | 'skatepark' | 'board';
+export type LandingFocusRow = 'skater' | 'park' | 'board' | 'mode' | 'start';
+export const LANDING_FOCUS_ROWS: LandingFocusRow[] = ['skater', 'park', 'board', 'mode', 'start'];
 
 export interface SkaterCharacter {
   id: string;
@@ -69,7 +71,7 @@ export class LandingPage {
   private skaterVisuals: SkaterVisuals;
   private dummyController: SurfskateController;
   private noteTimeout: number | null = null;
-  private activeCategoryIndex = 0;
+  private activeFocusIndex = 0;
   private currentSkaterIndex = (() => {
     const s = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('skater') : null;
     return s === 'female' || s === 'sophie' || s === '1' ? 1 : 0;
@@ -314,15 +316,34 @@ export class LandingPage {
       const sectionEl = document.getElementById(`sel-section-${cat}`);
       if (sectionEl) {
         sectionEl.addEventListener('mouseenter', () => {
-          this.activeCategoryIndex = idx;
+          this.activeFocusIndex = idx;
           this.updateActiveSectionVisuals();
         });
         sectionEl.addEventListener('click', () => {
-          this.activeCategoryIndex = idx;
+          this.activeFocusIndex = idx;
           this.updateActiveSectionVisuals();
         });
       }
     });
+
+    const modeSectionEl = this.overlayEl.querySelector('.landing-mode-section');
+    if (modeSectionEl) {
+      modeSectionEl.addEventListener('mouseenter', () => {
+        this.activeFocusIndex = 3;
+        this.updateActiveSectionVisuals();
+      });
+      modeSectionEl.addEventListener('click', () => {
+        this.activeFocusIndex = 3;
+        this.updateActiveSectionVisuals();
+      });
+    }
+
+    if (this.startBtnEl) {
+      this.startBtnEl.addEventListener('mouseenter', () => {
+        this.activeFocusIndex = 4;
+        this.updateActiveSectionVisuals();
+      });
+    }
 
     const closeBtn = document.getElementById('landing-ig-note-close');
     if (closeBtn) {
@@ -456,37 +477,68 @@ export class LandingPage {
       this.onCycleQuality?.();
       return;
     }
+    if (code === 'Enter' || code === 'NumpadEnter' || (code === 'Space' && LANDING_FOCUS_ROWS[this.activeFocusIndex] === 'start')) {
+      this.startGame();
+      return;
+    }
     if (code === 'ArrowDown' || code === 'KeyS') {
-      this.activeCategoryIndex = (this.activeCategoryIndex + 1) % SELECTOR_CATEGORIES.length;
+      this.activeFocusIndex = (this.activeFocusIndex + 1) % LANDING_FOCUS_ROWS.length;
       this.updateActiveSectionVisuals();
     } else if (code === 'ArrowUp' || code === 'KeyW') {
-      this.activeCategoryIndex =
-        (this.activeCategoryIndex - 1 + SELECTOR_CATEGORIES.length) % SELECTOR_CATEGORIES.length;
+      this.activeFocusIndex =
+        (this.activeFocusIndex - 1 + LANDING_FOCUS_ROWS.length) % LANDING_FOCUS_ROWS.length;
       this.updateActiveSectionVisuals();
     } else if (code === 'ArrowLeft' || code === 'KeyA') {
-      const cat = SELECTOR_CATEGORIES[this.activeCategoryIndex];
-      this.triggerSelect(cat, -1);
+      const row = LANDING_FOCUS_ROWS[this.activeFocusIndex];
+      if (row === 'skater' || row === 'park' || row === 'board') {
+        const cat = row === 'park' ? 'skatepark' : row;
+        this.triggerSelect(cat, -1);
+      } else if (row === 'mode') {
+        this.cycleGameMode(-1);
+      }
     } else if (code === 'ArrowRight' || code === 'KeyD') {
-      const cat = SELECTOR_CATEGORIES[this.activeCategoryIndex];
-      this.triggerSelect(cat, 1);
+      const row = LANDING_FOCUS_ROWS[this.activeFocusIndex];
+      if (row === 'skater' || row === 'park' || row === 'board') {
+        const cat = row === 'park' ? 'skatepark' : row;
+        this.triggerSelect(cat, 1);
+      } else if (row === 'mode') {
+        this.cycleGameMode(1);
+      }
     }
+  }
+
+  public cycleGameMode(dir: number): void {
+    const modes: GameModeId[] = ['jam', 'flow_cup', 'zen'];
+    let idx = modes.indexOf(this.selectedGameMode);
+    if (idx === -1) idx = 0;
+    idx = (idx + dir + modes.length) % modes.length;
+    this.setGameMode(modes[idx]);
+    this.activeFocusIndex = 3;
+    this.updateActiveSectionVisuals();
+  }
+
+  public getCurrentFocusRow(): LandingFocusRow {
+    return LANDING_FOCUS_ROWS[this.activeFocusIndex];
   }
 
   public setActiveCategory(kind: SelectorCategory): void {
     const idx = SELECTOR_CATEGORIES.indexOf(kind);
     if (idx !== -1) {
-      this.activeCategoryIndex = idx;
+      this.activeFocusIndex = idx;
       this.updateActiveSectionVisuals();
     }
   }
 
   private updateActiveSectionVisuals(): void {
+    const currentRow = LANDING_FOCUS_ROWS[this.activeFocusIndex];
+
     SELECTOR_CATEGORIES.forEach((cat, idx) => {
+      const rowName: LandingFocusRow = idx === 0 ? 'skater' : idx === 1 ? 'park' : 'board';
       const el = document.getElementById(`sel-section-${cat}`);
       const tabEl = this.overlayEl.querySelector<HTMLButtonElement>(`.landing-tab-btn[data-tab="${cat}"]`);
-      const isActive = idx === this.activeCategoryIndex;
+      const isActive = rowName === currentRow;
       if (el) {
-        el.classList.toggle('active', isActive);
+        el.classList.toggle('active', isActive || idx === (this.activeFocusIndex < 3 ? this.activeFocusIndex : 0));
         el.classList.toggle('focused-row', isActive);
       }
       if (tabEl) {
@@ -494,6 +546,15 @@ export class LandingPage {
         tabEl.setAttribute('aria-selected', isActive ? 'true' : 'false');
       }
     });
+
+    const modeEl = this.overlayEl.querySelector('.landing-mode-section');
+    if (modeEl) {
+      modeEl.classList.toggle('focused-row', currentRow === 'mode');
+    }
+
+    if (this.startBtnEl) {
+      this.startBtnEl.classList.toggle('focused-row', currentRow === 'start');
+    }
   }
 
   public triggerSelect(kind: SelectorCategory, dir: number): void {
