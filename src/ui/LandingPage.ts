@@ -93,8 +93,12 @@ export class LandingPage {
 
   public onCycleQuality?: () => void;
   public onToggleFullscreen?: () => void;
+  public onToggleSound?: () => void;
   public onSelectGameMode?: (mode: GameModeId) => void;
   private fullscreenBtnEl: HTMLElement | null = null;
+  private soundBtnEl: HTMLElement | null = null;
+  private modeDescEl: HTMLElement | null = null;
+  private missionsCountEl: HTMLElement | null = null;
   private selectedGameMode: GameModeId = (() => {
     const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('surfsk8.gameMode') : null;
     if (saved === 'jam' || saved === 'flow_cup' || saved === 'zen') return saved;
@@ -103,6 +107,12 @@ export class LandingPage {
   private modePillBtns: HTMLButtonElement[] = [];
   private rankBadgeEl: HTMLElement | null = null;
   private missionsListEl: HTMLElement | null = null;
+
+  private modeDescriptions: Record<GameModeId, string> = {
+    jam: '⏱️ 120s Highscore Hunt — Carve hot-spots, land tricks & collect pretzels.',
+    flow_cup: '🌊 Follow the Flow — Carve through gates, keep momentum & lock lines.',
+    zen: '🌅 Endless Free Surf — No timer, no stress: cruise the bowl & carve sunset lines.',
+  };
 
   constructor(
     parkSurface: ParkSurface,
@@ -120,6 +130,12 @@ export class LandingPage {
     this.parkSubtitleEl = document.getElementById('landing-park-subtitle') || this.overlayEl.querySelector('#sel-section-skatepark .sel-subtitle');
     this.parkThumbImgEl = document.getElementById('landing-park-thumb') as HTMLImageElement || this.overlayEl.querySelector('.park-thumb');
     this.parkInspectBtnEl = document.getElementById('landing-park-inspect-btn');
+    this.soundBtnEl = document.getElementById('landing-sound-btn');
+    this.modeDescEl = document.getElementById('landing-mode-desc');
+    this.missionsCountEl = document.getElementById('landing-missions-count');
+    if (this.modeDescEl) {
+      this.modeDescEl.textContent = this.modeDescriptions[this.selectedGameMode] || this.modeDescriptions.jam;
+    }
 
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvasEl,
@@ -224,6 +240,9 @@ export class LandingPage {
       localStorage.setItem('surfsk8.gameMode', mode);
     } catch {}
     this.syncModePills();
+    if (this.modeDescEl) {
+      this.modeDescEl.textContent = this.modeDescriptions[mode] || this.modeDescriptions.jam;
+    }
     this.onSelectGameMode?.(mode);
   }
 
@@ -237,6 +256,10 @@ export class LandingPage {
     if (this.rankBadgeEl) {
       this.rankBadgeEl.textContent = rank.fullLabel;
     }
+    if (this.missionsCountEl) {
+      const done = missions.filter((m) => m.completed).length;
+      this.missionsCountEl.textContent = `${done}/${missions.length} DONE`;
+    }
     if (this.missionsListEl) {
       this.missionsListEl.innerHTML = missions
         .map((m) => {
@@ -246,7 +269,7 @@ export class LandingPage {
             : `${m.progress.toLocaleString()}/${m.target.toLocaleString()}${m.unit ? ' ' + m.unit : ''}`;
           return `
             <div class="landing-mission-row ${m.completed ? 'done' : ''}">
-              <span>${check} ${m.shortTitle}</span>
+              <span class="m-title">${check} ${m.shortTitle}</span>
               <span class="m-prog">${progStr}</span>
             </div>
           `.trim();
@@ -266,6 +289,25 @@ export class LandingPage {
         this.triggerSelect(kind, dir);
       });
     });
+
+    // Segmented tab buttons for setup switcher (SKATER | PARK | BOARD)
+    const tabBtns = this.overlayEl.querySelectorAll<HTMLButtonElement>('.landing-tab-btn');
+    tabBtns.forEach((tab) => {
+      tab.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tabKind = tab.dataset.tab as SelectorCategory;
+        if (tabKind) {
+          this.setActiveCategory(tabKind);
+        }
+      });
+    });
+
+    if (this.soundBtnEl) {
+      this.soundBtnEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.onToggleSound?.();
+      });
+    }
 
     // Row hover & click synchronization with keyboard active index
     SELECTOR_CATEGORIES.forEach((cat, idx) => {
@@ -441,12 +483,14 @@ export class LandingPage {
   private updateActiveSectionVisuals(): void {
     SELECTOR_CATEGORIES.forEach((cat, idx) => {
       const el = document.getElementById(`sel-section-${cat}`);
+      const tabEl = this.overlayEl.querySelector<HTMLButtonElement>(`.landing-tab-btn[data-tab="${cat}"]`);
+      const isActive = idx === this.activeCategoryIndex;
       if (el) {
-        if (idx === this.activeCategoryIndex) {
-          el.classList.add('active');
-        } else {
-          el.classList.remove('active');
-        }
+        el.classList.toggle('active', isActive);
+      }
+      if (tabEl) {
+        tabEl.classList.toggle('active', isActive);
+        tabEl.setAttribute('aria-selected', isActive ? 'true' : 'false');
       }
     });
   }
@@ -558,11 +602,27 @@ export class LandingPage {
         : 'M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3';
       const label = isFs ? 'EXIT FULLSCREEN' : 'FULLSCREEN';
       this.fullscreenBtnEl.innerHTML = `
-        <svg class="landing-fs-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;">
+        <svg class="landing-fs-icon aux-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="${iconPath}"/>
         </svg>
-        <span>${label}</span>
+        <span class="aux-text">${label}</span>
       `.trim();
+    }
+  }
+
+  public updateSoundLabel(isActive: boolean): void {
+    if (this.soundBtnEl) {
+      const icon = isActive ? '🔊' : '🔇';
+      const text = isActive ? 'SOUND: ON' : 'SOUND: OFF';
+      const iconEl = this.soundBtnEl.querySelector('.aux-icon');
+      const textEl = this.soundBtnEl.querySelector('.aux-text');
+      if (iconEl && textEl) {
+        iconEl.textContent = icon;
+        textEl.textContent = text;
+      } else {
+        this.soundBtnEl.innerHTML = `<span class="aux-icon">${icon}</span> <span class="aux-text">${text}</span>`;
+      }
+      this.soundBtnEl.classList.toggle('muted', !isActive);
     }
   }
 
@@ -598,23 +658,23 @@ export class LandingPage {
 
     const isPortrait = w < h;
     if (isPortrait) {
-      // In portrait mode (smartphones & vertical reel mode), the selector card and start button
-      // occupy the bottom ~38% of the screen. We frame the entire 3D skater proudly in the upper half.
-      // Skater is at X ~0.14, board at Y=0, head at Y=1.7.
+      // In portrait mode, 3D skater is showcased in the top 35-40% of the screen.
       this.camera.fov = 43;
-      this.camera.position.set(0.14, 0.95, 4.8);
-      this.camera.lookAt(0.14, 0.72, 0.0);
-    } else if (h < 520) {
-      // Mobile landscape (e.g. 844x390):
-      // Height is short, selector card is on the left.
-      this.camera.fov = 34;
-      this.camera.position.set(0.16, 1.10, 4.1);
-      this.camera.lookAt(0.08, 0.92, 0.0);
+      this.camera.position.set(0.14, 0.88, 4.4);
+      this.camera.lookAt(0.14, 0.58, 0.0);
+    } else if (h < 540) {
+      // Mobile landscape (e.g. 852x393):
+      // Right sidebar occupies ~360px on the right.
+      // Offset camera lookAt so skater at X=0.14 is framed on the left half!
+      this.camera.fov = 32;
+      this.camera.position.set(0.42, 1.05, 3.8);
+      this.camera.lookAt(0.38, 0.88, 0.0);
     } else {
       // Standard desktop landscape
+      // Right sidebar occupies ~390px on the right.
       this.camera.fov = 34;
-      this.camera.position.set(0.0, 1.15, 4.15);
-      this.camera.lookAt(-0.08, 0.94, 0.0);
+      this.camera.position.set(0.44, 1.15, 4.15);
+      this.camera.lookAt(0.38, 0.94, 0.0);
     }
     this.camera.updateProjectionMatrix();
   }
@@ -631,7 +691,7 @@ export class LandingPage {
   public updateQualityLabel(preset: string, effective: string): void {
     if (!this.qualityBtnEl) return;
     const label = preset === 'auto' ? `AUTO (${effective.toUpperCase()})` : preset.toUpperCase();
-    this.qualityBtnEl.textContent = `⚡ QUALITY: ${label}`;
+    this.qualityBtnEl.innerHTML = `<span class="aux-icon">⚡</span> <span class="aux-text">QUALITY: ${label}</span>`;
   }
 
   public update(timeSec: number, dt: number): void {

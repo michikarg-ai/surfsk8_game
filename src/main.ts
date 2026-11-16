@@ -210,6 +210,7 @@ class SurfskateMunichGame {
     );
     this.landingPage.onCycleQuality = () => this.cycleGraphicsQuality();
     this.landingPage.onToggleFullscreen = () => this.toggleFullscreen();
+    this.landingPage.onToggleSound = () => this.toggleMusic();
     this.landingPage.onSelectGameMode = (mode) => {
       this.gameMode = mode;
     };
@@ -816,6 +817,7 @@ class SurfskateMunichGame {
     );
     this.hud.updateQualityButton(this.graphicsPreset, this.effectiveQuality);
     this.hud.updateTouchButton(this.touchControls.isEnabled);
+    this.landingPage?.updateSoundLabel(this.audio.isMusicActive);
     this.syncFlowRecorderUI();
     const keyLabel = document.getElementById('hud-garage-key-label');
     if (keyLabel) {
