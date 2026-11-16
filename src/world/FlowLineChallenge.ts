@@ -945,7 +945,7 @@ export class FlowLineChallenge {
           </div>
           <div class="flowline-modal-body">
             <p class="flowline-desc">
-              Your custom Flow Line was recorded live in Skatepark "Im Gefilde"! Copy this snippet to chat or directly into <code class="flowline-code">FlowLineChallenge.WAYPOINTS_2D</code>:
+              Your custom Flow Line was recorded live in Skatepark "Im Wiesengrund"! Copy this snippet to chat or directly into <code class="flowline-code">FlowLineChallenge.WAYPOINTS_2D</code>:
             </p>
             <textarea id="flowline-export-textarea" class="flowline-textarea" readonly spellcheck="false"></textarea>
           </div>

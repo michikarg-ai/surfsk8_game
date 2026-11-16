@@ -30,8 +30,8 @@ export const SKATER_CHARACTERS: SkaterCharacter[] = [
 export const SKATEPARK_LOCATIONS: SkateparkLocation[] = [
   {
     id: 'im_gefilde',
-    name: 'IM GEFILDE',
-    subtitle: 'IM GEFILDE - MUNICH',
+    name: 'IM WIESENGRUND',
+    subtitle: 'IM WIESENGRUND',
     thumbUrl: '/textures/im_gefilde_thumb.png',
     modelUrl: '/models/skatepark_multi.glb',
     lidarUrl: '/models/im_gefilde_lidar.json',
@@ -40,7 +40,7 @@ export const SKATEPARK_LOCATIONS: SkateparkLocation[] = [
   {
     id: 'airport_skatepark',
     name: 'AIRPORT SKATEPARK',
-    subtitle: 'AIRPORT SKATEPARK - HALLBERGMOOS',
+    subtitle: 'AIRPORT SKATEPARK',
     thumbUrl: '/textures/airport_thumb.png',
     modelUrl: '/models/airport_skatepark_game.glb',
     lidarUrl: '/models/airport_skatepark_lidar.json',

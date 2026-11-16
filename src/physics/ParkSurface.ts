@@ -230,7 +230,7 @@ export class ParkSurface {
     if (Math.hypot(x - 0.8, z - 11.2) < 4.8) return 'South Clover Bowl';
     if (Math.hypot(x - 11.6, z - 14.2) < 5.2) return 'SE Deep Bowl Pocket';
     if (h > 1.1) return 'Perimeter Quarterpipe';
-    return 'Im Gefilde Flow Basin';
+    return 'Im Wiesengrund Flow Basin';
   }
 
   private buildCopingSegments(): void {
