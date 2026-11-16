@@ -657,4 +657,128 @@ export class SurfAudio {
       osc.stop(t0 + duration + 0.05);
     });
   }
+
+  /**
+   * Heavy commercial twin-engine passenger jet flyover sound effect for the Airport Skatepark.
+   * Procedural Web Audio synthesis featuring:
+   * - Resonant lowpass-filtered aerodynamic jet roar & air displacement with Doppler sweep (950 Hz -> 220 Hz)
+   * - Dual-oscillator harmonic turbine blade whine with characteristic Doppler pitch drop (265 Hz -> 165 Hz)
+   * - Sub-bass engine rumble (38 - 62 Hz)
+   * - Smooth stereo panning across the airspace and background music ducking
+   */
+  public playJetFlyover(durationSec = 12): void {
+    if (!this.ctx || this.isMuted || this.isPaused || !this.masterGain) return;
+    const ctx = this.ctx;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+    const master = this.masterGain;
+    const now = ctx.currentTime;
+    const end = now + durationSec;
+    const tPeak = now + durationSec * 0.42; // Closest Point of Approach (CPA)
+
+    this.duckMusic(durationSec);
+
+    // Dynamic stereo panning across the airspace
+    const panner = typeof ctx.createStereoPanner === 'function' ? ctx.createStereoPanner() : null;
+    if (panner) {
+      panner.pan.setValueAtTime(-0.85, now);
+      panner.pan.linearRampToValueAtTime(0.85, end);
+    }
+    const sfxOut: AudioNode = panner ? (panner.connect(master), panner) : master;
+
+    // 1. Aerodynamic exhaust roar & air displacement (Filtered noise)
+    let noiseBuf = this.whiteNoise;
+    if (!noiseBuf) {
+      noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+      const data = noiseBuf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    }
+
+    const noiseSrc = ctx.createBufferSource();
+    noiseSrc.buffer = noiseBuf;
+    noiseSrc.loop = true;
+
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'lowpass';
+    noiseFilter.Q.value = 1.6;
+    // Doppler shift: higher approach cutoff, steep drop after CPA, deep rumble tail
+    noiseFilter.frequency.setValueAtTime(950, now);
+    noiseFilter.frequency.setValueAtTime(920, tPeak - 0.5);
+    noiseFilter.frequency.exponentialRampToValueAtTime(220, end);
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.0001, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.46, tPeak);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, end);
+
+    noiseSrc.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(sfxOut);
+
+    noiseSrc.start(now);
+    noiseSrc.stop(end + 0.1);
+
+    // 2. Twin-engine turbine compressor blade whines (Doppler-shifted oscillators)
+    // Fundamental whine (~265 Hz -> ~165 Hz)
+    const osc1 = ctx.createOscillator();
+    osc1.type = 'sawtooth';
+    osc1.frequency.setValueAtTime(265, now);
+    osc1.frequency.setValueAtTime(255, tPeak - 0.4);
+    osc1.frequency.exponentialRampToValueAtTime(165, end);
+
+    const osc1Filter = ctx.createBiquadFilter();
+    osc1Filter.type = 'bandpass';
+    osc1Filter.Q.value = 4.2;
+    osc1Filter.frequency.setValueAtTime(265, now);
+    osc1Filter.frequency.setValueAtTime(255, tPeak - 0.4);
+    osc1Filter.frequency.exponentialRampToValueAtTime(165, end);
+
+    const osc1Gain = ctx.createGain();
+    osc1Gain.gain.setValueAtTime(0.0001, now);
+    osc1Gain.gain.exponentialRampToValueAtTime(0.18, tPeak);
+    osc1Gain.gain.exponentialRampToValueAtTime(0.0001, end);
+
+    osc1.connect(osc1Filter);
+    osc1Filter.connect(osc1Gain);
+    osc1Gain.connect(sfxOut);
+
+    osc1.start(now);
+    osc1.stop(end + 0.1);
+
+    // Overtone whine (blade passing frequency shimmer: ~680 Hz -> ~420 Hz)
+    const osc2 = ctx.createOscillator();
+    osc2.type = 'triangle';
+    osc2.frequency.setValueAtTime(680, now);
+    osc2.frequency.setValueAtTime(650, tPeak - 0.4);
+    osc2.frequency.exponentialRampToValueAtTime(420, end);
+
+    const osc2Gain = ctx.createGain();
+    osc2Gain.gain.setValueAtTime(0.0001, now);
+    osc2Gain.gain.exponentialRampToValueAtTime(0.12, tPeak);
+    osc2Gain.gain.exponentialRampToValueAtTime(0.0001, end);
+
+    osc2.connect(osc2Gain);
+    osc2Gain.connect(sfxOut);
+
+    osc2.start(now);
+    osc2.stop(end + 0.1);
+
+    // 3. Deep sub-bass engine roar (felt in headphones/speakers)
+    const subOsc = ctx.createOscillator();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(62, now);
+    subOsc.frequency.exponentialRampToValueAtTime(38, end);
+
+    const subGain = ctx.createGain();
+    subGain.gain.setValueAtTime(0.0001, now);
+    subGain.gain.exponentialRampToValueAtTime(0.32, tPeak);
+    subGain.gain.exponentialRampToValueAtTime(0.0001, end);
+
+    subOsc.connect(subGain);
+    subGain.connect(sfxOut);
+
+    subOsc.start(now);
+    subOsc.stop(end + 0.1);
+  }
 }

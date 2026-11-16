@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SurfskateController } from '../physics/SurfskateController';
 
 type Side = 'Left' | 'Right';
@@ -374,6 +375,9 @@ export class SkaterVisuals {
         }
       });
     }
+
+    // Attach authentic surfskate trucks physically connecting deck to wheels
+    this.attachRealisticSurfskateTrucks();
 
     this.root.position.copy(prevPos);
     this.root.rotation.copy(prevRot);
@@ -815,6 +819,14 @@ export class SkaterVisuals {
       this.rearTruckPivot.rotation.set(0, -ctrl.rearTruckYaw, ctrl.leanAngle * 0.2);
     }
 
+    // 4. Spin wheels based on riding speed (radius 0.035m = 70mm surfskate wheel)
+    if (ctrl.isGrounded && Math.abs(ctrl.speed) > 0.02) {
+      const rollDelta = (ctrl.speed * dt) / 0.035;
+      for (let i = 0; i < this.wheels.length; i++) {
+        this.wheels[i].rotateY(rollDelta);
+      }
+    }
+
     // 4. Full-body skeletal surf pose (leg IK on the deck, crouch, lean, torso twist, arms, head)
     if (this.hasSkeleton) {
       this.poseSkeleton(ctrl, dt);
@@ -1092,5 +1104,273 @@ export class SkaterVisuals {
 
       shader.vertexShader = shader.vertexShader.replace(projectTarget, projectReplacement);
     };
+  }
+
+  /**
+   * Build authentic, realistic surfskate trucks physically connecting the deck to the wheels:
+   * - Front: Surfskate swing-arm adapter (Carver C7 / YOW Meraki style) with encapsulated spring drum,
+   *   swivel bearing housing, angled kingpin, vibrant orange urethane bushings, washers, locknut,
+   *   sculpted T-hanger, axle rod, speed rings and outer wheel nuts.
+   * - Rear: Standard surfskate / reverse-kingpin rear truck with cast baseplate, pivot cup,
+   *   angled kingpin, orange urethane bushings, cupped washers, locknut, sculpted T-hanger,
+   *   axle rod, and outer wheel nuts.
+   * - Baseplates & Riser Pads mounted flush beneath DeckMesh.
+   * Replaces the crude floating placeholder rods from the base model.
+   */
+  private attachRealisticSurfskateTrucks(): void {
+    if (!this.deckMesh || !this.frontTruckPivot || !this.rearTruckPivot) return;
+
+    // 1. Hide legacy crude placeholder rods & cubes from original GLB
+    const legacyPlaceholders = new Set([
+      'FrontSurfAdapterArm',
+      'FrontBushing',
+      'FrontAxle',
+      'RearAxle',
+    ]);
+    this.boardGroup?.traverse((child) => {
+      if (legacyPlaceholders.has(child.name)) {
+        child.visible = false;
+      }
+    });
+
+    // 2. Remove previously attached realistic truck meshes if reloading
+    const removeExisting = (parent: THREE.Object3D) => {
+      for (let i = parent.children.length - 1; i >= 0; i--) {
+        const child = parent.children[i];
+        if (child.name.startsWith('RealisticTruck_')) {
+          parent.remove(child);
+          if ((child as THREE.Mesh).geometry) {
+            (child as THREE.Mesh).geometry.dispose();
+          }
+        }
+      }
+    };
+    removeExisting(this.deckMesh);
+    removeExisting(this.frontTruckPivot);
+    removeExisting(this.rearTruckPivot);
+
+    // 3. Materials
+    // Brushed cast aluminum for baseplates, swing-arm & hangers
+    const matAlu = new THREE.MeshStandardMaterial({
+      color: 0xd8dde4,
+      metalness: 0.82,
+      roughness: 0.28,
+    });
+    // High-density damping rubber for riser pads and pivot cups
+    const matRubber = new THREE.MeshStandardMaterial({
+      color: 0x16181c,
+      roughness: 0.85,
+      metalness: 0.1,
+    });
+    // High-rebound orange urethane for surfskate bushings
+    const matBushing = new THREE.MeshStandardMaterial({
+      color: 0xff6a1a,
+      roughness: 0.38,
+      metalness: 0.05,
+    });
+    // Dark oxide steel for mounting screws, kingpin shaft & locknuts
+    const matSteel = new THREE.MeshStandardMaterial({
+      color: 0x22252a,
+      metalness: 0.85,
+      roughness: 0.3,
+    });
+    // Polished precision steel for washers, bearing caps & axle rods
+    const matPolishedSteel = new THREE.MeshStandardMaterial({
+      color: 0xc8cdd4,
+      metalness: 0.90,
+      roughness: 0.20,
+    });
+
+    const transformGeo = (
+      geo: THREE.BufferGeometry,
+      pos: [number, number, number],
+      rot?: [number, number, number]
+    ): THREE.BufferGeometry => {
+      const m = new THREE.Matrix4();
+      const p = new THREE.Vector3(pos[0], pos[1], pos[2]);
+      const q = rot
+        ? new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0], rot[1], rot[2]))
+        : new THREE.Quaternion();
+      m.compose(p, q, new THREE.Vector3(1, 1, 1));
+      const cloned = geo.clone();
+      cloned.applyMatrix4(m);
+      return cloned;
+    };
+
+    const createMergedMesh = (
+      geos: THREE.BufferGeometry[],
+      material: THREE.Material,
+      name: string,
+      parent: THREE.Object3D
+    ): THREE.Mesh => {
+      const merged = BufferGeometryUtils.mergeGeometries(geos);
+      for (let i = 0; i < geos.length; i++) {
+        geos[i].dispose();
+      }
+      const mesh = new THREE.Mesh(merged, material);
+      mesh.name = name;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      parent.add(mesh);
+      return mesh;
+    };
+
+    // -------------------------------------------------------------------------
+    // A. DECK MESH: Riser Pads & Baseplates (mounted flush against deck underside)
+    // -------------------------------------------------------------------------
+    const deckRubberGeos = [
+      // Front rubber riser pad (deck underside at Z = 0.25 is Y = 0.105)
+      transformGeo(new THREE.BoxGeometry(0.058, 0.005, 0.078), [0, 0.1025, 0.25]),
+      // Rear rubber riser pad (deck underside at Z = -0.25 is Y = 0.107)
+      transformGeo(new THREE.BoxGeometry(0.058, 0.006, 0.078), [0, 0.104, -0.25]),
+      // Rear pivot cup rubber collar (angled 32 deg)
+      transformGeo(new THREE.CylinderGeometry(0.0075, 0.0075, 0.010, 12), [0, 0.077, -0.218], [0.55, 0, 0]),
+    ];
+    createMergedMesh(deckRubberGeos, matRubber, 'RealisticTruck_DeckRubber', this.deckMesh);
+
+    const deckAluGeos = [
+      // Front aluminum baseplate mounting flange
+      transformGeo(new THREE.BoxGeometry(0.054, 0.006, 0.074), [0, 0.097, 0.25]),
+      // Front adapter swivel collar (bearing cup housing)
+      transformGeo(new THREE.CylinderGeometry(0.022, 0.022, 0.022, 22), [0, 0.083, 0.25]),
+      transformGeo(new THREE.CylinderGeometry(0.0235, 0.0235, 0.004, 22), [0, 0.074, 0.25]),
+      // Front baseplate stiffener gussets
+      transformGeo(new THREE.BoxGeometry(0.008, 0.016, 0.038), [-0.018, 0.086, 0.25]),
+      transformGeo(new THREE.BoxGeometry(0.008, 0.016, 0.038), [0.018, 0.086, 0.25]),
+      // Rear aluminum baseplate mounting flange
+      transformGeo(new THREE.BoxGeometry(0.054, 0.006, 0.074), [0, 0.098, -0.25]),
+      // Rear pivot cup housing
+      transformGeo(new THREE.CylinderGeometry(0.010, 0.010, 0.018, 14), [0, 0.079, -0.218], [0.55, 0, 0]),
+      // Rear kingpin base boss
+      transformGeo(new THREE.BoxGeometry(0.026, 0.016, 0.028), [0, 0.084, -0.260], [-0.35, 0, 0]),
+      // Rear center stiffener spine
+      transformGeo(new THREE.BoxGeometry(0.012, 0.016, 0.032), [0, 0.088, -0.238]),
+    ];
+    createMergedMesh(deckAluGeos, matAlu, 'RealisticTruck_DeckAlu', this.deckMesh);
+
+    const boltGeo = new THREE.CylinderGeometry(0.0035, 0.0035, 0.004, 6);
+    const deckSteelGeos: THREE.BufferGeometry[] = [];
+    for (const bx of [-0.0205, 0.0205]) {
+      for (const bz of [-0.026, 0.026]) {
+        deckSteelGeos.push(transformGeo(boltGeo, [bx, 0.093, 0.25 + bz]));
+        deckSteelGeos.push(transformGeo(boltGeo, [bx, 0.094, -0.25 + bz]));
+      }
+    }
+    boltGeo.dispose();
+    createMergedMesh(deckSteelGeos, matSteel, 'RealisticTruck_DeckSteel', this.deckMesh);
+
+    // -------------------------------------------------------------------------
+    // B. FRONT TRUCK: Surfskate Swing-Arm Adapter & Hanger (attached to FrontTruckPivot)
+    // -------------------------------------------------------------------------
+    const frontAluGeos = [
+      // Swivel pin drum (rotates inside baseplate swivel collar)
+      transformGeo(new THREE.CylinderGeometry(0.018, 0.018, 0.024, 20), [0, 0.014, 0]),
+      // Encapsulated torsion spring drum / adapter body
+      transformGeo(new THREE.CylinderGeometry(0.020, 0.020, 0.026, 20), [0, 0.003, -0.011]),
+      // Swing-arm cast body
+      transformGeo(new THREE.BoxGeometry(0.032, 0.018, 0.028), [0, -0.008, -0.018], [-0.60, 0, 0]),
+      // Cast T-hanger central eyelet / bushing collar
+      transformGeo(new THREE.CylinderGeometry(0.016, 0.016, 0.014, 16), [0, -0.020, -0.027], [-0.75, 0, 0]),
+      // Hanger center bridge
+      transformGeo(new THREE.BoxGeometry(0.040, 0.018, 0.016), [0, -0.025, -0.030]),
+      // Left & right tapered hanger wings
+      transformGeo(new THREE.CylinderGeometry(0.008, 0.012, 0.045, 14), [-0.042, -0.025, -0.030], [0, 0, Math.PI * 0.5]),
+      transformGeo(new THREE.CylinderGeometry(0.012, 0.008, 0.045, 14), [0.042, -0.025, -0.030], [0, 0, Math.PI * 0.5]),
+      // Left & right axle sleeves (against inner wheel faces)
+      transformGeo(new THREE.CylinderGeometry(0.0085, 0.0085, 0.014, 14), [-0.062, -0.025, -0.030], [0, 0, Math.PI * 0.5]),
+      transformGeo(new THREE.CylinderGeometry(0.0085, 0.0085, 0.014, 14), [0.062, -0.025, -0.030], [0, 0, Math.PI * 0.5]),
+    ];
+    createMergedMesh(frontAluGeos, matAlu, 'RealisticTruck_FrontAlu', this.frontTruckPivot);
+
+    const frontBushingGeos = [
+      // Board-side orange urethane bushing
+      transformGeo(new THREE.CylinderGeometry(0.0135, 0.0145, 0.009, 16), [0, -0.014, -0.020], [-0.75, 0, 0]),
+      // Road-side orange urethane bushing
+      transformGeo(new THREE.CylinderGeometry(0.0115, 0.013, 0.009, 16), [0, -0.022, -0.024], [-0.75, 0, 0]),
+    ];
+    createMergedMesh(frontBushingGeos, matBushing, 'RealisticTruck_FrontBushing', this.frontTruckPivot);
+
+    const frontSteelGeos = [
+      // Spring preload adjuster hex bolt
+      transformGeo(new THREE.CylinderGeometry(0.006, 0.006, 0.005, 6), [0, 0.003, 0.002], [Math.PI * 0.5, 0, 0]),
+      // Angled kingpin bolt shaft
+      transformGeo(new THREE.CylinderGeometry(0.0048, 0.0048, 0.038, 12), [0, -0.018, -0.022], [-0.75, 0, 0]),
+      // Kingpin nylon locknut
+      transformGeo(new THREE.CylinderGeometry(0.0065, 0.0065, 0.005, 6), [0, -0.030, -0.028], [-0.75, 0, 0]),
+      // Left outer wheel locknut
+      transformGeo(new THREE.CylinderGeometry(0.0065, 0.0065, 0.005, 6), [-0.119, -0.025, -0.030], [0, 0, Math.PI * 0.5]),
+      // Right outer wheel locknut
+      transformGeo(new THREE.CylinderGeometry(0.0065, 0.0065, 0.005, 6), [0.119, -0.025, -0.030], [0, 0, Math.PI * 0.5]),
+    ];
+    createMergedMesh(frontSteelGeos, matSteel, 'RealisticTruck_FrontSteel', this.frontTruckPivot);
+
+    const frontPolishedGeos = [
+      // Chrome seal cap on swivel pin
+      transformGeo(new THREE.CylinderGeometry(0.019, 0.019, 0.003, 20), [0, 0.025, 0]),
+      // Board-side cupped bushing washer
+      transformGeo(new THREE.CylinderGeometry(0.015, 0.015, 0.002, 16), [0, -0.010, -0.018], [-0.75, 0, 0]),
+      // Road-side cupped bushing washer
+      transformGeo(new THREE.CylinderGeometry(0.014, 0.014, 0.002, 16), [0, -0.026, -0.026], [-0.75, 0, 0]),
+      // Steel axle rod (running through entire hanger & wheels)
+      transformGeo(new THREE.CylinderGeometry(0.0045, 0.0045, 0.240, 12), [0, -0.025, -0.030], [0, 0, Math.PI * 0.5]),
+      // Left outer speed ring washer
+      transformGeo(new THREE.CylinderGeometry(0.008, 0.008, 0.0015, 12), [-0.116, -0.025, -0.030], [0, 0, Math.PI * 0.5]),
+      // Right outer speed ring washer
+      transformGeo(new THREE.CylinderGeometry(0.008, 0.008, 0.0015, 12), [0.116, -0.025, -0.030], [0, 0, Math.PI * 0.5]),
+    ];
+    createMergedMesh(frontPolishedGeos, matPolishedSteel, 'RealisticTruck_FrontPolished', this.frontTruckPivot);
+
+    // -------------------------------------------------------------------------
+    // C. REAR TRUCK: Surfskate Rear Truck & Hanger (attached to RearTruckPivot)
+    // -------------------------------------------------------------------------
+    const rearAluGeos = [
+      // Pivot pin (nests into baseplate rubber pivot cup)
+      transformGeo(new THREE.CylinderGeometry(0.0055, 0.0075, 0.026, 12), [0, 0.008, 0.024], [0.55, 0, 0]),
+      // Cast T-hanger central eyelet / collar
+      transformGeo(new THREE.CylinderGeometry(0.016, 0.016, 0.014, 16), [0, -0.018, -0.005], [-0.65, 0, 0]),
+      // Hanger center bridge
+      transformGeo(new THREE.BoxGeometry(0.040, 0.018, 0.016), [0, -0.025, 0]),
+      // Left & right tapered hanger wings
+      transformGeo(new THREE.CylinderGeometry(0.008, 0.012, 0.045, 14), [-0.042, -0.025, 0], [0, 0, Math.PI * 0.5]),
+      transformGeo(new THREE.CylinderGeometry(0.012, 0.008, 0.045, 14), [0.042, -0.025, 0], [0, 0, Math.PI * 0.5]),
+      // Left & right axle sleeves (against inner wheel faces)
+      transformGeo(new THREE.CylinderGeometry(0.0085, 0.0085, 0.014, 14), [-0.062, -0.025, 0], [0, 0, Math.PI * 0.5]),
+      transformGeo(new THREE.CylinderGeometry(0.0085, 0.0085, 0.014, 14), [0.062, -0.025, 0], [0, 0, Math.PI * 0.5]),
+    ];
+    createMergedMesh(rearAluGeos, matAlu, 'RealisticTruck_RearAlu', this.rearTruckPivot);
+
+    const rearBushingGeos = [
+      // Board-side orange urethane bushing
+      transformGeo(new THREE.CylinderGeometry(0.0135, 0.0145, 0.010, 16), [0, -0.012, -0.006], [-0.65, 0, 0]),
+      // Road-side orange urethane bushing
+      transformGeo(new THREE.CylinderGeometry(0.0115, 0.013, 0.009, 16), [0, -0.020, -0.010], [-0.65, 0, 0]),
+    ];
+    createMergedMesh(rearBushingGeos, matBushing, 'RealisticTruck_RearBushing', this.rearTruckPivot);
+
+    const rearSteelGeos = [
+      // Reverse kingpin bolt shaft
+      transformGeo(new THREE.CylinderGeometry(0.0048, 0.0048, 0.038, 12), [0, -0.016, -0.008], [-0.65, 0, 0]),
+      // Kingpin nylon locknut
+      transformGeo(new THREE.CylinderGeometry(0.0065, 0.0065, 0.005, 6), [0, -0.028, -0.014], [-0.65, 0, 0]),
+      // Left outer wheel locknut
+      transformGeo(new THREE.CylinderGeometry(0.0065, 0.0065, 0.005, 6), [-0.119, -0.025, 0], [0, 0, Math.PI * 0.5]),
+      // Right outer wheel locknut
+      transformGeo(new THREE.CylinderGeometry(0.0065, 0.0065, 0.005, 6), [0.119, -0.025, 0], [0, 0, Math.PI * 0.5]),
+    ];
+    createMergedMesh(rearSteelGeos, matSteel, 'RealisticTruck_RearSteel', this.rearTruckPivot);
+
+    const rearPolishedGeos = [
+      // Board-side cupped washer
+      transformGeo(new THREE.CylinderGeometry(0.015, 0.015, 0.002, 16), [0, -0.008, -0.004], [-0.65, 0, 0]),
+      // Road-side cupped washer
+      transformGeo(new THREE.CylinderGeometry(0.014, 0.014, 0.002, 16), [0, -0.024, -0.012], [-0.65, 0, 0]),
+      // Steel axle rod (running through entire hanger & wheels)
+      transformGeo(new THREE.CylinderGeometry(0.0045, 0.0045, 0.240, 12), [0, -0.025, 0], [0, 0, Math.PI * 0.5]),
+      // Left outer speed ring washer
+      transformGeo(new THREE.CylinderGeometry(0.008, 0.008, 0.0015, 12), [-0.116, -0.025, 0], [0, 0, Math.PI * 0.5]),
+      // Right outer speed ring washer
+      transformGeo(new THREE.CylinderGeometry(0.008, 0.008, 0.0015, 12), [0.116, -0.025, 0], [0, 0, Math.PI * 0.5]),
+    ];
+    createMergedMesh(rearPolishedGeos, matPolishedSteel, 'RealisticTruck_RearPolished', this.rearTruckPivot);
   }
 }

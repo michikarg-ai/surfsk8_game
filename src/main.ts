@@ -10,6 +10,8 @@ import { TouchControls } from './ui/TouchControls';
 import { SurfAudio } from './audio/SurfAudio';
 import { PretzelCollectibles } from './world/PretzelCollectibles';
 import { FlowLineChallenge } from './world/FlowLineChallenge';
+import { AirportFlyover } from './world/AirportFlyover';
+import { ScooterRiderNPC } from './world/ScooterRiderNPC';
 import { inject, track } from '@vercel/analytics';
 
 // Initialize Vercel Web Analytics
@@ -33,6 +35,8 @@ class SurfskateMunichGame {
   public audio = new SurfAudio();
   public pretzels: PretzelCollectibles;
   public flowLine: FlowLineChallenge;
+  public airportFlyover: AirportFlyover;
+  public scooterRider: ScooterRiderNPC;
 
   public controlMode: DriveControlMode =
     (localStorage.getItem('surfsk8.controlMode') as DriveControlMode) || 'arrows';
@@ -135,6 +139,8 @@ class SurfskateMunichGame {
     this.flowLine.onRecordingStateChange = () => {
       this.syncFlowRecorderUI();
     };
+    this.airportFlyover = new AirportFlyover(this.scene, this.audio);
+    this.scooterRider = new ScooterRiderNPC(this.scene, this.parkSurface, this.hud, this.audio);
     this.landingPage = new LandingPage(
       this.parkSurface,
       () => {
@@ -482,6 +488,7 @@ class SurfskateMunichGame {
       }
       this.controller.resetToSpawn();
       this.surfCamera.reset(this.controller);
+      this.scooterRider.reset();
     } catch (e) {
       console.error('Error switching skatepark:', e);
     }
@@ -865,6 +872,11 @@ class SurfskateMunichGame {
     this.skaterVisuals.update(dt, this.controller);
     this.pretzels.update(dt, this.controller.position);
     this.flowLine.update(dt, timeSec, this.controller);
+
+    const activeParkId = this.landingPage.getSelectedPark().id;
+    this.airportFlyover.update(dt, activeParkId);
+    this.scooterRider.update(dt, timeSec, activeParkId);
+
     this.surfCamera.update(realDt, this.controller);
     this.hud.update(dt, this.controller);
     this.audio.update(this.controller);
