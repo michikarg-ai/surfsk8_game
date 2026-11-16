@@ -114,12 +114,7 @@ class SurfskateMunichGame {
         canSnap: this.controller.snapWindow === 'READY',
         canBert: this.controller.canPerformBertSlide(),
         canLayback: this.controller.canPerformLayback(),
-        canReverse:
-          this.controller.isGrounded &&
-          !this.controller.isGrinding &&
-          !this.controller.snapActive &&
-          !this.controller.reverseActive &&
-          this.controller.speed >= 2.4,
+        canReverse: this.controller.canPerformReverse(),
       }),
     });
     if (TouchControls.isTouchDevice()) {
