@@ -248,7 +248,7 @@ export class ImGefildeScene {
     } else if (parkId === 'airport_skatepark') {
       const [airportGltf, airportColorTex] = await Promise.all([
         loader.loadAsync('/models/airport_skatepark_game.glb?v=2'),
-        texLoader.loadAsync('/textures/airport_skatepark_tex0.jpg?v=2'),
+        texLoader.loadAsync('/textures/airport_skatepark_tex0.jpg?v=3'),
       ]);
 
       airportColorTex.flipY = false;
