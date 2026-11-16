@@ -76,11 +76,11 @@ const WALL_PUMP_GAIN_ACTIVE = 0.60;
 const WALL_STRETCH_ASSIST = 0.08;
 
 // ---- Tricks ----
-const LAYBACK_MIN_SPEED = 4.6;
+const LAYBACK_MIN_SPEED = 3.7;
 const LAYBACK_HOLD_TIME = 0.65;
-const BERT_MIN_SPEED = 4.6;
+const BERT_MIN_SPEED = 3.5;
 const BERT_HOLD_TIME = 0.55;
-const REVERSE_MIN_SPEED = 4.8;
+const REVERSE_MIN_SPEED = 3.6;
 /** Duration (seconds) of the full 360° tail spin of the FS Reverse. */
 const REVERSE_DURATION = 0.8;
 
@@ -132,7 +132,6 @@ export class SurfskateController {
 
   // Slide trick difficulty & cooldown balance (Issue #22)
   public slideTrickCooldown = 0;
-  public needsWallResetAfterSlide = false;
 
   // Session timer, Overtime & Endless Mode state
   public endlessMode = false;
@@ -324,7 +323,6 @@ export class SurfskateController {
     this.prevCompressInput = false;
     this.prevSinT = 0;
     this.slideTrickCooldown = 0;
-    this.needsWallResetAfterSlide = false;
     this.ollieCooldown = 0;
   }
 
@@ -404,12 +402,6 @@ export class SurfskateController {
     }
     if (this.ollieCooldown > 0) {
       this.ollieCooldown = Math.max(0, this.ollieCooldown - clampedDt);
-    }
-    if (this.needsWallResetAfterSlide) {
-      // Wall reset clears when skater rides off wall into flat (< 0.25m) or cooldown expires
-      if (this.currentSurface.height < 0.25 || this.slideTrickCooldown <= 0) {
-        this.needsWallResetAfterSlide = false;
-      }
     }
 
     // -------------------------------------------------------------------------
@@ -603,18 +595,9 @@ export class SurfskateController {
 
       // Non-gravitational tangential acceleration (pump, friction, slides)
       let aExtra = -ROLLING_RESISTANCE - AIR_DRAG * this.speed * this.speed;
-      if (this.bertSlideActive && this.speed > 0.4) {
-        // Bert slide scrubs heavy speed: urethane wheels sliding sideways + planted hand on concrete
-        aExtra -= 6.2 + 0.5 * this.speed;
-      }
-      if (this.laybackActive && this.speed > 0.4) {
-        // Layback power carve scrubs heavy speed across the face
-        aExtra -= 5.5 + 0.45 * this.speed;
-      }
-      if (this.reverseActive && this.speed > 0.4) {
-        // Tail spin scrubs heavy speed
-        aExtra -= 5.8 + 0.5 * this.speed;
-      }
+      if (this.bertSlideActive) aExtra -= 2.2;
+      if (this.laybackActive) aExtra -= 1.8;
+      if (this.reverseActive) aExtra -= 2.0;
 
       // ---- Push-off: ONE kick from a standstill only. After that you have to pump! ----
       const canPush = Math.abs(grade) < 0.12 && h0 < 0.35;
@@ -694,12 +677,12 @@ export class SurfskateController {
         this.indyGrabReady = false;
 
         const isWallPop = isOnWall && (grade > 0.04 || h0 > 0.35);
-        // Realistic Ollie physics:
-        // - Flat ground: crisp small hop (~0.30m - 0.40m high, ~45% lower than before)
-        // - Wall/lip launch: controlled pop scaled by active compression/crouch loading
-        const wallBase = isWallPop ? 2.5 : 2.05;
-        const rampLaunchBoost = this.speed * Math.max(0, sinT) * 0.58;
-        const compressionPop = (0.25 + 0.65 * this.compression) * (isWallPop ? 1.15 : 0.65);
+        // Ollie physics:
+        // - Flat ground: base pop 2.55 m/s (with crouch up to 3.05 m/s)
+        // - Wall/lip launch: ramp boost factor 0.78 with controlled pop
+        const wallBase = isWallPop ? 3.1 : 2.55;
+        const rampLaunchBoost = this.speed * Math.max(0, sinT) * 0.78;
+        const compressionPop = this.compression * (isWallPop ? 0.75 : 0.50);
         const vy = wallBase + rampLaunchBoost + compressionPop;
 
         this.velocity.set(
@@ -817,7 +800,7 @@ export class SurfskateController {
       if (this.position.y <= this.currentSurface.height && this.velocity.y <= 0) {
         this.position.y = this.currentSurface.height;
         this.isGrounded = true;
-        this.ollieCooldown = 0.65; // Short cooldown after landing to prevent bunny-hop spam
+        this.ollieCooldown = 0.40; // Short cooldown after landing to prevent bunny-hop spam
 
         // Keep only the velocity component tangent to the landing surface
         const n = this.currentSurface.normal;
@@ -1086,8 +1069,7 @@ export class SurfskateController {
   /** Abort all ground tricks (e.g. when going airborne). */
   private cancelGroundTricks(): void {
     if (this.bertSlideActive || this.laybackActive || this.reverseActive) {
-      this.slideTrickCooldown = 2.4;
-      this.needsWallResetAfterSlide = true;
+      this.slideTrickCooldown = 1.5;
     }
     this.laybackActive = false;
     this.laybackHold = 0;
@@ -1158,27 +1140,19 @@ export class SurfskateController {
 
   /** Layback, Bert slide and FS Reverse 360. */
   private updateTricks(dt: number, input: InputState, onManeuver: (ev: ManeuverEvent) => void): void {
-    const absLean = Math.abs(this.leanAngle);
-    const deepBertCarve = absLean >= 0.34;
-    const deepLaybackCarve = absLean >= 0.42;
-
-    const slopeMag = Math.hypot(this.currentSurface.slopeX, this.currentSurface.slopeZ);
-    const onSteepWall = this.currentSurface.height >= 0.42 && slopeMag >= 0.22;
-
     // ---------------- FS REVERSE 360 (B) ----------------
-    // Carve frontside (toe-side, →), then whip the tail around a full 360° while the
-    // board keeps travelling in the same direction, and ride out forward again.
+    // Carve into a turn, whip the tail around a full 360°, ride out forward.
     const reversePressed = input.reverseTrick && !this.prevReverseInput;
     this.prevReverseInput = input.reverseTrick;
     if (reversePressed && !this.reverseActive && !this.snapActive) {
       if (this.slideTrickCooldown > 0) {
         this.trickFail('REVERSE 360: reset line before next slide!');
       } else if (this.speed < REVERSE_MIN_SPEED) {
-        this.trickFail(`REVERSE 360: need high speed (${REVERSE_MIN_SPEED.toFixed(1)}+ m/s) — pump harder!`);
-      } else if (this.leanAngle < 0.18) {
-        this.trickFail('REVERSE 360: carve frontside (→) first!');
+        this.trickFail(`REVERSE 360: need speed (${REVERSE_MIN_SPEED.toFixed(1)}+ m/s) — pump!`);
+      } else if (Math.abs(this.leanAngle) < 0.14) {
+        this.trickFail('REVERSE 360: carve into turn (← or →) first!');
       } else if (!this.canPerformReverse()) {
-        this.trickFail('REVERSE 360: requires transition or deep carve/crouch!');
+        this.trickFail('REVERSE 360: requires carve or transition!');
       } else {
         this.reverseActive = true;
         this.reverseTimer = 0;
@@ -1188,51 +1162,38 @@ export class SurfskateController {
     }
     if (this.reverseActive) {
       this.reverseTimer += dt;
-      // Heavy continuous urethane slide scrub
-      this.speed = Math.max(0.6, this.speed - dt * (3.6 + 0.35 * this.speed));
+      // Keep speed fluid: never stall mid-trick
+      this.speed = Math.max(2.4, this.speed);
       const t = Math.min(1, this.reverseTimer / REVERSE_DURATION);
-      // Ease-in-out spin; frontside rotation = same direction as the → carve (negative yaw)
+      // Ease-in-out spin; rotation follows carve direction
+      const spinDir = Math.sign(this.leanAngle) || 1;
       const eased = t * t * (3 - 2 * t);
-      this.boardYawOffset = -eased * Math.PI * 2;
+      this.boardYawOffset = -spinDir * eased * Math.PI * 2;
       this.sprayIntensity = 1.0;
-      if (this.speed < 1.0) {
+      if (t >= 1) {
         this.reverseActive = false;
         this.boardYawOffset = 0;
-        this.speed *= 0.4;
-        this.slideTrickCooldown = 2.4;
-        this.needsWallResetAfterSlide = true;
-        this.trickFail('BAILED THE REVERSE: lost too much speed!');
-      } else if (t >= 1) {
-        this.reverseActive = false;
-        this.boardYawOffset = 0;
-        // Hook up from slide scrubs additional speed (~35-45% total loss)
-        this.speed = Math.max(1.5, this.speed * 0.72);
-        this.slideTrickCooldown = 2.4;
-        this.needsWallResetAfterSlide = true;
-        const clean = this.speed >= 2.6;
-        this.emitTrick(onManeuver, 'REVERSE360', 'FS REVERSE 360!', clean ? 2200 : 1600, clean);
+        // Moderate exit scrub (~18% speed loss)
+        this.speed = Math.max(2.6, this.speed * 0.82);
+        this.slideTrickCooldown = 1.5;
+        this.emitTrick(onManeuver, 'REVERSE360', 'FS REVERSE 360!', 2000, true);
       }
       return; // nothing else while spinning
     }
 
     // ---------------- BERT SLIDE (V) ----------------
-    // High-speed hand-plant slide: carve deep at high speed, plant the inside hand on the
-    // concrete, throw the outside arm high, and hold through the pivot arc.
+    // Hand-plant slide: carve at speed, plant inside hand, swing tail through pivot arc.
     const bertPressed = input.snapSlide && !this.prevBertInput;
     this.prevBertInput = input.snapSlide;
     if (input.snapSlide && !this.bertSlideActive) {
       if (bertPressed && this.slideTrickCooldown > 0) {
         this.trickFail('BERT SLIDE: reset line before next slide!');
-      } else if (bertPressed && this.needsWallResetAfterSlide) {
-        this.trickFail('BERT SLIDE: leave wall and pump to reset line!');
-      } else if (bertPressed && !onSteepWall) {
-        this.trickFail('BERT SLIDE: need steep transition or bowl wall!');
       } else if (bertPressed && this.speed < BERT_MIN_SPEED) {
-        this.trickFail(`BERT SLIDE: need high speed (${BERT_MIN_SPEED.toFixed(1)}+ m/s) — pump harder!`);
-      } else if (bertPressed && !deepBertCarve) {
-        this.trickFail('BERT SLIDE: carve deep into the wall (← or →) first!');
-      } else if (bertPressed && this.gradeAlongHeading <= -0.15) {
-        this.trickFail('BERT SLIDE: initiate at top of wall/apex, not in downhill drop!');
+        this.trickFail(`BERT SLIDE: need speed (${BERT_MIN_SPEED.toFixed(1)}+ m/s) — pump harder!`);
+      } else if (bertPressed && Math.abs(this.leanAngle) < 0.22) {
+        this.trickFail('BERT SLIDE: carve deeper into turn (← or →) first!');
+      } else if (bertPressed && !this.canPerformBertSlide()) {
+        this.trickFail('BERT SLIDE: carve on a bank or deep turn!');
       } else if (this.canPerformBertSlide()) {
         this.bertSlideActive = true;
         this.bertHold = 0;
@@ -1243,26 +1204,19 @@ export class SurfskateController {
     }
     if (this.bertSlideActive) {
       this.bertHold += dt;
-      // Heavy continuous urethane slide scrub
-      this.speed = Math.max(0.6, this.speed - dt * (3.8 + 0.35 * this.speed));
+      // Keep speed fluid: never stall mid-trick
+      this.speed = Math.max(2.4, this.speed);
       this.sprayIntensity = 1.0;
-      if (this.speed < BERT_MIN_SPEED * 0.35) {
+      if (!input.snapSlide && this.bertHold < BERT_HOLD_TIME) {
         this.bertSlideActive = false;
-        this.slideTrickCooldown = 2.4;
-        this.needsWallResetAfterSlide = true;
-        if (!this.bertScored) this.trickFail('BERT SLIDE: stalled — enter with more speed!');
-      } else if (!input.snapSlide && this.bertHold < BERT_HOLD_TIME) {
-        this.bertSlideActive = false;
-        this.slideTrickCooldown = 2.4;
-        this.needsWallResetAfterSlide = true;
+        this.slideTrickCooldown = 1.5;
         if (!this.bertScored) this.trickFail('BERT SLIDE: hold V through the slide!');
-      } else if ((!input.snapSlide && this.bertHold >= 0.65) || this.bertHold >= 1.2) {
+      } else if ((!input.snapSlide && this.bertHold >= 0.55) || this.bertHold >= 1.2) {
         this.bertSlideActive = false;
-        this.slideTrickCooldown = 2.4;
-        this.needsWallResetAfterSlide = true;
+        this.slideTrickCooldown = 1.5;
         if (this.bertScored) {
-          // Hooking up from the slide scrubs additional speed as wheels grip back in
-          this.speed = Math.max(1.3, this.speed * 0.72);
+          // Moderate exit scrub (~18% speed loss)
+          this.speed = Math.max(2.6, this.speed * 0.82);
         }
       }
       // Tail swings out wide around the planted hand
@@ -1271,7 +1225,7 @@ export class SurfskateController {
       this.boardYawOffset += (target - this.boardYawOffset) * Math.min(1, dt * 14);
       if (!this.bertScored && this.bertHold >= BERT_HOLD_TIME && this.bertSlideActive) {
         this.bertScored = true;
-        this.emitTrick(onManeuver, 'BERTSLIDE', 'BERTSLIDE!', 900, this.speed >= 2.6);
+        this.emitTrick(onManeuver, 'BERTSLIDE', 'BERTSLIDE!', 900, true);
       }
     } else {
       this.boardYawOffset += (0 - this.boardYawOffset) * Math.min(1, dt * 10);
@@ -1280,23 +1234,19 @@ export class SurfskateController {
     this.bertSlideAmount += ((this.bertSlideActive ? 1 : 0) - this.bertSlideAmount) * Math.min(1, dt * bertRate);
 
     // ---------------- LAYBACK (G) ----------------
-    // High-speed power carve: lay the body back into a fast, deep carve and drag the back hand.
+    // Power carve: lay the body back into a fast carve and drag the back hand.
     const laybackPressed = input.laybackTrick && !this.prevLaybackInput;
     this.prevLaybackInput = input.laybackTrick;
     if (input.laybackTrick && !this.bertSlideActive) {
       if (!this.laybackActive) {
         if (laybackPressed && this.slideTrickCooldown > 0) {
           this.trickFail('LAYBACK: reset line before next slide!');
-        } else if (laybackPressed && this.needsWallResetAfterSlide) {
-          this.trickFail('LAYBACK: leave wall and pump to reset line!');
-        } else if (laybackPressed && !onSteepWall) {
-          this.trickFail('LAYBACK: carve on a steep wall or transition!');
         } else if (laybackPressed && this.speed < LAYBACK_MIN_SPEED) {
-          this.trickFail(`LAYBACK: need high speed (${LAYBACK_MIN_SPEED.toFixed(1)}+ m/s) — pump harder!`);
-        } else if (laybackPressed && !deepLaybackCarve) {
-          this.trickFail('LAYBACK: carve deeper into a turn (← or →)!');
-        } else if (laybackPressed && this.gradeAlongHeading <= -0.15) {
-          this.trickFail('LAYBACK: carve high on the face, not downhill!');
+          this.trickFail(`LAYBACK: need speed (${LAYBACK_MIN_SPEED.toFixed(1)}+ m/s) — pump harder!`);
+        } else if (laybackPressed && Math.abs(this.leanAngle) < 0.25) {
+          this.trickFail('LAYBACK: carve into turn (← or →) first!');
+        } else if (laybackPressed && !this.canPerformLayback()) {
+          this.trickFail('LAYBACK: carve on a bank or deep turn!');
         } else if (this.canPerformLayback()) {
           this.laybackActive = true;
           this.laybackHold = 0;
@@ -1305,8 +1255,7 @@ export class SurfskateController {
       }
     } else {
       if (this.laybackActive) {
-        this.slideTrickCooldown = 2.4;
-        this.needsWallResetAfterSlide = true;
+        this.slideTrickCooldown = 1.5;
         if (!this.laybackScored) {
           this.trickFail('LAYBACK: hold G through the carve!');
         }
@@ -1315,19 +1264,18 @@ export class SurfskateController {
     }
     if (this.laybackActive) {
       this.laybackHold += dt;
-      // Heavy continuous urethane slide scrub
-      this.speed = Math.max(0.6, this.speed - dt * (3.6 + 0.35 * this.speed));
+      // Keep speed fluid: never stall mid-trick
+      this.speed = Math.max(2.4, this.speed);
       this.sprayIntensity = Math.max(this.sprayIntensity, 0.75);
-      if (!deepLaybackCarve || this.speed < LAYBACK_MIN_SPEED * 0.45) {
-        // Stood up out of the turn or bled too much speed before landing it
+      if (Math.abs(this.leanAngle) < 0.18) {
+        // Stood completely up out of the turn
         this.laybackActive = false;
-        this.slideTrickCooldown = 2.4;
-        this.needsWallResetAfterSlide = true;
-        if (!this.laybackScored) this.trickFail('LAYBACK: keep speed & deep carve while laying back!');
+        this.slideTrickCooldown = 1.5;
+        if (!this.laybackScored) this.trickFail('LAYBACK: carve through the layback!');
       } else if (!this.laybackScored && this.laybackHold >= LAYBACK_HOLD_TIME) {
         this.laybackScored = true;
-        this.speed = Math.max(1.4, this.speed * 0.74); // hook up scrub
-        this.emitTrick(onManeuver, 'LAYBACK', 'LAYBACK!', 1200, this.speed >= 2.8);
+        this.speed = Math.max(2.6, this.speed * 0.82); // Moderate exit scrub (~18%)
+        this.emitTrick(onManeuver, 'LAYBACK', 'LAYBACK!', 1200, true);
       }
     }
     this.laybackAmount += ((this.laybackActive ? 1 : 0) - this.laybackAmount) * Math.min(1, dt * 7);
@@ -1498,7 +1446,7 @@ export class SurfskateController {
     });
   }
 
-  /** Whether the skater is currently eligible to perform a Bert Slide (wall, speed & lean threshold). */
+  /** Whether the skater is currently eligible to perform a Bert Slide. */
   public canPerformBertSlide(): boolean {
     if (
       !this.isGrounded ||
@@ -1506,26 +1454,21 @@ export class SurfskateController {
       this.snapActive ||
       this.reverseActive ||
       this.bertSlideActive ||
-      this.slideTrickCooldown > 0 ||
-      this.needsWallResetAfterSlide
+      this.laybackActive ||
+      this.slideTrickCooldown > 0
     ) {
       return false;
     }
 
-    const slopeMag = Math.hypot(this.currentSurface.slopeX, this.currentSurface.slopeZ);
+    if (this.speed < BERT_MIN_SPEED) return false;
     const absLean = Math.abs(this.leanAngle);
+    if (absLean < 0.22) return false;
 
-    // Require steep wall/transition (>= 0.42m, slope >= 0.22), high speed (>= 4.6 m/s), deep carve, and not in downhill drop
-    return (
-      this.speed >= BERT_MIN_SPEED &&
-      this.currentSurface.height >= 0.42 &&
-      slopeMag >= 0.22 &&
-      absLean >= 0.34 &&
-      this.gradeAlongHeading > -0.15
-    );
+    const slopeMag = Math.hypot(this.currentSurface.slopeX, this.currentSurface.slopeZ);
+    return slopeMag >= 0.07 || this.currentSurface.height >= 0.15 || absLean >= 0.28;
   }
 
-  /** Whether the skater is currently eligible to perform a Layback Carve (wall, speed & lean threshold). */
+  /** Whether the skater is currently eligible to perform a Layback Carve. */
   public canPerformLayback(): boolean {
     if (
       !this.isGrounded ||
@@ -1533,26 +1476,21 @@ export class SurfskateController {
       this.snapActive ||
       this.reverseActive ||
       this.laybackActive ||
-      this.slideTrickCooldown > 0 ||
-      this.needsWallResetAfterSlide
+      this.bertSlideActive ||
+      this.slideTrickCooldown > 0
     ) {
       return false;
     }
 
-    const slopeMag = Math.hypot(this.currentSurface.slopeX, this.currentSurface.slopeZ);
+    if (this.speed < LAYBACK_MIN_SPEED) return false;
     const absLean = Math.abs(this.leanAngle);
+    if (absLean < 0.25) return false;
 
-    // Require steep wall/transition (>= 0.42m, slope >= 0.22), high speed (>= 4.6 m/s), deep carve, and upper wall phase
-    return (
-      this.speed >= LAYBACK_MIN_SPEED &&
-      this.currentSurface.height >= 0.42 &&
-      slopeMag >= 0.22 &&
-      absLean >= 0.42 &&
-      this.gradeAlongHeading > -0.15
-    );
+    const slopeMag = Math.hypot(this.currentSurface.slopeX, this.currentSurface.slopeZ);
+    return slopeMag >= 0.08 || this.currentSurface.height >= 0.18 || absLean >= 0.30;
   }
 
-  /** Whether the skater is currently eligible to perform an FS Reverse 360 (speed & line threshold). */
+  /** Whether the skater is currently eligible to perform an FS Reverse 360. */
   public canPerformReverse(): boolean {
     if (
       !this.isGrounded ||
@@ -1566,14 +1504,7 @@ export class SurfskateController {
       return false;
     }
 
-    if (this.speed < REVERSE_MIN_SPEED) {
-      return false;
-    }
-
-    const slopeMag = Math.hypot(this.currentSurface.slopeX, this.currentSurface.slopeZ);
-    const isTransition = this.currentSurface.height >= 0.32 || slopeMag >= 0.18;
-    const isCarveOrCompressed = Math.abs(this.leanAngle) >= 0.22 || this.compression >= 0.35;
-
-    return isTransition || isCarveOrCompressed;
+    if (this.speed < REVERSE_MIN_SPEED) return false;
+    return Math.abs(this.leanAngle) >= 0.14;
   }
 }
