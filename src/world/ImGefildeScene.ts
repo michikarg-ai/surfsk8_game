@@ -278,7 +278,7 @@ export class ImGefildeScene {
       // 100% guaranteed to bind even after rapid hot-reloads!
       const [multiGltf, parkColorTex] = await Promise.all([
         loader.loadAsync('/models/skatepark_multi.glb?v=4'),
-        texLoader.loadAsync('/textures/skatepark_multi_tex0.jpg'),
+        texLoader.loadAsync('/textures/skatepark_multi_tex0.jpg?v=2'),
       ]);
 
       parkColorTex.flipY = false; // glTF UV convention
