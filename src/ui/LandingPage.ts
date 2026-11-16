@@ -41,7 +41,7 @@ export const SKATEPARK_LOCATIONS: SkateparkLocation[] = [
     id: 'airport_skatepark',
     name: 'AIRPORT SKATEPARK',
     subtitle: 'AIRPORT SKATEPARK',
-    thumbUrl: '/textures/airport_thumb.png',
+    thumbUrl: '/textures/airport_thumb.png?v=2',
     modelUrl: '/models/airport_skatepark_game.glb',
     lidarUrl: '/models/airport_skatepark_lidar.json',
     viewerUrl: '/viewer.html?model=/models/airport_skatepark_game.glb',
