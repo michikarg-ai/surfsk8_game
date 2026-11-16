@@ -1020,14 +1020,15 @@
         flex-shrink: 0;
       }
 
-      /* 2. Right-side Selection & Action Panel */
+      /* 2. Left-side Selection & Action Panel */
       .landing-control-panel {
         position: absolute;
-        right: max(28px, env(safe-area-inset-right));
+        left: max(28px, env(safe-area-inset-left));
+        right: auto;
         top: max(68px, calc(env(safe-area-inset-top) + 58px));
         bottom: max(20px, env(safe-area-inset-bottom));
-        width: 380px;
-        max-width: 400px;
+        width: 350px;
+        max-width: 380px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
@@ -1085,62 +1086,36 @@
         flex: 0 0 auto;
       }
 
-      /* Segmented Tab Bar for SKATER | PARK | BOARD */
-      .landing-segmented-tabs {
+      /* Stacked Setup Rows (SKATER, PARK, BOARD) */
+      .landing-setup-stack {
         display: flex;
-        align-items: center;
-        gap: 3px;
-        background: rgba(0, 0, 0, 0.5);
-        padding: 2.5px;
-        border-radius: 5px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        flex: 1;
-        margin-left: 8px;
+        flex-direction: column;
+        gap: 6px;
       }
-      .landing-tab-btn {
-        flex: 1;
-        padding: 4px 6px;
-        background: transparent;
-        border: none;
-        border-radius: 3px;
-        color: #9ca3af;
-        font-family: var(--font-hud);
-        font-size: 11.5px;
-        font-weight: 800;
-        letter-spacing: 0.05em;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        text-align: center;
-        white-space: nowrap;
-      }
-      .landing-tab-btn:hover {
-        color: #ffffff;
-        background: rgba(255, 255, 255, 0.08);
-      }
-      .landing-tab-btn.active {
-        background: linear-gradient(135deg, #f2741f, #d94509);
-        color: #ffffff;
-        box-shadow: 0 2px 8px rgba(242, 116, 31, 0.4);
-      }
-
-      /* Active Setup Content */
-      .landing-tab-panels {
+      .sel-section {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        gap: 2.5px;
         background: rgba(24, 22, 20, 0.65);
         border: 1px solid rgba(255, 255, 255, 0.12);
         border-radius: 7px;
-        padding: 7px 9px;
-        min-height: 74px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        padding: 5px 8px;
+        transition: border-color 0.18s ease, background 0.18s ease;
       }
-      .sel-section {
-        display: none;
-        width: 100%;
-        flex-direction: column;
+      .sel-section.focused-row,
+      .sel-section:hover {
+        border-color: rgba(242, 116, 31, 0.7);
+        background: rgba(30, 26, 22, 0.85);
       }
-      .sel-section.active {
-        display: flex;
+      .sel-row-label {
+        font-family: var(--font-hud);
+        font-size: 10.5px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        color: #94a3b8;
+        text-transform: uppercase;
+        margin-left: 2px;
       }
       .sel-picker {
         display: flex;
@@ -1158,7 +1133,7 @@
         font-weight: 900;
         line-height: 1;
         width: 28px;
-        height: 34px;
+        height: 32px;
         cursor: pointer;
         border-radius: 4px;
         display: flex;
@@ -1191,12 +1166,12 @@
         justify-content: center;
         flex: 1;
         text-align: center;
-        gap: 3px;
+        gap: 2px;
         min-width: 0;
       }
       .sel-player-name {
         font-family: var(--font-hud);
-        font-size: 21px;
+        font-size: 19px;
         font-weight: 900;
         letter-spacing: 0.05em;
         color: #ffffff;
@@ -1207,22 +1182,22 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 5px;
+        gap: 4px;
         font-family: var(--font-hud);
-        font-size: 10.5px;
+        font-size: 10px;
         font-weight: 800;
         color: #94a3b8;
         letter-spacing: 0.05em;
       }
       .sel-stats span {
         background: rgba(0, 0, 0, 0.45);
-        padding: 1.5px 5px;
+        padding: 1.5px 4.5px;
         border-radius: 3px;
         border: 1px solid rgba(255, 255, 255, 0.1);
       }
       .sel-subtitle {
         font-family: var(--font-hud);
-        font-size: 13.5px;
+        font-size: 12.5px;
         font-weight: 800;
         letter-spacing: 0.05em;
         color: var(--yellow);
@@ -1240,14 +1215,14 @@
       }
       .park-slot-wrap {
         width: 100%;
-        max-width: 175px;
-        height: 50px;
+        max-width: 165px;
+        height: 44px;
         background: #181715;
       }
       .board-slot-wrap {
         width: 100%;
-        max-width: 175px;
-        height: 50px;
+        max-width: 165px;
+        height: 44px;
         background: radial-gradient(ellipse 80% 65% at 50% 45%, #524b42 0%, #302b26 55%, #181614 100%);
       }
       .slot-view {
@@ -1434,12 +1409,24 @@
         align-items: center;
       }
 
-      /* 4. Missions & Challenges Box */
+      /* 4. Missions & Challenges Box (Top Right on Desktop & Landscape) */
       .landing-progression-box {
-        background: rgba(20, 18, 16, 0.75);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 6px;
-        padding: 6px 9px;
+        position: absolute;
+        right: max(28px, env(safe-area-inset-right));
+        top: max(68px, calc(env(safe-area-inset-top) + 58px));
+        width: 290px;
+        background: rgba(16, 15, 14, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1.5px solid rgba(255, 255, 255, 0.16);
+        border-radius: 8px;
+        padding: 9px 12px;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65), 0 0 18px rgba(0, 214, 195, 0.12);
+        z-index: 10;
+        pointer-events: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
       }
       .landing-missions-counter {
         font-family: var(--font-hud);
@@ -1573,27 +1560,77 @@
           position: absolute;
           left: max(10px, env(safe-area-inset-left));
           right: max(10px, env(safe-area-inset-right));
-          bottom: max(10px, env(safe-area-inset-bottom));
+          bottom: max(8px, env(safe-area-inset-bottom));
           top: auto;
           width: auto;
           max-width: 440px;
           margin: 0 auto;
-          max-height: calc(var(--app-height, 100dvh) - 180px);
-          padding: 10px 12px;
-          gap: 8px;
+          max-height: calc(var(--app-height, 100dvh) - 170px);
+          padding: 8px 10px;
+          gap: 6px;
+        }
+        .landing-setup-stack {
+          gap: 4px;
+        }
+        .sel-section {
+          padding: 3px 6px;
+          gap: 1.5px;
+        }
+        .sel-row-label {
+          font-size: 9.5px;
+        }
+        .sel-player-name {
+          font-size: 16px;
+        }
+        .park-slot-wrap,
+        .board-slot-wrap {
+          height: 36px;
+        }
+        .park-thumb {
+          height: 36px;
+        }
+        .board-icon-svg {
+          max-height: 30px;
+        }
+        .mode-pill-btn {
+          padding: 4px 2px;
+          font-size: 10.5px;
+        }
+        .landing-mode-desc {
+          font-size: 9.5px;
+          padding: 2.5px 6px;
+          min-height: 18px;
+        }
+        #landing-start-btn {
+          height: 42px;
+          margin-top: 1px;
+        }
+        .start-btn-label {
+          font-size: 18px;
         }
         .start-btn-sub {
           display: none;
         }
-        .park-slot-wrap,
-        .board-slot-wrap {
-          height: 44px;
+        .landing-progression-box {
+          position: absolute;
+          right: max(10px, env(safe-area-inset-right));
+          top: max(48px, calc(env(safe-area-inset-top) + 42px));
+          width: 175px;
+          padding: 5px 8px;
+          gap: 3px;
+          border-radius: 6px;
         }
-        .park-thumb {
-          height: 44px;
+        .landing-progression-box .section-title {
+          font-size: 11px;
         }
-        .board-icon-svg {
-          max-height: 38px;
+        .landing-missions-counter {
+          font-size: 9.5px;
+        }
+        .landing-missions-list {
+          gap: 2px;
+        }
+        .landing-mission-row {
+          font-size: 9.5px;
         }
       }
 
@@ -1622,60 +1659,90 @@
         }
         .landing-control-panel {
           position: absolute;
-          right: max(8px, env(safe-area-inset-right));
-          top: max(38px, calc(env(safe-area-inset-top) + 34px));
+          left: max(8px, env(safe-area-inset-left));
+          right: auto;
+          top: max(36px, calc(env(safe-area-inset-top) + 32px));
           bottom: max(6px, env(safe-area-inset-bottom));
-          width: 360px;
-          max-width: 46vw;
-          padding: 6px 10px;
-          gap: 4px;
-          max-height: calc(var(--app-height, 100dvh) - 44px);
+          width: 320px;
+          max-width: 44vw;
+          padding: 5px 8px;
+          gap: 3.5px;
+          max-height: calc(var(--app-height, 100dvh) - 42px);
         }
-        .landing-tab-panels {
-          min-height: 52px;
-          padding: 4px 6px;
+        .landing-setup-stack {
+          gap: 3px;
+        }
+        .sel-section {
+          padding: 2px 5px;
+          gap: 1px;
+        }
+        .sel-row-label {
+          font-size: 9px;
         }
         .park-slot-wrap,
         .board-slot-wrap {
-          height: 36px;
+          height: 28px;
         }
         .park-thumb {
-          height: 36px;
+          height: 28px;
         }
         .board-icon-svg {
-          max-height: 30px;
+          max-height: 24px;
         }
         .sel-player-name {
-          font-size: 16px;
-        }
-        .sel-arrow {
-          width: 24px;
-          height: 28px;
           font-size: 15px;
         }
+        .sel-stats {
+          font-size: 9px;
+          gap: 3px;
+        }
+        .sel-subtitle {
+          font-size: 11px;
+        }
+        .sel-arrow {
+          width: 22px;
+          height: 24px;
+          font-size: 13px;
+        }
         .mode-pill-btn {
-          padding: 4px 3px;
-          font-size: 10.5px;
+          padding: 3px 2px;
+          font-size: 9.5px;
         }
         .landing-mode-desc {
-          font-size: 9.5px;
-          padding: 2.5px 6px;
-          min-height: 16px;
+          font-size: 9px;
+          padding: 2px 5px;
+          min-height: 14px;
+        }
+        #landing-start-btn {
+          height: 34px;
+          margin-top: 1px;
+        }
+        .start-btn-label {
+          font-size: 16px;
+        }
+        .start-btn-sub {
+          display: none;
+        }
+        .landing-progression-box {
+          position: absolute;
+          right: max(8px, env(safe-area-inset-right));
+          top: max(36px, calc(env(safe-area-inset-top) + 32px));
+          width: 210px;
+          padding: 5px 8px;
+          gap: 2.5px;
+          border-radius: 6px;
+        }
+        .landing-progression-box .section-title {
+          font-size: 10.5px;
+        }
+        .landing-missions-counter {
+          font-size: 9px;
         }
         .landing-missions-list {
           gap: 1.5px;
         }
         .landing-mission-row {
-          font-size: 10px;
-        }
-        #landing-start-btn {
-          height: 38px;
-        }
-        .start-btn-label {
-          font-size: 17px;
-        }
-        .start-btn-sub {
-          display: none;
+          font-size: 9px;
         }
       }
 
@@ -1696,8 +1763,13 @@
         width: auto;
         max-width: 420px;
         margin: 0 auto;
-        max-height: calc(var(--app-height, 100dvh) - 200px);
-        padding: 10px 12px;
+        max-height: calc(var(--app-height, 100dvh) - 180px);
+        padding: 8px 10px;
+      }
+      body.reel-mode .landing-progression-box {
+        right: 10px;
+        top: 48px;
+        width: 175px;
       }
       body.reel-mode .start-btn-sub {
         display: none;
@@ -3344,25 +3416,21 @@
           </nav>
         </header>
 
-        <!-- Right Side Selection Panel (Step 1, Step 2, Step 3, CTA) -->
+        <!-- Left Side Selection Panel (Setup, Mode, CTA) -->
         <aside class="landing-control-panel" id="landing-control-panel">
-          <!-- Step 1: Setup Card with Segmented Switch -->
+          <!-- Step 1: Setup Card with Skater, Park, Board stacked untereinander -->
           <div class="landing-panel-section landing-setup-section" id="landing-select-board">
             <div class="landing-section-header">
               <div class="section-title-wrap">
                 <span class="step-badge">1</span>
                 <span class="section-title">SETUP</span>
               </div>
-              <div class="landing-segmented-tabs" role="tablist" aria-label="Setup Category">
-                <button type="button" class="landing-tab-btn active" data-tab="skater" role="tab" id="landing-tab-skater" aria-selected="true">SKATER</button>
-                <button type="button" class="landing-tab-btn" data-tab="skatepark" role="tab" id="landing-tab-skatepark" aria-selected="false">PARK</button>
-                <button type="button" class="landing-tab-btn" data-tab="board" role="tab" id="landing-tab-board" aria-selected="false">BOARD</button>
-              </div>
             </div>
 
-            <div class="landing-tab-panels">
-              <!-- Tab 1: Skater -->
+            <div class="landing-setup-stack">
+              <!-- Item 1: Skater -->
               <div class="sel-section active" id="sel-section-skater">
+                <div class="sel-row-label">SKATER</div>
                 <div class="sel-picker">
                   <button class="sel-arrow" data-kind="skater" data-dir="-1" aria-label="Previous skater">&#10094;</button>
                   <div class="sel-info-center">
@@ -3377,8 +3445,9 @@
                 </div>
               </div>
 
-              <!-- Tab 2: Skatepark -->
+              <!-- Item 2: Skatepark -->
               <div class="sel-section" id="sel-section-skatepark">
+                <div class="sel-row-label">SKATEPARK</div>
                 <div class="sel-picker">
                   <button class="sel-arrow" data-kind="skatepark" data-dir="-1" aria-label="Previous skatepark">&#10094;</button>
                   <div class="sel-park-center">
@@ -3408,8 +3477,9 @@
                 </div>
               </div>
 
-              <!-- Tab 3: Board -->
+              <!-- Item 3: Board -->
               <div class="sel-section" id="sel-section-board">
+                <div class="sel-row-label">BOARD</div>
                 <div class="sel-picker">
                   <button class="sel-arrow" data-kind="board" data-dir="-1" aria-label="Previous board">&#10094;</button>
                   <div class="sel-board-center">
@@ -3541,20 +3611,6 @@
             </div>
           </div>
 
-          <!-- Step 3: Challenges / Missions -->
-          <div class="landing-panel-section landing-progression-box" id="landing-progression-box">
-            <div class="landing-section-header" id="landing-missions-header">
-              <div class="section-title-wrap">
-                <span class="step-badge">3</span>
-                <span class="section-title">CHALLENGES</span>
-              </div>
-              <span class="landing-missions-counter" id="landing-missions-count">0/3 DONE</span>
-            </div>
-            <div class="landing-missions-list" id="landing-missions-list">
-              <!-- Dynamically populated by LandingPage.updateProgressionDisplay -->
-            </div>
-          </div>
-
           <!-- Primary CTA Button -->
           <button id="landing-start-btn" type="button" aria-label="Drop In / Start Game">
             <span class="start-btn-skew-wrap">
@@ -3564,6 +3620,20 @@
             </span>
           </button>
         </aside>
+
+        <!-- Top Right Challenges Card -->
+        <div class="landing-progression-box" id="landing-progression-box">
+          <div class="landing-section-header" id="landing-missions-header">
+            <div class="section-title-wrap">
+              <span class="step-badge">🎯</span>
+              <span class="section-title">CHALLENGES</span>
+            </div>
+            <span class="landing-missions-counter" id="landing-missions-count">0/3 DONE</span>
+          </div>
+          <div class="landing-missions-list" id="landing-missions-list">
+            <!-- Dynamically populated by LandingPage.updateProgressionDisplay -->
+          </div>
+        </div>
 
         <!-- Instagram prompt note fallback -->
         <div id="landing-ig-note" role="status" aria-live="polite">

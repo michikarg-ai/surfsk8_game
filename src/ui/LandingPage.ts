@@ -487,6 +487,7 @@ export class LandingPage {
       const isActive = idx === this.activeCategoryIndex;
       if (el) {
         el.classList.toggle('active', isActive);
+        el.classList.toggle('focused-row', isActive);
       }
       if (tabEl) {
         tabEl.classList.toggle('active', isActive);
@@ -664,17 +665,18 @@ export class LandingPage {
       this.camera.lookAt(0.14, 0.58, 0.0);
     } else if (h < 540) {
       // Mobile landscape (e.g. 852x393):
-      // Right sidebar occupies ~360px on the right.
-      // Offset camera lookAt so skater at X=0.14 is framed on the left half!
+      // Menu panel is on the LEFT side (~320px).
+      // Offset camera lookAt so skater at X=0.14 is framed in the center-right!
       this.camera.fov = 32;
-      this.camera.position.set(0.42, 1.05, 3.8);
-      this.camera.lookAt(0.38, 0.88, 0.0);
+      this.camera.position.set(-0.20, 1.08, 3.8);
+      this.camera.lookAt(-0.10, 0.90, 0.0);
     } else {
       // Standard desktop landscape
-      // Right sidebar occupies ~390px on the right.
+      // Menu panel is on the LEFT side (~350px).
+      // Camera looks slightly to the left of the skater so skater is prominently in the right-center.
       this.camera.fov = 34;
-      this.camera.position.set(0.44, 1.15, 4.15);
-      this.camera.lookAt(0.38, 0.94, 0.0);
+      this.camera.position.set(-0.16, 1.15, 4.15);
+      this.camera.lookAt(-0.06, 0.94, 0.0);
     }
     this.camera.updateProjectionMatrix();
   }
