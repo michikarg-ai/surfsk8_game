@@ -195,6 +195,8 @@ export class SurfskateController {
   private laybackHold = 0;
   private laybackScored = false;
   private prevLaybackInput = false;
+  private laybackAccumulatedYaw = 0;
+  private laybackKeyReleased = true;
 
   // Bert slide
   /** Smoothed 0..1 amount of the Bertleman hand-plant slide pose. */
@@ -202,6 +204,7 @@ export class SurfskateController {
   private bertHold = 0;
   private bertScored = false;
   private prevBertInput = false;
+  private bertKeyReleased = true;
 
   // FS Reverse 360
   public reverseActive = false;
@@ -293,8 +296,15 @@ export class SurfskateController {
     this.snapWindow = 'NONE';
     this.laybackActive = false;
     this.laybackAmount = 0;
+    this.laybackHold = 0;
+    this.laybackScored = false;
+    this.laybackAccumulatedYaw = 0;
+    this.laybackKeyReleased = true;
     this.bertSlideActive = false;
     this.bertSlideAmount = 0;
+    this.bertHold = 0;
+    this.bertScored = false;
+    this.bertKeyReleased = true;
     this.reverseActive = false;
     this.boardYawOffset = 0;
     this.indyGrabActive = false;
@@ -566,14 +576,38 @@ export class SurfskateController {
       } else {
         const lowSpeedPivotFactor = 1.35 - 0.055 * Math.min(5.5, this.speed);
         const baseTurnRate = 4.5 * presetGain;
+        // Layback strictly carves backside (left / negative effectiveLean) — regular stance back hand into wall
         const effectiveLean = this.bertSlideActive
           ? this.bertSlideHandSide * Math.max(Math.abs(this.leanAngle), 0.65)
+          : this.laybackActive
+          ? -Math.max(Math.abs(this.leanAngle), 0.58)
           : this.leanAngle;
-        const trickMultiplier = this.bertSlideActive ? 2.2 : this.laybackActive ? 1.3 : 1.0;
+
+        let trickMultiplier = this.bertSlideActive ? 2.2 : this.laybackActive ? 1.35 : 1.0;
+
+        // Capping Layback turn rate near 180° (Math.PI radians) to prevent doughnuts
+        if (this.laybackActive) {
+          const yawProgress = this.laybackAccumulatedYaw;
+          if (yawProgress >= 2.4) {
+            const dampFactor = Math.max(0, 1 - (yawProgress - 2.4) / (Math.PI - 2.4));
+            trickMultiplier *= dampFactor;
+          }
+        }
+
         const targetYawRate = -effectiveLean * baseTurnRate * lowSpeedPivotFactor * trickMultiplier;
         this.smoothedYawRate +=
           (targetYawRate - this.smoothedYawRate) * Math.min(1, (rawSteer === 0 ? 38.0 : 34.0) * clampedDt);
+
+        if (this.laybackActive && this.laybackAccumulatedYaw >= Math.PI * 0.98) {
+          this.smoothedYawRate = 0;
+        }
+
+        const frameYawDelta = Math.abs(this.smoothedYawRate * clampedDt);
         this.heading += this.smoothedYawRate * clampedDt;
+
+        if (this.laybackActive) {
+          this.laybackAccumulatedYaw += frameYawDelta;
+        }
       }
 
       // Track continuous carve angle for Roundhouse Cutback detection (NO speed gain on flat ground!)
@@ -719,7 +753,14 @@ export class SurfskateController {
         }
 
         // Stall on a wall: at very low speed gravity pulls the nose down the fall line
-        if (slopeMag > 0.12 && this.speed < 0.9 && !this.snapActive) {
+        if (
+          slopeMag > 0.12 &&
+          this.speed < 0.9 &&
+          !this.snapActive &&
+          !this.laybackActive &&
+          !this.bertSlideActive &&
+          !this.reverseActive
+        ) {
           const downhillHeading = Math.atan2(slopeX, slopeZ);
           let diff = downhillHeading - this.heading;
           while (diff > Math.PI) diff -= Math.PI * 2;
@@ -1073,6 +1114,7 @@ export class SurfskateController {
     }
     this.laybackActive = false;
     this.laybackHold = 0;
+    this.laybackAccumulatedYaw = 0;
     this.bertSlideActive = false;
     this.bertHold = 0;
     this.reverseActive = false;
@@ -1185,6 +1227,11 @@ export class SurfskateController {
     // Hand-plant slide: carve at speed, plant inside hand, swing tail through pivot arc.
     const bertPressed = input.snapSlide && !this.prevBertInput;
     this.prevBertInput = input.snapSlide;
+
+    if (!input.snapSlide) {
+      this.bertKeyReleased = true;
+    }
+
     if (input.snapSlide && !this.bertSlideActive) {
       if (bertPressed && this.slideTrickCooldown > 0) {
         this.trickFail('BERT SLIDE: reset line before next slide!');
@@ -1194,12 +1241,13 @@ export class SurfskateController {
         this.trickFail('BERT SLIDE: carve deeper into turn (← or →) first!');
       } else if (bertPressed && !this.canPerformBertSlide()) {
         this.trickFail('BERT SLIDE: carve on a bank or deep turn!');
-      } else if (this.canPerformBertSlide()) {
+      } else if (this.bertKeyReleased && this.canPerformBertSlide()) {
         this.bertSlideActive = true;
         this.bertHold = 0;
         this.bertScored = false;
         this.bertSlideHandSide = Math.sign(this.leanAngle) || 1;
         this.laybackActive = false;
+        this.bertKeyReleased = false;
       }
     }
     if (this.bertSlideActive) {
@@ -1234,48 +1282,72 @@ export class SurfskateController {
     this.bertSlideAmount += ((this.bertSlideActive ? 1 : 0) - this.bertSlideAmount) * Math.min(1, dt * bertRate);
 
     // ---------------- LAYBACK (G) ----------------
-    // Power carve: lay the body back into a fast carve and drag the back hand.
+    // Power carve: lay the body back into a fast carve and drag the trailing hand (RightHand)
+    // on the concrete wall face. Regular stance: strictly backside / heelside carve (←).
     const laybackPressed = input.laybackTrick && !this.prevLaybackInput;
     this.prevLaybackInput = input.laybackTrick;
+
+    if (!input.laybackTrick) {
+      this.laybackKeyReleased = true;
+    }
+
     if (input.laybackTrick && !this.bertSlideActive) {
       if (!this.laybackActive) {
         if (laybackPressed && this.slideTrickCooldown > 0) {
           this.trickFail('LAYBACK: reset line before next slide!');
         } else if (laybackPressed && this.speed < LAYBACK_MIN_SPEED) {
           this.trickFail(`LAYBACK: need speed (${LAYBACK_MIN_SPEED.toFixed(1)}+ m/s) — pump harder!`);
-        } else if (laybackPressed && Math.abs(this.leanAngle) < 0.25) {
-          this.trickFail('LAYBACK: carve into turn (← or →) first!');
+        } else if (laybackPressed && this.leanAngle > -0.22) {
+          this.trickFail('LAYBACK: carve backside (←) so your back hand drops into the wall!');
         } else if (laybackPressed && !this.canPerformLayback()) {
-          this.trickFail('LAYBACK: carve on a bank or deep turn!');
-        } else if (this.canPerformLayback()) {
+          this.trickFail('LAYBACK: approach a wall or bank to lay back into the face!');
+        } else if (this.laybackKeyReleased && this.canPerformLayback()) {
           this.laybackActive = true;
           this.laybackHold = 0;
           this.laybackScored = false;
+          this.laybackAccumulatedYaw = 0;
+          this.laybackKeyReleased = false;
         }
       }
     } else {
       if (this.laybackActive) {
         this.slideTrickCooldown = 1.5;
-        if (!this.laybackScored) {
+        if (this.laybackHold >= 0.50 || this.laybackAccumulatedYaw >= 2.0) {
+          if (!this.laybackScored) {
+            this.laybackScored = true;
+            this.speed = Math.max(2.6, this.speed * 0.82);
+            this.emitTrick(onManeuver, 'LAYBACK', 'LAYBACK!', 900, false);
+          }
+        } else if (!this.laybackScored) {
           this.trickFail('LAYBACK: hold G through the carve!');
         }
+        this.laybackActive = false;
       }
-      this.laybackActive = false;
     }
+
     if (this.laybackActive) {
       this.laybackHold += dt;
       // Keep speed fluid: never stall mid-trick
       this.speed = Math.max(2.4, this.speed);
       this.sprayIntensity = Math.max(this.sprayIntensity, 0.75);
-      if (Math.abs(this.leanAngle) < 0.18) {
-        // Stood completely up out of the turn
+
+      if (this.leanAngle > -0.15) {
+        // Skater stopped carving backside
         this.laybackActive = false;
         this.slideTrickCooldown = 1.5;
-        if (!this.laybackScored) this.trickFail('LAYBACK: carve through the layback!');
-      } else if (!this.laybackScored && this.laybackHold >= LAYBACK_HOLD_TIME) {
+        if (!this.laybackScored) this.trickFail('LAYBACK: keep carving backside (←)!');
+      } else if (this.laybackAccumulatedYaw >= 3.05 || this.laybackHold >= 0.85) {
+        // Turn completed: maximum 180° rotation (no doughnuts!) or hold limit reached
+        this.laybackActive = false;
+        this.slideTrickCooldown = 1.5;
+        this.speed = Math.max(2.6, this.speed * 0.82);
+        if (!this.laybackScored) {
+          this.laybackScored = true;
+          this.emitTrick(onManeuver, 'LAYBACK', 'LAYBACK 180°!', 1200, true);
+        }
+      } else if (!this.laybackScored && (this.laybackHold >= LAYBACK_HOLD_TIME || this.laybackAccumulatedYaw >= 2.4)) {
         this.laybackScored = true;
-        this.speed = Math.max(2.6, this.speed * 0.82); // Moderate exit scrub (~18%)
-        this.emitTrick(onManeuver, 'LAYBACK', 'LAYBACK!', 1200, true);
+        this.emitTrick(onManeuver, 'LAYBACK', 'LAYBACK 180°!', 1200, true);
       }
     }
     this.laybackAmount += ((this.laybackActive ? 1 : 0) - this.laybackAmount) * Math.min(1, dt * 7);
@@ -1483,11 +1555,27 @@ export class SurfskateController {
     }
 
     if (this.speed < LAYBACK_MIN_SPEED) return false;
-    const absLean = Math.abs(this.leanAngle);
-    if (absLean < 0.25) return false;
+
+    // Layback is strictly a backside / heelside carve (steering left, leanAngle <= -0.22)
+    // for a regular stance skater where the trailing RightHand drops down into the wall.
+    if (this.leanAngle > -0.22) return false;
 
     const slopeMag = Math.hypot(this.currentSurface.slopeX, this.currentSurface.slopeZ);
-    return slopeMag >= 0.08 || this.currentSurface.height >= 0.18 || absLean >= 0.30;
+    const hasTransition = slopeMag >= 0.08 || this.currentSurface.height >= 0.18;
+    if (!hasTransition) return false;
+
+    // When on a bank or transition, ensure the wall is ahead or to the heel-side (left)
+    // so the back hand actually drops toward the concrete wall/face
+    if (slopeMag >= 0.10) {
+      const leftX = -Math.cos(this.heading);
+      const leftZ = Math.sin(this.heading);
+      const slopeLeft = this.currentSurface.slopeX * leftX + this.currentSurface.slopeZ * leftZ;
+      if (this.gradeAlongHeading < -0.15 && slopeLeft < -0.05) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /** Whether the skater is currently eligible to perform an FS Reverse 360. */
