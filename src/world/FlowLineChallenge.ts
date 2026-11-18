@@ -324,234 +324,309 @@ export class FlowLineChallenge {
     new THREE.Vector2(8.83, 0.84), // 124
   ];
 
-  /** Authentic Flow Waypoints for Airport Skatepark (Hallbergmoos). */
+  /**
+   * Authentic LiDAR-calibrated Wave-Surfing Flow Waypoints for Airport Skatepark (Hallbergmoos).
+   * Bowl floor sits at ~-1.10m raw LiDAR height; walls rise +1.35m..+1.65m up to coping (~+0.25m..+0.55m).
+   * Start gate (3.30, 8.90) sits ~2.45m ahead of spawn (2.94, 11.32, heading -0.175) at the south roll-in lip.
+   */
   public static readonly AIRPORT_WAYPOINTS_TIER_0: readonly THREE.Vector2[] = [
-    new THREE.Vector2(2.90, 11.30), // 1 - Spawn
-    new THREE.Vector2(2.20, 9.80),  // 2
-    new THREE.Vector2(1.50, 8.50),  // 3
-    new THREE.Vector2(0.60, 7.20),  // 4
-    new THREE.Vector2(-0.50, 6.00), // 5
-    new THREE.Vector2(-1.80, 5.00), // 6
-    new THREE.Vector2(-3.20, 4.20), // 7
-    new THREE.Vector2(-4.50, 3.00), // 8
-    new THREE.Vector2(-5.20, 1.50), // 9
-    new THREE.Vector2(-5.00, -0.20),// 10
-    new THREE.Vector2(-4.00, -1.60),// 11
-    new THREE.Vector2(-2.50, -2.50),// 12
-    new THREE.Vector2(-0.80, -3.00),// 13
-    new THREE.Vector2(1.00, -3.20), // 14
-    new THREE.Vector2(2.80, -3.00), // 15
-    new THREE.Vector2(4.50, -2.20), // 16
-    new THREE.Vector2(5.80, -1.00), // 17
-    new THREE.Vector2(6.80, 0.50),  // 18
-    new THREE.Vector2(7.20, 2.20),  // 19
-    new THREE.Vector2(6.80, 4.00),  // 20
-    new THREE.Vector2(5.80, 5.60),  // 21
-    new THREE.Vector2(4.40, 7.00),  // 22
-    new THREE.Vector2(2.80, 8.20),  // 23
-    new THREE.Vector2(1.20, 9.20),  // 24
-    new THREE.Vector2(-0.50, 9.80), // 25
-    new THREE.Vector2(-2.20, 9.60), // 26
-    new THREE.Vector2(-3.80, 8.80), // 27
-    new THREE.Vector2(-5.00, 7.50), // 28
-    new THREE.Vector2(-5.80, 5.80), // 29
-    new THREE.Vector2(-6.00, 4.00), // 30
-    new THREE.Vector2(-5.50, 2.20), // 31
-    new THREE.Vector2(-4.40, 0.80), // 32
-    new THREE.Vector2(-3.00, -0.20),// 33
-    new THREE.Vector2(-1.20, -0.60),// 34
-    new THREE.Vector2(0.60, -0.40), // 35
-    new THREE.Vector2(2.40, 0.20),  // 36
-    new THREE.Vector2(4.00, 1.20),  // 37
-    new THREE.Vector2(5.20, 2.60),  // 38
-    new THREE.Vector2(5.80, 4.20),  // 39
-    new THREE.Vector2(5.60, 6.00),  // 40
-    new THREE.Vector2(4.80, 7.60),  // 41
-    new THREE.Vector2(3.60, 9.20),  // 42
-    new THREE.Vector2(2.50, 10.50), // 43
+    // Start Gate & South Roll-in Drop-in
+    new THREE.Vector2(3.30, 8.90),   // 1 - Start Gate (ahead of spawn)
+    new THREE.Vector2(3.55, 7.35),   // 2
+    new THREE.Vector2(3.65, 5.75),   // 3
+    // Bottom Turn 1 -> carve left across south pool floor
+    new THREE.Vector2(3.05, 4.10),   // 4
+    new THREE.Vector2(1.55, 2.95),   // 5
+    new THREE.Vector2(-0.20, 2.25),  // 6
+    new THREE.Vector2(-1.95, 1.50),  // 7
+    new THREE.Vector2(-3.70, 0.75),  // 8
+    // Wave 1: SW Bend & Mid-NW Diagonal Wall ("67 / BVB 09" wall face)
+    new THREE.Vector2(-5.35, -0.05), // 9
+    new THREE.Vector2(-6.80, -0.85), // 10 - High Wall Top Turn
+    new THREE.Vector2(-6.95, -2.15), // 11
+    new THREE.Vector2(-5.95, -3.40), // 12
+    new THREE.Vector2(-5.00, -4.65), // 13
+    new THREE.Vector2(-4.15, -5.95), // 14
+    new THREE.Vector2(-3.40, -7.30), // 15
+    // Bottom Turn 2 -> sweep across deep pool trough to East Pocket
+    new THREE.Vector2(-1.95, -7.50), // 16
+    new THREE.Vector2(-0.20, -6.70), // 17
+    new THREE.Vector2(1.55, -5.75),  // 18
+    new THREE.Vector2(3.40, -4.85),  // 19
+    new THREE.Vector2(5.25, -4.15),  // 20
+    new THREE.Vector2(7.15, -3.70),  // 21
+    // Wave 2: Deep East Wall ("Green Graffiti / Mushrooms" wall face)
+    new THREE.Vector2(9.05, -3.45),  // 22
+    new THREE.Vector2(10.80, -3.70), // 23
+    new THREE.Vector2(12.00, -4.60), // 24
+    new THREE.Vector2(12.15, -6.00), // 25 - High Wall Top Turn
+    new THREE.Vector2(11.40, -7.45), // 26
+    new THREE.Vector2(10.45, -8.85), // 27
+    new THREE.Vector2(9.50, -10.25), // 28
+    new THREE.Vector2(8.60, -11.60), // 29
+    // Bottom Turn 3 -> carve into North Apex Pocket
+    new THREE.Vector2(7.15, -12.15), // 30
+    new THREE.Vector2(5.85, -12.65), // 31
+    // Wave 3: North Apex Nose ("SPOR" curved bowl peak)
+    new THREE.Vector2(5.40, -14.10), // 32
+    new THREE.Vector2(4.55, -14.90), // 33 - High Wall Top Turn
+    new THREE.Vector2(3.05, -14.95), // 34
+    new THREE.Vector2(1.50, -14.90), // 35
+    new THREE.Vector2(0.25, -14.55), // 36
+    new THREE.Vector2(-0.60, -13.75),// 37
+    // Bottom Turn 4 -> diagonal pump down center bowl to East Extension
+    new THREE.Vector2(-0.35, -11.90),// 38
+    new THREE.Vector2(0.40, -10.20), // 39
+    new THREE.Vector2(1.55, -8.65),  // 40
+    new THREE.Vector2(2.95, -7.15),  // 41
+    new THREE.Vector2(4.35, -5.60),  // 42
+    new THREE.Vector2(5.50, -3.85),  // 43
+    // Wave 4: East Extension Wall -> South Exit Bank
+    new THREE.Vector2(6.35, -1.95),  // 44
+    new THREE.Vector2(6.90, -0.35),  // 45 - High Wall Top Turn
+    new THREE.Vector2(7.20, 1.25),   // 46
+    new THREE.Vector2(7.30, 2.85),   // 47
+    new THREE.Vector2(7.55, 4.30),   // 48
+    new THREE.Vector2(6.00, 5.45),   // 49
+    new THREE.Vector2(4.35, 6.40),   // 50
+    new THREE.Vector2(3.10, 7.70),   // 51
+    new THREE.Vector2(2.40, 9.25),   // 52
+    new THREE.Vector2(2.00, 10.70),  // 53 - Finish Gate
   ];
 
   public static readonly AIRPORT_WAYPOINTS_TIER_1: readonly THREE.Vector2[] = [
-    new THREE.Vector2(2.90, 11.30), // 1
-    new THREE.Vector2(2.20, 9.80),  // 2
-    new THREE.Vector2(1.50, 8.50),  // 3
-    new THREE.Vector2(0.60, 7.20),  // 4
-    new THREE.Vector2(-0.50, 6.00), // 5
-    new THREE.Vector2(-1.80, 5.00), // 6
-    new THREE.Vector2(-3.20, 4.20), // 7
-    new THREE.Vector2(-4.50, 3.00), // 8
-    new THREE.Vector2(-5.60, 1.80), // 9
-    new THREE.Vector2(-6.40, 0.20), // 10
-    new THREE.Vector2(-6.80, -1.60),// 11
-    new THREE.Vector2(-6.50, -3.40),// 12
-    new THREE.Vector2(-5.60, -5.00),// 13
-    new THREE.Vector2(-4.20, -6.50),// 14
-    new THREE.Vector2(-2.50, -7.80),// 15
-    new THREE.Vector2(-0.60, -8.60),// 16
-    new THREE.Vector2(1.50, -9.00), // 17
-    new THREE.Vector2(3.60, -8.80), // 18
-    new THREE.Vector2(5.50, -8.00), // 19
-    new THREE.Vector2(7.20, -6.80), // 20
-    new THREE.Vector2(8.40, -5.20), // 21
-    new THREE.Vector2(9.00, -3.40), // 22
-    new THREE.Vector2(8.80, -1.50), // 23
-    new THREE.Vector2(7.80, 0.20),  // 24
-    new THREE.Vector2(6.20, 1.80),  // 25
-    new THREE.Vector2(4.50, 3.00),  // 26
-    new THREE.Vector2(2.80, 4.20),  // 27
-    new THREE.Vector2(1.20, 5.60),  // 28
-    new THREE.Vector2(-0.20, 7.00), // 29
-    new THREE.Vector2(-1.80, 8.20), // 30
-    new THREE.Vector2(-3.50, 9.00), // 31
-    new THREE.Vector2(-5.20, 9.20), // 32
-    new THREE.Vector2(-6.80, 8.40), // 33
-    new THREE.Vector2(-8.00, 7.00), // 34
-    new THREE.Vector2(-8.60, 5.20), // 35
-    new THREE.Vector2(-8.40, 3.20), // 36
-    new THREE.Vector2(-7.50, 1.50), // 37
-    new THREE.Vector2(-6.00, 0.00), // 38
-    new THREE.Vector2(-4.20, -1.20),// 39
-    new THREE.Vector2(-2.50, -2.20),// 40
-    new THREE.Vector2(-0.80, -3.20),// 41
-    new THREE.Vector2(1.00, -4.00), // 42
-    new THREE.Vector2(2.80, -4.80), // 43
-    new THREE.Vector2(4.60, -5.20), // 44
-    new THREE.Vector2(6.40, -5.00), // 45
-    new THREE.Vector2(7.80, -4.20), // 46
-    new THREE.Vector2(8.80, -3.00), // 47
-    new THREE.Vector2(9.20, -1.50), // 48
-    new THREE.Vector2(8.60, 0.20),  // 49
-    new THREE.Vector2(7.20, 1.60),  // 50
-    new THREE.Vector2(5.50, 2.80),  // 51
-    new THREE.Vector2(3.60, 4.00),  // 52
-    new THREE.Vector2(1.80, 5.20),  // 53
-    new THREE.Vector2(0.20, 6.60),  // 54
-    new THREE.Vector2(-1.40, 7.80), // 55
-    new THREE.Vector2(-3.00, 8.80), // 56
-    new THREE.Vector2(-4.80, 9.00), // 57
-    new THREE.Vector2(-6.40, 8.20), // 58
-    new THREE.Vector2(-7.50, 6.80), // 59
-    new THREE.Vector2(-7.80, 5.00), // 60
-    new THREE.Vector2(-7.20, 3.20), // 61
-    new THREE.Vector2(-5.80, 1.80), // 62
-    new THREE.Vector2(-4.00, 0.80), // 63
-    new THREE.Vector2(-2.00, 0.20), // 64
-    new THREE.Vector2(0.00, 0.00),  // 65
-    new THREE.Vector2(2.00, 0.50),  // 66
-    new THREE.Vector2(3.80, 1.60),  // 67
-    new THREE.Vector2(5.20, 3.00),  // 68
-    new THREE.Vector2(6.00, 4.60),  // 69
-    new THREE.Vector2(6.20, 6.40),  // 70
-    new THREE.Vector2(5.60, 8.00),  // 71
-    new THREE.Vector2(4.50, 9.50),  // 72
-    new THREE.Vector2(3.20, 10.60), // 73
-    new THREE.Vector2(2.50, 11.20), // 74
+    // Start Gate & Drop-in
+    new THREE.Vector2(3.30, 8.90),   // 1 - Start Gate
+    new THREE.Vector2(3.55, 7.35),   // 2
+    new THREE.Vector2(3.65, 5.75),   // 3
+    new THREE.Vector2(3.70, 4.10),   // 4
+    // Wave 1: East Extension Wall (South-to-North)
+    new THREE.Vector2(5.95, 3.25),   // 5
+    new THREE.Vector2(7.15, 2.55),   // 6
+    new THREE.Vector2(7.30, 1.15),   // 7
+    new THREE.Vector2(7.15, -0.30),  // 8
+    new THREE.Vector2(6.50, -1.45),  // 9
+    // Bottom Turn 1 -> sweep across waist to SW Blue Graffiti Corner
+    new THREE.Vector2(4.80, -1.95),  // 10
+    new THREE.Vector2(2.95, -1.85),  // 11
+    new THREE.Vector2(1.10, -1.70),  // 12
+    new THREE.Vector2(-0.75, -1.45), // 13
+    new THREE.Vector2(-2.60, -1.10), // 14
+    new THREE.Vector2(-4.45, -0.60), // 15
+    // Wave 2: SW Blue Graffiti Corner
+    new THREE.Vector2(-6.35, -0.45), // 16
+    new THREE.Vector2(-8.05, -0.35), // 17
+    new THREE.Vector2(-9.65, -0.25), // 18
+    new THREE.Vector2(-10.95, -0.25),// 19
+    new THREE.Vector2(-11.30, 1.05), // 20
+    // Bottom Turn 2 -> Wide West Bowl -> SW Corner Hip
+    new THREE.Vector2(-11.00, 2.55), // 21
+    new THREE.Vector2(-10.80, 4.00), // 22
+    new THREE.Vector2(-10.95, 5.35), // 23
+    // Wave 3: SW Corner Hip
+    new THREE.Vector2(-10.75, 6.65), // 24
+    new THREE.Vector2(-9.50, 7.30),  // 25
+    new THREE.Vector2(-8.25, 7.45),  // 26
+    // Bottom Turn 3 -> diagonal setup into NW Wall
+    new THREE.Vector2(-6.90, 6.15),  // 27
+    new THREE.Vector2(-5.30, 4.65),  // 28
+    new THREE.Vector2(-3.85, 2.95),  // 29
+    new THREE.Vector2(-3.05, 1.10),  // 30
+    new THREE.Vector2(-3.15, -0.75), // 31
+    // Wave 4: Long NW Diagonal Wall ("67 / BVB 09")
+    new THREE.Vector2(-4.45, -2.45), // 32
+    new THREE.Vector2(-5.35, -3.85), // 33
+    new THREE.Vector2(-4.75, -5.25), // 34
+    new THREE.Vector2(-3.90, -6.70), // 35
+    new THREE.Vector2(-3.10, -8.15), // 36
+    new THREE.Vector2(-2.40, -9.65), // 37
+    new THREE.Vector2(-1.75, -11.15),// 38
+    // Bottom Turn 4 -> North Pocket sweep into North Apex
+    new THREE.Vector2(-0.55, -12.35),// 39
+    new THREE.Vector2(1.10, -12.55), // 40
+    // Wave 5: North Apex Nose ("SPOR")
+    new THREE.Vector2(2.20, -14.05), // 41
+    new THREE.Vector2(3.05, -14.85), // 42
+    new THREE.Vector2(4.55, -14.85), // 43
+    new THREE.Vector2(6.00, -14.40), // 44
+    new THREE.Vector2(6.65, -13.35), // 45
+    // Bottom Turn 5 -> drop smoothly into East Wall
+    new THREE.Vector2(6.65, -11.65), // 46
+    new THREE.Vector2(7.60, -10.45), // 47
+    // Wave 6: East "Green Graffiti" Wall (North-to-South)
+    new THREE.Vector2(8.95, -9.95),  // 48
+    new THREE.Vector2(10.25, -8.90), // 49
+    new THREE.Vector2(11.40, -7.50), // 50
+    new THREE.Vector2(12.15, -5.90), // 51
+    new THREE.Vector2(12.35, -4.25), // 52
+    new THREE.Vector2(11.80, -3.00), // 53
+    new THREE.Vector2(10.45, -2.15), // 54
+    // Bottom Turn 6 -> fast sweep to Mid-NW Wall 2nd Slash
+    new THREE.Vector2(8.65, -2.25),  // 55
+    new THREE.Vector2(6.85, -2.95),  // 56
+    new THREE.Vector2(5.05, -3.75),  // 57
+    new THREE.Vector2(3.25, -4.55),  // 58
+    new THREE.Vector2(1.45, -5.15),  // 59
+    new THREE.Vector2(-0.40, -5.45), // 60
+    new THREE.Vector2(-2.35, -5.50), // 61
+    // Wave 7: Mid-NW Wall Return Slash
+    new THREE.Vector2(-4.45, -5.50), // 62
+    new THREE.Vector2(-5.25, -4.15), // 63
+    new THREE.Vector2(-6.05, -2.85), // 64
+    new THREE.Vector2(-6.45, -1.55), // 65
+    // Bottom Turn 7 -> cross center to East Extension Finale
+    new THREE.Vector2(-5.15, -0.55), // 66
+    new THREE.Vector2(-3.35, -0.45), // 67
+    new THREE.Vector2(-1.50, -0.40), // 68
+    new THREE.Vector2(0.40, -0.35),  // 69
+    new THREE.Vector2(2.30, -0.30),  // 70
+    new THREE.Vector2(4.45, -0.15),  // 71
+    // Wave 8: East Extension Wall Finale -> South Exit Bank
+    new THREE.Vector2(6.85, 0.20),   // 72
+    new THREE.Vector2(7.15, 1.45),   // 73
+    new THREE.Vector2(7.35, 2.95),   // 74
+    new THREE.Vector2(7.55, 4.30),   // 75
+    new THREE.Vector2(5.85, 5.45),   // 76
+    new THREE.Vector2(4.20, 6.45),   // 77
+    new THREE.Vector2(3.00, 7.80),   // 78
+    new THREE.Vector2(2.35, 9.35),   // 79
+    new THREE.Vector2(1.95, 10.75),  // 80 - Finish Gate
   ];
 
   public static readonly AIRPORT_WAYPOINTS_TIER_2: readonly THREE.Vector2[] = [
-    new THREE.Vector2(2.90, 11.30), // 1
-    new THREE.Vector2(2.20, 9.80),  // 2
-    new THREE.Vector2(1.50, 8.50),  // 3
-    new THREE.Vector2(0.60, 7.20),  // 4
-    new THREE.Vector2(-0.50, 6.00), // 5
-    new THREE.Vector2(-1.80, 5.00), // 6
-    new THREE.Vector2(-3.20, 4.20), // 7
-    new THREE.Vector2(-4.50, 3.20), // 8
-    new THREE.Vector2(-5.80, 2.00), // 9
-    new THREE.Vector2(-7.00, 0.60), // 10
-    new THREE.Vector2(-7.80, -1.00),// 11
-    new THREE.Vector2(-8.20, -2.80),// 12
-    new THREE.Vector2(-8.00, -4.60),// 13
-    new THREE.Vector2(-7.20, -6.40),// 14
-    new THREE.Vector2(-6.00, -8.00),// 15
-    new THREE.Vector2(-4.50, -9.50),// 16
-    new THREE.Vector2(-2.80, -10.80),// 17
-    new THREE.Vector2(-0.80, -11.60),// 18
-    new THREE.Vector2(1.20, -11.80),// 19
-    new THREE.Vector2(3.20, -11.40),// 20
-    new THREE.Vector2(5.20, -10.40),// 21
-    new THREE.Vector2(7.00, -9.00), // 22
-    new THREE.Vector2(8.50, -7.20), // 23
-    new THREE.Vector2(9.50, -5.20), // 24
-    new THREE.Vector2(10.00, -3.20),// 25
-    new THREE.Vector2(9.80, -1.20), // 26
-    new THREE.Vector2(9.00, 0.80),  // 27
-    new THREE.Vector2(7.60, 2.60),  // 28
-    new THREE.Vector2(5.80, 4.20),  // 29
-    new THREE.Vector2(3.80, 5.50),  // 30
-    new THREE.Vector2(1.80, 6.80),  // 31
-    new THREE.Vector2(-0.20, 8.00), // 32
-    new THREE.Vector2(-2.20, 9.00), // 33
-    new THREE.Vector2(-4.20, 9.60), // 34
-    new THREE.Vector2(-6.20, 9.40), // 35
-    new THREE.Vector2(-8.00, 8.40), // 36
-    new THREE.Vector2(-9.20, 6.80), // 37
-    new THREE.Vector2(-9.80, 4.80), // 38
-    new THREE.Vector2(-9.60, 2.80), // 39
-    new THREE.Vector2(-8.80, 1.00), // 40
-    new THREE.Vector2(-7.40, -0.60),// 41
-    new THREE.Vector2(-5.80, -2.00),// 42
-    new THREE.Vector2(-4.00, -3.20),// 43
-    new THREE.Vector2(-2.20, -4.20),// 44
-    new THREE.Vector2(-0.40, -5.00),// 45
-    new THREE.Vector2(1.50, -5.60), // 46
-    new THREE.Vector2(3.50, -6.00), // 47
-    new THREE.Vector2(5.40, -6.00), // 48
-    new THREE.Vector2(7.20, -5.40), // 49
-    new THREE.Vector2(8.60, -4.20), // 50
-    new THREE.Vector2(9.40, -2.60), // 51
-    new THREE.Vector2(9.50, -0.80), // 52
-    new THREE.Vector2(8.80, 1.00),  // 53
-    new THREE.Vector2(7.50, 2.60),  // 54
-    new THREE.Vector2(5.80, 4.00),  // 55
-    new THREE.Vector2(3.80, 5.20),  // 56
-    new THREE.Vector2(1.80, 6.40),  // 57
-    new THREE.Vector2(-0.20, 7.60), // 58
-    new THREE.Vector2(-2.00, 8.60), // 59
-    new THREE.Vector2(-3.80, 9.20), // 60
-    new THREE.Vector2(-5.60, 9.00), // 61
-    new THREE.Vector2(-7.20, 8.00), // 62
-    new THREE.Vector2(-8.20, 6.50), // 63
-    new THREE.Vector2(-8.50, 4.80), // 64
-    new THREE.Vector2(-8.00, 3.00), // 65
-    new THREE.Vector2(-6.80, 1.50), // 66
-    new THREE.Vector2(-5.20, 0.20), // 67
-    new THREE.Vector2(-3.50, -1.00),// 68
-    new THREE.Vector2(-1.80, -2.00),// 69
-    new THREE.Vector2(0.00, -2.80), // 70
-    new THREE.Vector2(1.80, -3.40), // 71
-    new THREE.Vector2(3.60, -3.60), // 72
-    new THREE.Vector2(5.40, -3.20), // 73
-    new THREE.Vector2(7.00, -2.20), // 74
-    new THREE.Vector2(8.00, -0.80), // 75
-    new THREE.Vector2(8.40, 0.80),  // 76
-    new THREE.Vector2(8.00, 2.50),  // 77
-    new THREE.Vector2(7.00, 4.00),  // 78
-    new THREE.Vector2(5.40, 5.50),  // 79
-    new THREE.Vector2(3.50, 6.80),  // 80
-    new THREE.Vector2(1.50, 8.00),  // 81
-    new THREE.Vector2(-0.50, 9.00), // 82
-    new THREE.Vector2(-2.50, 9.60), // 83
-    new THREE.Vector2(-4.50, 9.40), // 84
-    new THREE.Vector2(-6.20, 8.50), // 85
-    new THREE.Vector2(-7.40, 7.00), // 86
-    new THREE.Vector2(-7.80, 5.20), // 87
-    new THREE.Vector2(-7.40, 3.50), // 88
-    new THREE.Vector2(-6.20, 2.00), // 89
-    new THREE.Vector2(-4.60, 0.80), // 90
-    new THREE.Vector2(-2.80, -0.20),// 91
-    new THREE.Vector2(-0.80, -0.80),// 92
-    new THREE.Vector2(1.20, -1.00), // 93
-    new THREE.Vector2(3.20, -0.80), // 94
-    new THREE.Vector2(5.00, 0.00),  // 95
-    new THREE.Vector2(6.60, 1.20),  // 96
-    new THREE.Vector2(7.60, 2.80),  // 97
-    new THREE.Vector2(7.80, 4.60),  // 98
-    new THREE.Vector2(7.20, 6.40),  // 99
-    new THREE.Vector2(6.00, 8.00),  // 100
-    new THREE.Vector2(4.50, 9.40),  // 101
-    new THREE.Vector2(3.20, 10.50), // 102
-    new THREE.Vector2(2.50, 11.20), // 103
+    // Start Gate & Drop-in
+    new THREE.Vector2(3.30, 8.90),   // 1 - Start Gate
+    new THREE.Vector2(3.55, 7.35),   // 2
+    new THREE.Vector2(3.65, 5.75),   // 3
+    new THREE.Vector2(3.70, 4.10),   // 4
+    // Wave 1: East Extension Wall
+    new THREE.Vector2(5.95, 3.25),   // 5
+    new THREE.Vector2(7.15, 2.55),   // 6
+    new THREE.Vector2(7.30, 1.15),   // 7
+    new THREE.Vector2(7.15, -0.30),  // 8
+    new THREE.Vector2(6.50, -1.45),  // 9
+    // Bottom Turn 1 -> East Hip into Deep East Wall
+    new THREE.Vector2(5.65, -2.65),  // 10
+    new THREE.Vector2(5.85, -3.85),  // 11
+    new THREE.Vector2(7.45, -4.15),  // 12
+    new THREE.Vector2(9.25, -3.95),  // 13
+    new THREE.Vector2(10.95, -3.80), // 14
+    // Wave 2: Full East Wall ("Green Graffiti")
+    new THREE.Vector2(12.00, -4.60), // 15
+    new THREE.Vector2(12.10, -5.90), // 16
+    new THREE.Vector2(11.55, -7.25), // 17
+    new THREE.Vector2(10.70, -8.55), // 18
+    new THREE.Vector2(9.75, -9.85),  // 19
+    new THREE.Vector2(8.80, -11.15), // 20
+    new THREE.Vector2(7.90, -12.35), // 21
+    // Bottom Turn 2 -> Upper NW Wall
+    new THREE.Vector2(6.30, -12.55), // 22
+    new THREE.Vector2(4.45, -12.05), // 23
+    new THREE.Vector2(2.65, -11.40), // 24
+    new THREE.Vector2(0.85, -10.85), // 25
+    new THREE.Vector2(-0.80, -10.45),// 26
+    // Wave 3: Upper NW Wall ("BVB 09")
+    new THREE.Vector2(-2.25, -9.75), // 27
+    new THREE.Vector2(-3.05, -8.25), // 28
+    new THREE.Vector2(-3.90, -6.75), // 29
+    new THREE.Vector2(-4.40, -5.65), // 30
+    // Bottom Turn 3 -> into North Apex Nose
+    new THREE.Vector2(-3.85, -4.55), // 31
+    new THREE.Vector2(-2.25, -4.75), // 32
+    new THREE.Vector2(-0.55, -5.55), // 33
+    new THREE.Vector2(1.05, -6.70),  // 34
+    new THREE.Vector2(2.45, -8.35),  // 35
+    new THREE.Vector2(3.55, -10.25), // 36
+    new THREE.Vector2(4.55, -12.15), // 37
+    // Wave 4: Full North Apex Nose ("SPOR")
+    new THREE.Vector2(5.40, -13.95), // 38
+    new THREE.Vector2(4.35, -14.85), // 39
+    new THREE.Vector2(2.75, -14.95), // 40
+    new THREE.Vector2(1.15, -14.85), // 41
+    new THREE.Vector2(0.05, -14.50), // 42
+    new THREE.Vector2(-0.65, -13.75),// 43
+    // Bottom Turn 4 -> Mid-NW Diagonal Wall
+    new THREE.Vector2(-0.35, -11.90),// 44
+    new THREE.Vector2(0.25, -10.10), // 45
+    new THREE.Vector2(0.35, -8.25),  // 46
+    new THREE.Vector2(-0.25, -6.45), // 47
+    new THREE.Vector2(-1.55, -5.15), // 48
+    // Wave 5: Mid-Lower NW Diagonal Wall ("67")
+    new THREE.Vector2(-3.30, -4.85), // 49
+    new THREE.Vector2(-4.95, -4.35), // 50
+    new THREE.Vector2(-5.95, -3.15), // 51
+    new THREE.Vector2(-7.05, -1.95), // 52
+    new THREE.Vector2(-5.80, -0.50), // 53
+    // Bottom Turn 5 -> wide sweeping S-turn into SW Blue Graffiti Corner
+    new THREE.Vector2(-4.95, 0.85),  // 54
+    new THREE.Vector2(-5.80, 1.85),  // 55
+    new THREE.Vector2(-7.45, 1.55),  // 56
+    new THREE.Vector2(-8.80, 0.65),  // 57
+    // Wave 6: SW Blue Graffiti Corner
+    new THREE.Vector2(-9.80, -0.25), // 58
+    new THREE.Vector2(-10.95, -0.22),// 59
+    new THREE.Vector2(-11.30, 1.10), // 60
+    new THREE.Vector2(-11.15, 2.45), // 61
+    // Bottom Turn 6 -> Wide West Bowl -> SW Corner Hip
+    new THREE.Vector2(-10.90, 3.80), // 62
+    new THREE.Vector2(-10.95, 5.20), // 63
+    // Wave 7: SW Corner Hip
+    new THREE.Vector2(-10.85, 6.65), // 64
+    new THREE.Vector2(-9.60, 7.30),  // 65
+    new THREE.Vector2(-8.20, 7.50),  // 66
+    // Bottom Turn 7 -> sweep across wide south bowl into East Extension Pass
+    new THREE.Vector2(-6.85, 6.10),  // 67
+    new THREE.Vector2(-5.15, 4.45),  // 68
+    new THREE.Vector2(-3.25, 3.30),  // 69
+    new THREE.Vector2(-1.25, 2.75),  // 70
+    new THREE.Vector2(0.80, 2.55),   // 71
+    new THREE.Vector2(2.85, 2.50),   // 72
+    new THREE.Vector2(4.85, 2.45),   // 73
+    // Wave 8: East Extension Pass -> East Hip -> East Wall
+    new THREE.Vector2(6.35, 2.35),   // 74
+    new THREE.Vector2(7.15, 1.45),   // 75
+    new THREE.Vector2(7.30, -0.05),  // 76
+    new THREE.Vector2(7.20, -1.15),  // 77
+    new THREE.Vector2(7.05, -2.05),  // 78
+    // Bottom Turn 8 -> East Wall ("Green Graffiti")
+    new THREE.Vector2(8.60, -2.95),  // 79
+    new THREE.Vector2(10.85, -3.60), // 80
+    new THREE.Vector2(11.85, -4.15), // 81
+    new THREE.Vector2(12.05, -5.45), // 82
+    new THREE.Vector2(11.65, -6.90), // 83
+    new THREE.Vector2(10.75, -8.35), // 84
+    new THREE.Vector2(9.85, -9.65),  // 85
+    new THREE.Vector2(9.05, -10.75), // 86
+    // Bottom Turn 9 -> fast sweep to Second NW Wall Slash
+    new THREE.Vector2(7.15, -10.85), // 87
+    new THREE.Vector2(5.30, -9.85),  // 88
+    new THREE.Vector2(3.50, -8.65),  // 89
+    new THREE.Vector2(1.75, -7.45),  // 90
+    new THREE.Vector2(-0.05, -6.45), // 91
+    new THREE.Vector2(-1.85, -5.85), // 92
+    // Wave 9: Second NW Wall Slash ("67")
+    new THREE.Vector2(-3.45, -5.65), // 93
+    new THREE.Vector2(-4.85, -4.75), // 94
+    new THREE.Vector2(-5.75, -3.45), // 95
+    new THREE.Vector2(-6.65, -2.10), // 96
+    new THREE.Vector2(-7.55, -1.15), // 97
+    // Bottom Turn 10 -> swift arc to East Extension Finale
+    new THREE.Vector2(-5.85, 0.35),  // 98
+    new THREE.Vector2(-3.95, 0.75),  // 99
+    new THREE.Vector2(-2.05, 0.65),  // 100
+    new THREE.Vector2(-0.15, 0.45),  // 101
+    new THREE.Vector2(1.75, 0.25),   // 102
+    new THREE.Vector2(4.25, 0.15),   // 103
+    // Wave 10: East Extension Finale -> South Exit Bank
+    new THREE.Vector2(6.85, 0.20),   // 104
+    new THREE.Vector2(7.15, 1.35),   // 105
+    new THREE.Vector2(7.35, 2.85),   // 106
+    new THREE.Vector2(7.55, 4.35),   // 107
+    new THREE.Vector2(5.85, 5.45),   // 108
+    new THREE.Vector2(4.20, 6.45),   // 109
+    new THREE.Vector2(3.00, 7.80),   // 110
+    new THREE.Vector2(2.35, 9.35),   // 111
+    new THREE.Vector2(1.95, 10.75),  // 112 - Finish Gate
   ];
 
   public static readonly NUM_SAMPLE_POINTS = 372;
