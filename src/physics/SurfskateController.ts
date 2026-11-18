@@ -48,10 +48,14 @@ const ROLLING_RESISTANCE = 0.28;
 const AIR_DRAG = 0.010;
 /** Hard speed cap (m/s, simulation speed). */
 const MAX_SPEED = 9.5;
-/** Speed given by the single initial push-off (only from a standstill). */
-const PUSH_OFF_SPEED = 2.0;
-/** Below this speed the skater counts as standing still (push-off allowed). */
+/** Speed given by the initial push-off from a standstill (+80% crisper startup). */
+const PUSH_OFF_SPEED = 3.6;
+/** Below this speed the skater counts as standing still (full kick-push allowed). */
 const STANDSTILL_SPEED = 0.4;
+/** Startup push-boost ceiling: extra pushes / holding push work up to this cruising speed. */
+const PUSH_STARTUP_SPEED = 4.2;
+/** Tangential push acceleration while holding forwardPush below PUSH_STARTUP_SPEED (m/s²). */
+const PUSH_ACCEL = 3.6;
 
 // ---- Flat-ground pumping (alternating ← → carves with the right rhythm) ----
 /** Time between two direction switches (real seconds) that still counts as a pump. */
@@ -129,6 +133,7 @@ export class SurfskateController {
   public airRotation = 0;
   public maxAirHeight = 0;
   public ollieCooldown = 0;
+  private postJumpFlatTimer = 0;
 
   // Slide trick difficulty & cooldown balance (Issue #22)
   public slideTrickCooldown = 0;
@@ -336,6 +341,7 @@ export class SurfskateController {
     this.prevSinT = 0;
     this.slideTrickCooldown = 0;
     this.ollieCooldown = 0;
+    this.postJumpFlatTimer = 0;
   }
 
   public update(dt: number, input: InputState, onManeuver: (ev: ManeuverEvent) => void): void {
@@ -415,6 +421,9 @@ export class SurfskateController {
     if (this.ollieCooldown > 0) {
       this.ollieCooldown = Math.max(0, this.ollieCooldown - clampedDt);
     }
+    if (this.postJumpFlatTimer > 0) {
+      this.postJumpFlatTimer = Math.max(0, this.postJumpFlatTimer - clampedDt);
+    }
 
     // -------------------------------------------------------------------------
     // Surf-Zone Overdrive State (>= 80% Flow)
@@ -466,7 +475,11 @@ export class SurfskateController {
         ? input.analogSteer
         : (input.steerRight ? 1 : 0) - (input.steerLeft ? 1 : 0);
 
-    if (rawSteer !== 0) {
+    if (rawSteer === 0) {
+      this.postJumpFlatTimer = 0;
+    }
+
+    if (this.isGrounded && this.postJumpFlatTimer <= 0 && rawSteer !== 0) {
       if (rawSteer !== this.lastSteerDir) {
         this.steerHoldTime = 0.15;
         this.lastSteerDir = rawSteer;
@@ -478,24 +491,36 @@ export class SurfskateController {
       this.lastSteerDir = 0;
     }
 
-    // Immediate 82% authority on key press, ramping to 100% for ultra-tight surfskate carves
-    const progressiveFactor = 0.82 + 0.18 * this.steerHoldTime;
-    const maxLean = 0.68; // ~39 deg deep surf-adapter rail lean for tight pivot turns
-    const targetLean = rawSteer * maxLean * progressiveFactor;
+    if (this.isGrounded && this.postJumpFlatTimer <= 0) {
+      // Immediate 82% authority on key press, ramping to 100% for ultra-tight surfskate carves
+      const progressiveFactor = 0.82 + 0.18 * this.steerHoldTime;
+      const maxLean = 0.68; // ~39 deg deep surf-adapter rail lean for tight pivot turns
+      const targetLean = rawSteer * maxLean * progressiveFactor;
 
-    const prevLean = this.leanAngle;
-    const responseRate = rawSteer === 0 ? 36.0 : 32.0;
-    this.leanAngle += (targetLean - this.leanAngle) * Math.min(1, responseRate * clampedDt);
-    if (rawSteer === 0 && Math.abs(this.leanAngle) < 0.008) {
+      const prevLean = this.leanAngle;
+      const responseRate = rawSteer === 0 ? 36.0 : 32.0;
+      this.leanAngle += (targetLean - this.leanAngle) * Math.min(1, responseRate * clampedDt);
+      if (rawSteer === 0 && Math.abs(this.leanAngle) < 0.008) {
+        this.leanAngle = 0;
+      }
+      this.leanRate = (this.leanAngle - prevLean) / Math.max(0.001, clampedDt);
+
+      this.frontTruckYaw = this.leanAngle * 1.55;
+      this.rearTruckYaw = -this.leanAngle * 0.42;
+
+      const targetLeadYaw = -this.leanAngle * 1.48;
+      this.upperBodyLeadYaw += (targetLeadYaw - this.upperBodyLeadYaw) * Math.min(1, 26.0 * clampedDt);
+    } else {
+      // Airborne or settling immediately after touchdown: keep deck flat (no surfboard rail tilt)
       this.leanAngle = 0;
+      this.leanRate = 0;
+      this.frontTruckYaw = 0;
+      this.rearTruckYaw = 0;
+      if (!this.isGrounded) {
+        this.pitchAngle = 0;
+      }
+      this.upperBodyLeadYaw += (0 - this.upperBodyLeadYaw) * Math.min(1, 26.0 * clampedDt);
     }
-    this.leanRate = (this.leanAngle - prevLean) / Math.max(0.001, clampedDt);
-
-    this.frontTruckYaw = this.leanAngle * 1.55;
-    this.rearTruckYaw = -this.leanAngle * 0.42;
-
-    const targetLeadYaw = -this.leanAngle * 1.48;
-    this.upperBodyLeadYaw += (targetLeadYaw - this.upperBodyLeadYaw) * Math.min(1, 26.0 * clampedDt);
 
     // -------------------------------------------------------------------------
     // 2. Surface analysis along the current heading (correct sign!)
@@ -647,19 +672,28 @@ export class SurfskateController {
       if (this.laybackActive) aExtra -= 1.8;
       if (this.reverseActive) aExtra -= 2.0;
 
-      // ---- Push-off: ONE kick from a standstill only. After that you have to pump! ----
+      // ---- Push-off: snappy surfskate kick-start up to cruising speed, then pump! ----
       const canPush = Math.abs(grade) < 0.12 && h0 < 0.35;
       const pushPressed = input.forwardPush && !this.prevPushInput;
       this.prevPushInput = input.forwardPush;
       if (input.forwardPush) {
-        if (pushPressed && canPush && this.speed < STANDSTILL_SPEED) {
-          this.speed = PUSH_OFF_SPEED; // single kick-push
-          this.pumpSyncQuality = 'FLOW PUMP';
-          this.pumpQualityTimer = 0.6;
-          this.coachHint = 'Now PUMP: alternate ← → in rhythm to gain speed';
-          this.coachHintTimer = 3.0;
-        } else if (this.speed >= STANDSTILL_SPEED) {
-          this.coachHint = 'Pushing only works from a standstill — PUMP: alternate ← → in rhythm (≈ 1 left-right cycle per second)';
+        if (canPush && this.speed < PUSH_STARTUP_SPEED) {
+          if (pushPressed) {
+            if (this.speed < STANDSTILL_SPEED) {
+              this.speed = PUSH_OFF_SPEED; // immediate punchy kick-push from standstill
+            } else {
+              this.speed = Math.min(PUSH_STARTUP_SPEED, Math.max(PUSH_OFF_SPEED, this.speed + 1.4));
+            }
+            this.pumpPulse = Math.max(this.pumpPulse, 0.7);
+            this.pumpSyncQuality = 'FLOW PUMP';
+            this.pumpQualityTimer = 0.6;
+            this.coachHint = 'Now PUMP: alternate ← → in rhythm to gain speed';
+            this.coachHintTimer = 3.0;
+          }
+          // Smooth startup acceleration while holding push below cruising speed
+          aExtra += PUSH_ACCEL;
+        } else if (this.speed >= PUSH_STARTUP_SPEED) {
+          this.coachHint = 'At cruise speed — PUMP: alternate ← → in rhythm (≈ 1 left-right cycle per second)';
           this.coachHintTimer = 2.5;
         }
       }
@@ -715,6 +749,15 @@ export class SurfskateController {
         this.airTime = 0;
         this.airRotation = 0;
         this.maxAirHeight = 0;
+        this.leanAngle = 0;
+        this.leanRate = 0;
+        this.frontTruckYaw = 0;
+        this.rearTruckYaw = 0;
+        this.pitchAngle = 0;
+        this.smoothedYawRate = 0;
+        this.steerHoldTime = 0;
+        this.lastSteerDir = 0;
+        this.cancelGroundTricks();
         this.airLaunchedFromWall = isOnWall;
         this.airLaunchHeight = h0;
         this.airLaunchSpeed = this.speed;
@@ -910,10 +953,23 @@ export class SurfskateController {
         this.indyGrabAmount = 0;
         this.indyGrabReady = false;
 
+        // Land flat on the concrete with zero lingering surfboard tilt/roll
+        this.leanAngle = 0;
+        this.leanRate = 0;
+        this.frontTruckYaw = 0;
+        this.rearTruckYaw = 0;
+        this.smoothedYawRate = 0;
+        this.steerHoldTime = 0;
+        this.lastSteerDir = 0;
+        this.bertSlideAmount = 0;
+        this.laybackAmount = 0;
+        this.postJumpFlatTimer = 0.14;
+
         this.speed = Math.min(this.maxSpeedLimit, tangentVel.length());
         if (Math.hypot(tangentVel.x, tangentVel.z) > 0.2) {
           this.heading = Math.atan2(-tangentVel.x, -tangentVel.z);
         }
+        this.pitchAngle = Math.atan(this.computeGradeAlongHeading()) * 0.72;
         this.flowMeter = Math.min(100, this.flowMeter + 10);
       }
     }
@@ -1127,9 +1183,11 @@ export class SurfskateController {
       this.slideTrickCooldown = 1.5;
     }
     this.laybackActive = false;
+    this.laybackAmount = 0;
     this.laybackHold = 0;
     this.laybackAccumulatedYaw = 0;
     this.bertSlideActive = false;
+    this.bertSlideAmount = 0;
     this.bertHold = 0;
     this.bertSlideAccumulatedYaw = 0;
     this.reverseActive = false;
@@ -1152,6 +1210,7 @@ export class SurfskateController {
     this.airTime = 0;
     this.maxAirHeight = 0;
     this.airLaunchedFromWall = false;
+    this.postJumpFlatTimer = 0;
     this.indyGrabActive = false;
     this.indyGrabReady = false;
     this.indyGrabAmount = 0;
@@ -1437,6 +1496,15 @@ export class SurfskateController {
       this.position.y = this.currentSurface.height + (input.jumpOllie ? 0.35 : 0);
       if (input.jumpOllie) {
         this.isGrounded = false;
+        this.leanAngle = 0;
+        this.leanRate = 0;
+        this.frontTruckYaw = 0;
+        this.rearTruckYaw = 0;
+        this.pitchAngle = 0;
+        this.smoothedYawRate = 0;
+        this.steerHoldTime = 0;
+        this.lastSteerDir = 0;
+        this.cancelGroundTricks();
         this.velocity.set(-Math.sin(this.heading) * this.speed, 3.4, -Math.cos(this.heading) * this.speed);
         this.triggerManeuver(onManeuver, 'Lip Re-Entry Air', 420, this.currentSurface.zoneName, false, 'STYLISH');
       }

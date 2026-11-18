@@ -486,7 +486,11 @@ export class SkaterVisuals {
     // Smooth the inputs a little so the body motion stays fluid
     const k = Math.min(1, dt * 14);
     this.smoothCompression += (ctrl.compression - this.smoothCompression) * k;
-    this.smoothLean += (ctrl.leanAngle - this.smoothLean) * k;
+    if (!ctrl.isGrounded) {
+      this.smoothLean = 0;
+    } else {
+      this.smoothLean += (ctrl.leanAngle - this.smoothLean) * k;
+    }
     const crouch = this.smoothCompression;
     const lean = this.smoothLean;
     const lead = ctrl.upperBodyLeadYaw;
@@ -811,20 +815,22 @@ export class SkaterVisuals {
       }
     }
 
+    const groundedLean = ctrl.isGrounded ? ctrl.leanAngle : 0;
+
     if (this.deckMesh && !ctrl.isBailing) {
-      const b = ctrl.bertSlideAmount;
-      const indy = ctrl.indyGrabAmount;
-      const deckRoll = ctrl.leanAngle * (1 - b) * (1 - indy) - 0.34 * b - 0.36 * indy;
+      const b = ctrl.isGrounded ? ctrl.bertSlideAmount : 0;
+      const indy = !ctrl.isGrounded ? ctrl.indyGrabAmount : 0;
+      const deckRoll = groundedLean * (1 - b) * (1 - indy) - 0.34 * b - 0.36 * indy;
       const deckPitch = -0.18 * b + 0.16 * indy;
       this.deckMesh.rotation.set(deckPitch, 0, deckRoll);
     }
 
     // 3. Dual-Axis Front Surf-Adapter Truck (`FrontTruckPivot`) & Rear Truck (`RearTruckPivot`)
     if (this.frontTruckPivot) {
-      this.frontTruckPivot.rotation.set(0, -ctrl.frontTruckYaw, ctrl.leanAngle * 0.35);
+      this.frontTruckPivot.rotation.set(0, ctrl.isGrounded ? -ctrl.frontTruckYaw : 0, groundedLean * 0.35);
     }
     if (this.rearTruckPivot) {
-      this.rearTruckPivot.rotation.set(0, -ctrl.rearTruckYaw, ctrl.leanAngle * 0.2);
+      this.rearTruckPivot.rotation.set(0, ctrl.isGrounded ? -ctrl.rearTruckYaw : 0, groundedLean * 0.2);
     }
 
     // 4. Spin wheels based on riding speed (radius 0.035m = 70mm surfskate wheel)
