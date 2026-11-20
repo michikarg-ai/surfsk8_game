@@ -32,6 +32,12 @@ export interface ManeuverEvent {
 
 export type TruckFeelPreset = 'smooth' | 'balanced' | 'snappy';
 
+export interface SkaterStats {
+  flow: number;
+  pump: number;
+  agility: number;
+}
+
 /** Whether a SNAP is currently possible (used by the HUD hint). */
 export type SnapWindow = 'NONE' | 'TOO_SLOW' | 'READY' | 'TOO_FAST';
 
@@ -104,6 +110,9 @@ export class SurfskateController {
 
   // Truck feel preset (defaults to 'balanced' for immediate, crisp, predictable control!)
   public truckPreset: TruckFeelPreset = 'balanced';
+
+  // Character stats (Lukas baseline 92/88/85 = 1.0x across all modifiers)
+  private skaterStats: SkaterStats = { flow: 92, pump: 88, agility: 85 };
 
   // Surfskate truck & deck state
   public leanAngle = 0; // Roll angle of the deck (radians, + = right, - = left)
@@ -256,6 +265,22 @@ export class SurfskateController {
     const order: TruckFeelPreset[] = ['smooth', 'balanced', 'snappy'];
     this.truckPreset = order[(order.indexOf(this.truckPreset) + 1) % order.length];
     return this.truckPreset;
+  }
+
+  public setSkaterStats(stats: SkaterStats): void {
+    this.skaterStats = { ...stats };
+  }
+
+  private get agilityScale(): number {
+    return THREE.MathUtils.clamp(1 + (this.skaterStats.agility - 85) * 0.008, 0.9, 1.12);
+  }
+
+  private get pumpScale(): number {
+    return THREE.MathUtils.clamp(1 + (this.skaterStats.pump - 88) * 0.008, 0.88, 1.12);
+  }
+
+  private get flowScale(): number {
+    return THREE.MathUtils.clamp(1 + (this.skaterStats.flow - 92) * 0.005, 0.92, 1.08);
   }
 
   private spawnX = 15.2;
@@ -498,7 +523,7 @@ export class SurfskateController {
       const targetLean = rawSteer * maxLean * progressiveFactor;
 
       const prevLean = this.leanAngle;
-      const responseRate = rawSteer === 0 ? 36.0 : 32.0;
+      const responseRate = (rawSteer === 0 ? 36.0 : 32.0) * this.agilityScale;
       this.leanAngle += (targetLean - this.leanAngle) * Math.min(1, responseRate * clampedDt);
       if (rawSteer === 0 && Math.abs(this.leanAngle) < 0.008) {
         this.leanAngle = 0;
@@ -602,7 +627,7 @@ export class SurfskateController {
         }
       } else {
         const lowSpeedPivotFactor = 1.35 - 0.055 * Math.min(5.5, this.speed);
-        const baseTurnRate = 4.5 * presetGain;
+        const baseTurnRate = 4.5 * presetGain * this.agilityScale;
         // Layback strictly carves backside (left / negative effectiveLean) — regular stance back hand into wall
         const effectiveLean = this.bertSlideActive
           ? this.bertSlideHandSide * Math.max(Math.abs(this.leanAngle), 0.65)
@@ -710,10 +735,15 @@ export class SurfskateController {
       // Going DOWN: compress into the knees and drive the board down the face → speed!
       if (isOnWall && sinT < -0.05 && !this.bertSlideActive) {
         const active = input.compressCrouch;
-        aExtra += (active ? WALL_PUMP_GAIN_ACTIVE : WALL_PUMP_GAIN) * GRAVITY * -sinT * (0.4 + 0.6 * this.compression);
+        aExtra +=
+          (active ? WALL_PUMP_GAIN_ACTIVE : WALL_PUMP_GAIN) *
+          this.pumpScale *
+          GRAVITY *
+          -sinT *
+          (0.4 + 0.6 * this.compression);
         this.pumpSyncQuality = active ? 'PERFECT PUMP!' : 'FLOW PUMP';
         this.pumpQualityTimer = 0.4;
-        this.flowMeter = Math.min(100, this.flowMeter + (active ? 16.0 : 12.0) * clampedDt);
+        this.flowMeter = Math.min(100, this.flowMeter + (active ? 16.0 : 12.0) * this.flowScale * clampedDt);
 
         // Perfect Pump in transitions:
         // When dropping down a wall (h0 > 0.35, sinT < -0.08) at the optimal moment
@@ -977,7 +1007,7 @@ export class SurfskateController {
     this.wheelSpinAngle = (this.wheelSpinAngle + this.speed * simDt * 18.0) % (Math.PI * 2);
 
     if (this.speed < 1.05) {
-      this.flowMeter = Math.max(0, this.flowMeter - 4.0 * clampedDt);
+      this.flowMeter = Math.max(0, this.flowMeter - (4.0 / this.flowScale) * clampedDt);
     }
 
     // Save previous inputs & slope for next frame
@@ -1163,17 +1193,17 @@ export class SurfskateController {
         this.coachHintTimer = 1.8;
       }
     } else if (interval >= PUMP_PERFECT_MIN && interval <= PUMP_PERFECT_MAX) {
-      this.speed = Math.min(this.maxSpeedLimit, this.speed + PUMP_GAIN_PERFECT * taper);
+      this.speed = Math.min(this.maxSpeedLimit, this.speed + PUMP_GAIN_PERFECT * taper * this.pumpScale);
       this.pumpSyncQuality = 'PERFECT PUMP!';
       this.pumpQualityTimer = 0.7;
       this.pumpPulse = 1;
-      this.flowMeter = Math.min(100, this.flowMeter + 4);
+      this.flowMeter = Math.min(100, this.flowMeter + 4 * this.flowScale);
     } else {
-      this.speed = Math.min(this.maxSpeedLimit, this.speed + PUMP_GAIN_GOOD * taper);
+      this.speed = Math.min(this.maxSpeedLimit, this.speed + PUMP_GAIN_GOOD * taper * this.pumpScale);
       this.pumpSyncQuality = 'FLOW PUMP';
       this.pumpQualityTimer = 0.6;
       this.pumpPulse = 0.7;
-      this.flowMeter = Math.min(100, this.flowMeter + 2);
+      this.flowMeter = Math.min(100, this.flowMeter + 2 * this.flowScale);
     }
   }
 

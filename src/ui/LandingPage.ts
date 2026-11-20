@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { SkaterVisuals } from '../entities/SkaterVisuals';
 import { ParkSurface } from '../physics/ParkSurface';
-import { SurfskateController } from '../physics/SurfskateController';
+import { SkaterStats, SurfskateController } from '../physics/SurfskateController';
 import { GameModeId, SkaterRankInfo, SurfMission } from '../progression/SurfProgression';
 import {
   fetchLeaderboard,
@@ -15,10 +15,13 @@ export type SelectorCategory = 'skater' | 'skatepark' | 'board';
 export type LandingFocusRow = 'skater' | 'park' | 'board' | 'mode' | 'start';
 export const LANDING_FOCUS_ROWS: LandingFocusRow[] = ['skater', 'park', 'board', 'mode', 'start'];
 
+export type { SkaterStats };
+
 export interface SkaterCharacter {
   id: string;
   name: string;
   modelUrl: string;
+  stats: SkaterStats;
 }
 
 export interface SkateparkLocation {
@@ -33,8 +36,18 @@ export interface SkateparkLocation {
 }
 
 export const SKATER_CHARACTERS: SkaterCharacter[] = [
-  { id: 'male', name: 'LUKAS', modelUrl: '/models/skater.glb' },
-  { id: 'female', name: 'SOPHIE', modelUrl: '/models/skater_female.glb' },
+  {
+    id: 'male',
+    name: 'LUKAS',
+    modelUrl: '/models/skater.glb',
+    stats: { flow: 92, pump: 88, agility: 85 },
+  },
+  {
+    id: 'female',
+    name: 'SOPHIE',
+    modelUrl: '/models/skater_female.glb',
+    stats: { flow: 91, pump: 82, agility: 93 },
+  },
 ];
 
 export const SKATEPARK_LOCATIONS: SkateparkLocation[] = [
@@ -71,6 +84,7 @@ export class LandingPage {
   private noteTextEl: HTMLElement;
   private startBtnEl: HTMLElement;
   private playerNameEl: HTMLElement | null = null;
+  private skaterStatsEl: HTMLElement | null = null;
 
   private renderer: THREE.WebGLRenderer;
   private scene: THREE.Scene;
@@ -133,7 +147,7 @@ export class LandingPage {
   constructor(
     parkSurface: ParkSurface,
     private onStartGame: () => void,
-    private onSelectSkater?: (modelUrl: string) => void,
+    private onSelectSkater?: (modelUrl: string, skater?: SkaterCharacter) => void,
     private onSelectPark?: (park: SkateparkLocation) => void,
     private onInspectPark?: (park: SkateparkLocation) => void
   ) {
@@ -145,6 +159,10 @@ export class LandingPage {
     this.playerNameEl =
       document.getElementById('landing-skater-name') ||
       this.overlayEl.querySelector('.sel-player-name');
+    this.skaterStatsEl =
+      document.getElementById('landing-skater-stats') ||
+      this.overlayEl.querySelector('#sel-section-skater .sel-stats');
+    this.updateSkaterDisplay();
     this.riderNameInputEl = document.getElementById('landing-player-name') as HTMLInputElement | null;
     this.parkSubtitleEl = document.getElementById('landing-park-subtitle') || this.overlayEl.querySelector('#sel-section-skatepark .sel-subtitle');
     this.parkThumbImgEl = document.getElementById('landing-park-thumb') as HTMLImageElement || this.overlayEl.querySelector('.park-thumb');
@@ -222,12 +240,32 @@ export class LandingPage {
   }
 
   public async load(): Promise<void> {
-    const currentSkater = SKATER_CHARACTERS[this.currentSkaterIndex];
-    if (this.playerNameEl) {
-      this.playerNameEl.textContent = currentSkater.name;
-    }
+    const currentSkater = this.getSelectedSkater();
+    this.updateSkaterDisplay();
     this.updateParkDisplay();
     await this.skaterVisuals.load(currentSkater.modelUrl);
+  }
+
+  public updateSkaterDisplay(): void {
+    const skater = this.getSelectedSkater();
+    if (this.playerNameEl) {
+      this.playerNameEl.textContent = skater.name;
+    }
+    if (this.skaterStatsEl) {
+      const labels = [
+        `FLOW ${skater.stats.flow}`,
+        `PUMP ${skater.stats.pump}`,
+        `AGILITY ${skater.stats.agility}`,
+      ];
+      const spans = this.skaterStatsEl.querySelectorAll('span');
+      if (spans.length === labels.length) {
+        spans.forEach((span, idx) => {
+          span.textContent = labels[idx];
+        });
+      } else {
+        this.skaterStatsEl.innerHTML = labels.map((label) => `<span>${label}</span>`).join('');
+      }
+    }
   }
 
   public updateParkDisplay(): void {
@@ -245,8 +283,12 @@ export class LandingPage {
     return SKATEPARK_LOCATIONS[this.currentParkIndex];
   }
 
+  public getSelectedSkater(): SkaterCharacter {
+    return SKATER_CHARACTERS[this.currentSkaterIndex];
+  }
+
   public getSelectedSkaterModel(): string {
-    return SKATER_CHARACTERS[this.currentSkaterIndex].modelUrl;
+    return this.getSelectedSkater().modelUrl;
   }
 
   public getSelectedGameMode(): GameModeId {
@@ -747,13 +789,11 @@ export class LandingPage {
     if (kind === 'skater') {
       this.currentSkaterIndex =
         (this.currentSkaterIndex + dir + SKATER_CHARACTERS.length) % SKATER_CHARACTERS.length;
-      const skater = SKATER_CHARACTERS[this.currentSkaterIndex];
-      if (this.playerNameEl) {
-        this.playerNameEl.textContent = skater.name;
-      }
+      const skater = this.getSelectedSkater();
+      this.updateSkaterDisplay();
       void this.skaterVisuals.load(skater.modelUrl);
       if (this.onSelectSkater) {
-        this.onSelectSkater(skater.modelUrl);
+        this.onSelectSkater(skater.modelUrl, skater);
       }
       this.showInstagramPrompt('skater', btn || rowEl || undefined);
     } else if (kind === 'skatepark') {
@@ -872,7 +912,8 @@ export class LandingPage {
     this.isVisible = false;
     this.overlayEl.classList.add('hidden');
     if (this.onSelectSkater) {
-      this.onSelectSkater(SKATER_CHARACTERS[this.currentSkaterIndex].modelUrl);
+      const skater = this.getSelectedSkater();
+      this.onSelectSkater(skater.modelUrl, skater);
     }
     this.onStartGame();
   }
@@ -884,6 +925,7 @@ export class LandingPage {
   public show(): void {
     this.isVisible = true;
     this.overlayEl.classList.remove('hidden');
+    this.updateSkaterDisplay();
     this.syncRiderNameInput();
     this.updateActiveSectionVisuals();
     this.handleResize();

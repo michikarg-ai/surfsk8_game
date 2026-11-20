@@ -183,6 +183,7 @@ class SurfskateMunichGame {
           this.toggleFullscreen();
         }
         this.gameMode = this.landingPage.getSelectedGameMode();
+        this.controller.setSkaterStats(this.landingPage.getSelectedSkater().stats);
         this.resetSession();
         if (this.gameMode === 'flow_cup') {
           (this.flowLine as unknown as { setTier?: (t: 0 | 1 | 2) => void }).setTier?.(0);
@@ -199,8 +200,11 @@ class SurfskateMunichGame {
           });
         } catch {}
       },
-      (modelUrl) => {
+      (modelUrl, skater) => {
         void this.skaterVisuals.load(modelUrl);
+        if (skater) {
+          this.controller.setSkaterStats(skater.stats);
+        }
       },
       (park) => {
         void this.switchPark(park);
@@ -209,6 +213,7 @@ class SurfskateMunichGame {
         this.inspectPark(park);
       }
     );
+    this.controller.setSkaterStats(this.landingPage.getSelectedSkater().stats);
     this.landingPage.onCycleQuality = () => this.cycleGraphicsQuality();
     this.landingPage.onToggleFullscreen = () => this.toggleFullscreen();
     this.landingPage.onToggleSound = () => this.toggleMusic();
