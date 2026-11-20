@@ -3,6 +3,9 @@ import { ParkSurface } from '../physics/ParkSurface';
 import { SurfHUD } from '../ui/SurfHUD';
 import { SurfAudio } from '../audio/SurfAudio';
 import { SurfskateController } from '../physics/SurfskateController';
+import { FlowGhostSkater } from './FlowGhostSkater';
+
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
 /**
  * 3-Tier difficulty system for "Follow the Flow" mode:
@@ -33,6 +36,7 @@ export interface GhostSample {
   z: number;
   h: number;
   lean: number;
+  u?: number; // normalized arc-length progress [0..1] along Flow Line curve
 }
 
 export interface GhostRecord {
@@ -40,6 +44,7 @@ export interface GhostRecord {
   tier: FlowLineTier;
   bestTimeSec: number;
   date: string;
+  routeSignature?: string;
   isVirtualPace?: boolean;
   samples: GhostSample[];
 }
@@ -149,7 +154,7 @@ function renderSpriteCard(
  */
 export class FlowLineChallenge {
   public readonly group = new THREE.Group();
-  public readonly ghostGroup = new THREE.Group();
+  public ghostGroup!: THREE.Group;
 
   public currentTier: FlowLineTier = 0;
   public currentParkId = 'im_gefilde';
@@ -659,6 +664,9 @@ export class FlowLineChallenge {
   // 3D Spline and sampled points
   private curve!: THREE.CatmullRomCurve3;
   private curvePoints: THREE.Vector3[] = [];
+  private curveTotalLength = 1;
+  private curveSegmentLength = 0.5;
+  private currentRouteSignature = '';
 
   // Scene sub-groups
   private startGateGroup = new THREE.Group();
@@ -681,18 +689,26 @@ export class FlowLineChallenge {
   private finishLabelSprite!: THREE.Sprite;
   private finishLight!: THREE.PointLight;
 
-  // 3D Ghost Skater state & sub-meshes
-  private ghostDeckGroup = new THREE.Group();
-  private ghostSurferGroup = new THREE.Group();
+  // 3D MakeHuman Holographic Ghost Skater & pathing state
+  private ghostSkater!: FlowGhostSkater;
   private ghostLabelSprite!: THREE.Sprite;
-  private ghostGroundGlow!: THREE.Mesh;
-  private ghostMaterials: THREE.Material[] = [];
   private ghostRotMatrix = new THREE.Matrix4();
+  private ghostForward = new THREE.Vector3(0, 0, -1);
+  private tempGhostPos = new THREE.Vector3();
+  private tempGhostTan = new THREE.Vector3();
+  private tempTanPrev = new THREE.Vector3();
+  private tempTanNext = new THREE.Vector3();
+  private tempGhostUp = new THREE.Vector3();
+  private tempGhostRight = new THREE.Vector3();
+  private tempGhostOrthoFwd = new THREE.Vector3();
+  private tempGhostNegFwd = new THREE.Vector3();
 
   private activeGhostSamples: GhostSample[] = [];
   private activeGhostTotalTime = 0;
   private activeGhostType: 'PB' | 'PACE' = 'PACE';
   private ghostSamplePlaybackIdx = 0;
+  private ghostCurveU = 0;
+  private ghostPaceSpeed = 4.65;
   private ghostProgressTimes: Float32Array = new Float32Array(0);
 
   // Ghost Recording for current run
@@ -711,7 +727,6 @@ export class FlowLineChallenge {
     this.group.add(this.startGateGroup);
     this.group.add(this.flowLineGroup);
     this.group.add(this.finishGateGroup);
-    this.group.add(this.ghostGroup);
 
     const srfParkId = this.parkSurface?.getParkId?.();
     if (srfParkId) {
@@ -740,6 +755,18 @@ export class FlowLineChallenge {
     return FlowLineChallenge.TIER_CONFIGS[this.currentTier] ?? FlowLineChallenge.TIER_CONFIGS[0];
   }
 
+  private computeRouteSignature(
+    parkId: string,
+    tier: FlowLineTier,
+    waypoints: readonly THREE.Vector2[] = this.getWaypointsForParkAndTier(parkId, tier)
+  ): string {
+    if (!waypoints.length) return `${parkId}:t${tier}:empty`;
+    const first = waypoints[0];
+    const mid = waypoints[Math.floor(waypoints.length / 2)];
+    const last = waypoints[waypoints.length - 1];
+    return `${parkId}:t${tier}:n${waypoints.length}:${first.x.toFixed(1)},${first.y.toFixed(1)}:${mid.x.toFixed(1)},${mid.y.toFixed(1)}:${last.x.toFixed(1)},${last.y.toFixed(1)}`;
+  }
+
   public getPersonalBest(
     parkId: string = this.currentParkId,
     tier: FlowLineTier = this.currentTier
@@ -748,7 +775,13 @@ export class FlowLineChallenge {
       const raw = localStorage.getItem(`surfsk8.flowGhost.${parkId}_tier_${tier}`);
       if (!raw) return null;
       const data = JSON.parse(raw) as GhostRecord;
-      if (typeof data.bestTimeSec === 'number' && !isNaN(data.bestTimeSec)) {
+      const expectedSig = this.computeRouteSignature(parkId, tier);
+      if (
+        data.routeSignature === expectedSig &&
+        typeof data.bestTimeSec === 'number' &&
+        !isNaN(data.bestTimeSec) &&
+        data.bestTimeSec > 2.0
+      ) {
         return data.bestTimeSec;
       }
     } catch {
@@ -772,6 +805,23 @@ export class FlowLineChallenge {
   }
 
   public setTier(tier: FlowLineTier): void {
+    if (this.isActive) {
+      this.isActive = false;
+      this.hud.setFlowLineHint(null);
+    }
+    this.progressIdx = 0;
+    this.runElapsedSec = 0;
+    this.activeGhostSamples = [];
+    this.ghostSamplePlaybackIdx = 0;
+    this.ghostCurveU = 0;
+    if (this.ghostGroup) {
+      this.ghostGroup.visible = false;
+    }
+    this.ghostSkater?.resetTrail();
+    this.flowLineGroup.visible = false;
+    this.finishGateGroup.visible = false;
+    this.startGateGroup.visible = true;
+
     this.currentTier = tier;
     this.rebuildCurrentTierCurve();
   }
@@ -784,6 +834,11 @@ export class FlowLineChallenge {
 
   public rebuildCurrentTierCurve(): void {
     const pts = this.getWaypointsForParkAndTier(this.currentParkId, this.currentTier);
+    this.currentRouteSignature = this.computeRouteSignature(
+      this.currentParkId,
+      this.currentTier,
+      pts
+    );
     this.buildCurveFromWaypoints(pts);
     this.updateStartGateVisuals();
   }
@@ -867,7 +922,10 @@ export class FlowLineChallenge {
       waypoints.length * 3
     );
     const tubularSegments = sampleCount - 1;
-    const sampled = rawCurve.getPoints(tubularSegments);
+    rawCurve.arcLengthDivisions = Math.max(600, sampleCount * 2);
+
+    // Uniform arc-length spacing ensures 1:1 sync with TubeGeometry & Ghost Pacer
+    const sampled = rawCurve.getSpacedPoints(tubularSegments);
 
     // Re-sample height exactly from park surface at every single point along the path
     for (const p of sampled) {
@@ -880,6 +938,14 @@ export class FlowLineChallenge {
       false,
       'centripetal',
       0.5
+    );
+    this.curve.arcLengthDivisions = Math.max(600, sampleCount * 2);
+    this.curveTotalLength = Math.max(1.0, this.curve.getLength());
+    this.curveSegmentLength = this.curveTotalLength / tubularSegments;
+    this.currentRouteSignature = this.computeRouteSignature(
+      this.currentParkId,
+      this.currentTier,
+      waypoints
     );
 
     if (this.tubeMesh) {
@@ -1112,186 +1178,18 @@ export class FlowLineChallenge {
   }
 
   /**
-   * Builds the 3D Ghost Skater: semi-transparent glowing surfskate deck with wheels,
-   * stylized surfer silhouette in deep carve stance, and floating overhead split banner.
+   * Builds the MakeHuman 3D Holographic Ghost Skater & overhead split banner.
+   * Reused across all tiers and skateparks without re-loading the GLB.
    */
   private buildGhostSkater(): void {
-    const cfg = this.getCurrentTierConfig();
-    this.ghostGroup.name = 'FlowLineGhostSkater';
-
-    // Deck group rolls around board axis with leanAngle
-    this.ghostDeckGroup = new THREE.Group();
-    this.ghostGroup.add(this.ghostDeckGroup);
-
-    // 1. Deck Mesh (nose toward local -Z, tail toward local +Z)
-    const deckGeo = new THREE.BoxGeometry(0.24, 0.024, 0.82);
-    const deckMat = new THREE.MeshStandardMaterial({
-      color: cfg.hexColor,
-      emissive: cfg.emissiveColor,
-      emissiveIntensity: 0.65,
-      roughness: 0.25,
-      metalness: 0.1,
-      transparent: true,
-      opacity: 0.62,
-      depthWrite: false,
-    });
-    this.ghostMaterials.push(deckMat);
-    const deckMesh = new THREE.Mesh(deckGeo, deckMat);
-    deckMesh.position.set(0, 0.08, 0);
-    this.ghostDeckGroup.add(deckMesh);
-
-    // Grip accent line
-    const gripGeo = new THREE.PlaneGeometry(0.18, 0.74);
-    gripGeo.rotateX(-Math.PI / 2);
-    const gripMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.32,
-      depthWrite: false,
-    });
-    this.ghostMaterials.push(gripMat);
-    const gripMesh = new THREE.Mesh(gripGeo, gripMat);
-    gripMesh.position.set(0, 0.093, 0);
-    this.ghostDeckGroup.add(gripMesh);
-
-    // 4 Wheels
-    const wheelGeo = new THREE.CylinderGeometry(0.034, 0.034, 0.045, 12);
-    wheelGeo.rotateZ(Math.PI / 2);
-    const wheelMat = new THREE.MeshStandardMaterial({
-      color: cfg.hexColor,
-      emissive: cfg.emissiveColor,
-      emissiveIntensity: 0.8,
-      transparent: true,
-      opacity: 0.7,
-      depthWrite: false,
-    });
-    this.ghostMaterials.push(wheelMat);
-
-    const wheelOffsets: [number, number, number][] = [
-      [-0.12, 0.038, -0.26], // front-left
-      [0.12, 0.038, -0.26],  // front-right
-      [-0.12, 0.038, 0.26],  // rear-left
-      [0.12, 0.038, 0.26],   // rear-right
-    ];
-    for (const [wx, wy, wz] of wheelOffsets) {
-      const wheel = new THREE.Mesh(wheelGeo, wheelMat);
-      wheel.position.set(wx, wy, wz);
-      this.ghostDeckGroup.add(wheel);
-    }
-
-    // 2. Stylized Surfer Silhouette in Carve Stance
-    this.ghostSurferGroup = new THREE.Group();
-    this.ghostDeckGroup.add(this.ghostSurferGroup);
-
-    const surferMat = new THREE.MeshStandardMaterial({
-      color: cfg.hexColor,
-      emissive: cfg.emissiveColor,
-      emissiveIntensity: 0.55,
-      roughness: 0.3,
-      metalness: 0.1,
-      transparent: true,
-      opacity: 0.5,
-      depthWrite: false,
-    });
-    this.ghostMaterials.push(surferMat);
-
-    // Feet on deck
-    const frontFoot = new THREE.Mesh(
-      new THREE.BoxGeometry(0.08, 0.04, 0.16),
-      surferMat
-    );
-    frontFoot.position.set(0.02, 0.11, -0.18);
-    this.ghostSurferGroup.add(frontFoot);
-
-    const rearFoot = new THREE.Mesh(
-      new THREE.BoxGeometry(0.08, 0.04, 0.16),
-      surferMat
-    );
-    rearFoot.position.set(-0.02, 0.11, 0.18);
-    this.ghostSurferGroup.add(rearFoot);
-
-    // Calves & Thighs (deep surf crouch)
-    const calfGeo = new THREE.CylinderGeometry(0.036, 0.04, 0.26, 8);
-    const frontCalf = new THREE.Mesh(calfGeo, surferMat);
-    frontCalf.position.set(0.02, 0.24, -0.16);
-    frontCalf.rotation.x = -0.2;
-    this.ghostSurferGroup.add(frontCalf);
-
-    const rearCalf = new THREE.Mesh(calfGeo, surferMat);
-    rearCalf.position.set(-0.02, 0.22, 0.15);
-    rearCalf.rotation.x = 0.35;
-    this.ghostSurferGroup.add(rearCalf);
-
-    const thighGeo = new THREE.CylinderGeometry(0.045, 0.048, 0.28, 8);
-    const frontThigh = new THREE.Mesh(thighGeo, surferMat);
-    frontThigh.position.set(0.02, 0.38, -0.08);
-    frontThigh.rotation.x = 0.35;
-    this.ghostSurferGroup.add(frontThigh);
-
-    const rearThigh = new THREE.Mesh(thighGeo, surferMat);
-    rearThigh.position.set(-0.02, 0.35, 0.06);
-    rearThigh.rotation.x = -0.45;
-    this.ghostSurferGroup.add(rearThigh);
-
-    // Torso / Pelvis
-    const torsoGeo = new THREE.CylinderGeometry(0.08, 0.065, 0.32, 8);
-    const torso = new THREE.Mesh(torsoGeo, surferMat);
-    torso.position.set(0, 0.54, 0.0);
-    torso.rotation.x = -0.2; // leaning into the carve
-    this.ghostSurferGroup.add(torso);
-
-    // Head
-    const headGeo = new THREE.SphereGeometry(0.075, 12, 8);
-    const head = new THREE.Mesh(headGeo, surferMat);
-    head.position.set(0, 0.74, -0.06);
-    this.ghostSurferGroup.add(head);
-
-    // Arms: trailing arm touching wave, lead arm reaching forward
-    const armGeo = new THREE.CylinderGeometry(0.026, 0.03, 0.26, 6);
-    const leadArm = new THREE.Mesh(armGeo, surferMat);
-    leadArm.position.set(-0.16, 0.56, -0.22);
-    leadArm.rotation.set(-0.7, 0, 0.5);
-    this.ghostSurferGroup.add(leadArm);
-
-    const trailArm = new THREE.Mesh(armGeo, surferMat);
-    trailArm.position.set(0.18, 0.34, 0.08);
-    trailArm.rotation.set(0.9, 0, -0.5);
-    this.ghostSurferGroup.add(trailArm);
-
-    // 3. Ground contact glow decal disc
-    const groundGlowGeo = new THREE.CircleGeometry(0.36, 18);
-    groundGlowGeo.rotateX(-Math.PI / 2);
-    const groundGlowMat = new THREE.MeshBasicMaterial({
-      color: cfg.hexColor,
-      transparent: true,
-      opacity: 0.25,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-    this.ghostGroundGlow = new THREE.Mesh(groundGlowGeo, groundGlowMat);
-    this.ghostGroundGlow.position.set(0, 0.02, 0);
-    this.ghostGroup.add(this.ghostGroundGlow);
-
-    // 4. Overhead Floating Ghost Mini-Sprite
-    this.ghostLabelSprite = createTextSprite('👻 PB GHOST', '', cfg.accentColor);
-    this.ghostLabelSprite.scale.set(0.95, 0.26, 1.0);
-    this.ghostLabelSprite.position.set(0, 1.42, 0);
-    this.ghostGroup.add(this.ghostLabelSprite);
+    this.ghostLabelSprite = createTextSprite('👻 TARGET PACE', '', '#00f5e0');
+    this.ghostLabelSprite.scale.set(1.05, 0.29, 1.0);
+    this.ghostSkater = new FlowGhostSkater(this.group, this.ghostLabelSprite);
+    this.ghostGroup = this.ghostSkater.root;
   }
 
   private updateGhostMaterials(): void {
-    const cfg = this.getCurrentTierConfig();
-    for (const m of this.ghostMaterials) {
-      if ('color' in m) {
-        (m as THREE.MeshStandardMaterial).color.setHex(cfg.hexColor);
-      }
-      if ('emissive' in m) {
-        (m as THREE.MeshStandardMaterial).emissive.setHex(cfg.emissiveColor);
-      }
-    }
-    if (this.ghostGroundGlow?.material) {
-      (this.ghostGroundGlow.material as THREE.MeshBasicMaterial).color.setHex(cfg.hexColor);
-    }
+    // Holographic Ghost Skater stays unmistakable cyan/aqua across all tiers
   }
 
   private updateStartGatePosition(): void {
@@ -1371,12 +1269,23 @@ export class FlowLineChallenge {
       this.failChallenge('PARK CHANGED');
     }
 
+    this.progressIdx = 0;
+    this.runElapsedSec = 0;
+    this.activeGhostSamples = [];
+    this.ghostSamplePlaybackIdx = 0;
+    this.ghostCurveU = 0;
+    if (this.ghostGroup) {
+      this.ghostGroup.visible = false;
+    }
+    this.ghostSkater?.resetTrail();
+
     this.rebuildCurrentTierCurve();
 
     if (this.isRecording) {
       this.updateFlowLineVisibility(0);
     } else {
       this.flowLineGroup.visible = false;
+      this.finishGateGroup.visible = false;
       this.startGateGroup.visible = true;
     }
   }
@@ -1443,7 +1352,10 @@ export class FlowLineChallenge {
       }
 
       this.flowLineGroup.visible = false;
-      this.ghostGroup.visible = false;
+      if (this.ghostGroup.visible) {
+        this.ghostGroup.visible = false;
+        this.ghostSkater?.resetTrail();
+      }
 
       // Check if skater enters starting gate
       if (this.curvePoints.length > 0) {
@@ -1513,6 +1425,7 @@ export class FlowLineChallenge {
     this.ghostSampleTimer += dt;
     if (this.ghostSampleTimer >= 0.1) {
       this.ghostSampleTimer -= 0.1;
+      const sampleU = this.progressIdx / Math.max(1, this.curvePoints.length - 1);
       this.currentRunSamples.push({
         t: Number(this.runElapsedSec.toFixed(2)),
         x: Number(controller.position.x.toFixed(2)),
@@ -1520,6 +1433,7 @@ export class FlowLineChallenge {
         z: Number(controller.position.z.toFixed(2)),
         h: Number(controller.heading.toFixed(3)),
         lean: Number(controller.leanAngle.toFixed(3)),
+        u: Number(sampleU.toFixed(4)),
       });
     }
 
@@ -1765,6 +1679,8 @@ export class FlowLineChallenge {
       testBtn?.addEventListener('click', () => {
         this.closeExportModal();
         this.isActive = false;
+        this.ghostGroup.visible = false;
+        this.ghostSkater?.resetTrail();
         this.resetFlowLineVisibility();
         this.startGateGroup.visible = true;
         this.finishGateGroup.visible = true;
@@ -1780,20 +1696,35 @@ export class FlowLineChallenge {
   }
 
   /**
-   * Dynamically renders only the ~10-15m window of the flow line in front of the skater,
+   * Dynamically renders the active flow line ribbon window ahead of the skater
+   * (at least ~18m ahead, and extending to keep the Ghost Pacer visibly on the ribbon),
    * keeping rendering lightweight with zero per-frame buffer allocations.
    */
   private updateFlowLineVisibility(timeSec: number): void {
     if (!this.tubeMesh?.geometry || !this.curvePoints.length) return;
 
     const numSegments = this.curvePoints.length - 1;
-    const startSeg = Math.max(
-      0,
-      this.progressIdx - FlowLineChallenge.VISIBLE_BEHIND_POINTS
+    const segLen = Math.max(0.05, this.curveSegmentLength || 0.45);
+    const behindSegs = Math.max(
+      FlowLineChallenge.VISIBLE_BEHIND_POINTS,
+      Math.ceil(1.5 / segLen)
     );
+    const aheadSegs = Math.max(
+      FlowLineChallenge.VISIBLE_AHEAD_POINTS,
+      Math.ceil(18.0 / segLen)
+    );
+    const maxAheadSegs = Math.ceil(28.0 / segLen);
+    const ghostSeg = this.ghostGroup?.visible
+      ? Math.round(this.ghostCurveU * numSegments)
+      : this.progressIdx;
+
+    const startSeg = Math.max(0, this.progressIdx - behindSegs);
     const endSeg = Math.min(
       numSegments,
-      this.progressIdx + FlowLineChallenge.VISIBLE_AHEAD_POINTS
+      Math.max(
+        this.progressIdx + aheadSegs,
+        Math.min(this.progressIdx + maxAheadSegs, ghostSeg + 6)
+      )
     );
     const startIndex = startSeg * FlowLineChallenge.INDICES_PER_SEGMENT;
     const count = Math.max(
@@ -1803,9 +1734,9 @@ export class FlowLineChallenge {
 
     this.tubeMesh.geometry.setDrawRange(startIndex, count);
 
-    // Chevron directional markers: visible only within the active 10-15m window ahead
+    // Chevron directional markers: visible within the active ahead window
     const windowStart = this.progressIdx;
-    const windowEnd = this.progressIdx + FlowLineChallenge.VISIBLE_AHEAD_POINTS;
+    const windowEnd = endSeg;
 
     for (const marker of this.chevronMarkers) {
       const sampleIdx = (marker.userData.sampleIdx as number) ?? 0;
@@ -1823,7 +1754,7 @@ export class FlowLineChallenge {
       }
     }
 
-    // Pulse markers: smoothly cruise along the active 10-15m visible segment
+    // Pulse markers: smoothly cruise along the active visible segment
     const numMarkers = this.pulseMarkers.length;
     const startFrac = startSeg / numSegments;
     const endFrac = endSeg / numSegments;
@@ -1881,6 +1812,7 @@ export class FlowLineChallenge {
         z: Number(controller.position.z.toFixed(2)),
         h: Number(controller.heading.toFixed(3)),
         lean: Number(controller.leanAngle.toFixed(3)),
+        u: 0,
       });
     } else if (this.curvePoints.length > 0) {
       const p = this.curvePoints[0];
@@ -1893,6 +1825,7 @@ export class FlowLineChallenge {
         z: Number(p.z.toFixed(2)),
         h: Number(h.toFixed(3)),
         lean: 0,
+        u: 0,
       });
     }
 
@@ -1919,9 +1852,12 @@ export class FlowLineChallenge {
         const parsed = JSON.parse(raw) as GhostRecord;
         if (
           parsed &&
+          parsed.routeSignature === this.currentRouteSignature &&
           Array.isArray(parsed.samples) &&
           parsed.samples.length >= 3 &&
-          typeof parsed.bestTimeSec === 'number'
+          typeof parsed.bestTimeSec === 'number' &&
+          !isNaN(parsed.bestTimeSec) &&
+          parsed.bestTimeSec > 2.0
         ) {
           loadedRecord = parsed;
         }
@@ -1930,57 +1866,68 @@ export class FlowLineChallenge {
       // LocalStorage error fallback
     }
 
+    this.ghostSkater.resetTrail();
+
     if (loadedRecord) {
-      this.activeGhostSamples = loadedRecord.samples;
+      // Project PB timestamps monotonically onto the active Flow Line curve u ∈ [0..1]
+      // so the PB ghost always rides strictly along the visible ribbon.
+      const nCurve = Math.max(2, this.curvePoints.length);
+      let lastCurveIdx = 0;
+      let maxU = 0;
+      const projected: GhostSample[] = [];
+
+      for (const s of loadedRecord.samples) {
+        let u = typeof s.u === 'number' ? s.u : -1;
+        if (u < 0) {
+          let bestIdx = lastCurveIdx;
+          let bestDistSq = Infinity;
+          const searchMax = Math.min(nCurve - 1, lastCurveIdx + 48);
+          for (let ci = lastCurveIdx; ci <= searchMax; ci++) {
+            const pt = this.curvePoints[ci];
+            const dx = pt.x - s.x;
+            const dz = pt.z - s.z;
+            const dSq = dx * dx + dz * dz;
+            if (dSq < bestDistSq) {
+              bestDistSq = dSq;
+              bestIdx = ci;
+            }
+          }
+          lastCurveIdx = bestIdx;
+          u = bestIdx / (nCurve - 1);
+        }
+        maxU = Math.max(maxU, Math.min(1.0, u));
+        projected.push({
+          ...s,
+          u: maxU,
+        });
+      }
+
+      this.activeGhostSamples = projected;
       this.activeGhostTotalTime = loadedRecord.bestTimeSec;
       this.activeGhostType = 'PB';
+      this.ghostCurveU = projected[0]?.u ?? 0;
       updateTextSprite(
         this.ghostLabelSprite,
         '👻 PB GHOST',
         `${loadedRecord.bestTimeSec.toFixed(1)}s`,
-        cfg.accentColor
+        '#00f5e0'
       );
     } else {
-      // Generate virtual target pace ghost
-      const totalLen = this.curve.getLength();
-      const totalTime = totalLen / cfg.targetPaceSpeed;
+      // Match SurfskateController TIME_SCALE = 0.75 so target pace is realistic & surfable
+      const worldPaceSpeed = cfg.targetPaceSpeed * 0.75;
+      this.ghostPaceSpeed = worldPaceSpeed;
+      const totalTime = this.curveTotalLength / Math.max(0.5, worldPaceSpeed);
       this.activeGhostTotalTime = totalTime;
       this.activeGhostType = 'PACE';
+      this.activeGhostSamples = [];
+      // Start 1.8m ahead on the curve so the Ghost Pacer is immediately visible ahead
+      this.ghostCurveU = Math.min(0.05, 1.8 / Math.max(1.0, this.curveTotalLength));
 
-      const numSamples = Math.max(10, Math.ceil(totalTime * 10)); // 10 Hz
-      const generated: GhostSample[] = [];
-
-      for (let i = 0; i <= numSamples; i++) {
-        const frac = i / numSamples;
-        const t = Number((frac * totalTime).toFixed(2));
-        const pos = this.curve.getPointAt(frac);
-        const tangent = this.curve.getTangentAt(frac);
-        const h = Math.atan2(-tangent.x, -tangent.z);
-
-        // Procedural carve lean based on curve turn rate
-        const nextFrac = Math.min(1.0, frac + 0.02);
-        const nextTangent = this.curve.getTangentAt(nextFrac);
-        const cross = tangent.x * nextTangent.z - tangent.z * nextTangent.x;
-        const lean = Math.max(-0.55, Math.min(0.55, cross * 25));
-
-        const groundH = this.parkSurface.sample(pos.x, pos.z).height;
-
-        generated.push({
-          t,
-          x: Number(pos.x.toFixed(2)),
-          y: Number((groundH + 0.05).toFixed(2)),
-          z: Number(pos.z.toFixed(2)),
-          h: Number(h.toFixed(3)),
-          lean: Number(lean.toFixed(3)),
-        });
-      }
-
-      this.activeGhostSamples = generated;
       updateTextSprite(
         this.ghostLabelSprite,
-        '👻 TARGET PACE',
-        `${cfg.targetPaceSpeed.toFixed(1)} m/s`,
-        cfg.accentColor
+        '👻 GHOST PACER',
+        `${worldPaceSpeed.toFixed(1)} m/s`,
+        '#00f5e0'
       );
     }
 
@@ -2004,100 +1951,133 @@ export class FlowLineChallenge {
       return;
     }
 
-    // For PB Ghost: forward search closest sample timestamp
+    // For PB Ghost: monotonic forward lookup by curve progress u
     let lastG = 0;
     for (let i = 0; i < n; i++) {
-      const pt = this.curvePoints[i];
-      let bestIdx = lastG;
-      let bestDistSq = Infinity;
-      const searchMax = Math.min(this.activeGhostSamples.length - 1, lastG + 25);
-      for (let g = lastG; g <= searchMax; g++) {
-        const s = this.activeGhostSamples[g];
-        const dx = pt.x - s.x;
-        const dz = pt.z - s.z;
-        const dSq = dx * dx + dz * dz;
-        if (dSq < bestDistSq) {
-          bestDistSq = dSq;
-          bestIdx = g;
-        }
+      const targetU = i / Math.max(1, n - 1);
+      while (
+        lastG < this.activeGhostSamples.length - 1 &&
+        (this.activeGhostSamples[lastG].u ?? 0) < targetU
+      ) {
+        lastG++;
       }
-      lastG = bestIdx;
-      this.ghostProgressTimes[i] = this.activeGhostSamples[bestIdx].t;
+      this.ghostProgressTimes[i] = this.activeGhostSamples[lastG]?.t ?? 0;
     }
   }
 
-  private updateGhostPlayback(timeSec: number, _dt: number): void {
-    if (!this.activeGhostSamples.length) return;
+  private updateGhostPlayback(timeSec: number, dt: number): void {
+    if (!this.curve || this.curveTotalLength <= 0.5) return;
 
-    const t = this.runElapsedSec;
+    let u = this.ghostCurveU;
+    let ghostSpeed = 0;
 
-    // If ghost finished more than 2.0s ago, hide it
-    if (t > this.activeGhostTotalTime + 2.0) {
-      this.ghostGroup.visible = false;
-      return;
+    if (this.activeGhostType === 'PB') {
+      if (!this.activeGhostSamples.length) return;
+      const t = this.runElapsedSec;
+
+      if (t > this.activeGhostTotalTime + 3.0) {
+        this.ghostGroup.visible = false;
+        this.ghostSkater.resetTrail();
+        return;
+      }
+      this.ghostGroup.visible = true;
+
+      while (
+        this.ghostSamplePlaybackIdx < this.activeGhostSamples.length - 2 &&
+        this.activeGhostSamples[this.ghostSamplePlaybackIdx + 1].t < t
+      ) {
+        this.ghostSamplePlaybackIdx++;
+      }
+
+      const s0 = this.activeGhostSamples[this.ghostSamplePlaybackIdx];
+      const s1 =
+        this.activeGhostSamples[
+          Math.min(this.activeGhostSamples.length - 1, this.ghostSamplePlaybackIdx + 1)
+        ];
+
+      const span = Math.max(0.0001, s1.t - s0.t);
+      const alpha = Math.max(0, Math.min(1, (t - s0.t) / span));
+      const u0 = s0.u ?? 0;
+      const u1 = s1.u ?? u0;
+      u = THREE.MathUtils.clamp(u0 + (u1 - u0) * alpha, 0, 1);
+      this.ghostCurveU = u;
+      ghostSpeed = t >= this.activeGhostTotalTime ? 0 : Math.max(0, ((u1 - u0) * this.curveTotalLength) / span);
+    } else {
+      // PACE Pacer: strictly follows the Flow Line curve and stays visibly ahead within the ribbon
+      this.ghostGroup.visible = true;
+      const playerU = this.progressIdx / Math.max(1, this.curvePoints.length - 1);
+      const leadMeters = (this.ghostCurveU - playerU) * this.curveTotalLength;
+
+      if (this.ghostCurveU < 1.0 && dt > 0) {
+        let effectiveSpeed = this.ghostPaceSpeed;
+        if (leadMeters > 13.0) {
+          const over = Math.min(1.0, (leadMeters - 13.0) / 5.5);
+          effectiveSpeed = THREE.MathUtils.lerp(this.ghostPaceSpeed, 1.25, over);
+          if (leadMeters >= 18.5) {
+            effectiveSpeed = Math.min(effectiveSpeed, 0.35);
+          }
+        }
+        this.ghostCurveU = Math.min(
+          1.0,
+          this.ghostCurveU + (effectiveSpeed * dt) / this.curveTotalLength
+        );
+        ghostSpeed = this.ghostCurveU >= 1.0 ? 0 : effectiveSpeed;
+      } else {
+        ghostSpeed = 0;
+      }
+      u = this.ghostCurveU;
     }
-    this.ghostGroup.visible = true;
 
-    // Advance playback index
-    while (
-      this.ghostSamplePlaybackIdx < this.activeGhostSamples.length - 2 &&
-      this.activeGhostSamples[this.ghostSamplePlaybackIdx + 1].t < t
-    ) {
-      this.ghostSamplePlaybackIdx++;
+    // Strictly sample 3D position & forward tangent directly on the active Flow Line spline
+    this.curve.getPointAt(u, this.tempGhostPos);
+    this.curve.getTangentAt(u, this.tempGhostTan);
+
+    // Sample authentic LiDAR/C2 ground height so board wheels ride flush on concrete
+    const srf = this.parkSurface.sample(this.tempGhostPos.x, this.tempGhostPos.z);
+    const gy = srf.height;
+
+    const fwdLen = Math.hypot(this.tempGhostTan.x, this.tempGhostTan.z);
+    if (fwdLen > 1e-5) {
+      this.ghostForward.set(this.tempGhostTan.x / fwdLen, 0, this.tempGhostTan.z / fwdLen);
     }
 
-    const s0 = this.activeGhostSamples[this.ghostSamplePlaybackIdx];
-    const s1 =
-      this.activeGhostSamples[
-        Math.min(this.activeGhostSamples.length - 1, this.ghostSamplePlaybackIdx + 1)
-      ];
+    // Build orthonormal surface-aligned frame: +X = right, +Y = up, -Z = orthoForward
+    const up = this.tempGhostUp.copy(srf.normal).lerp(WORLD_UP, 0.28).normalize();
+    const right = this.tempGhostRight.crossVectors(this.ghostForward, up).normalize();
+    const orthoForward = this.tempGhostOrthoFwd.crossVectors(up, right).normalize();
 
-    const span = Math.max(0.0001, s1.t - s0.t);
-    const alpha = Math.max(0, Math.min(1, (t - s0.t) / span));
-
-    // Position lerp
-    const gx = s0.x + (s1.x - s0.x) * alpha;
-    const gz = s0.z + (s1.z - s0.z) * alpha;
-
-    // Sample surface at ghost position for accurate slope alignment
-    const srf = this.parkSurface.sample(gx, gz);
-    const gy = srf.height + 0.05;
-
-    // Heading lerp with angle wrap-around
-    let dh = s1.h - s0.h;
-    while (dh > Math.PI) dh -= 2 * Math.PI;
-    while (dh < -Math.PI) dh += 2 * Math.PI;
-    const gh = s0.h + dh * alpha;
-
-    // Lean lerp
-    const glean = s0.lean + (s1.lean - s0.lean) * alpha;
-
-    // Orientation along surface normal and heading
-    const forward = new THREE.Vector3(-Math.sin(gh), 0, -Math.cos(gh)).normalize();
-    const up = srf.normal.clone().lerp(new THREE.Vector3(0, 1, 0), 0.28).normalize();
-    const right = new THREE.Vector3().crossVectors(forward, up).normalize();
-    const orthoForward = new THREE.Vector3().crossVectors(up, right).normalize();
-
-    this.ghostRotMatrix.makeBasis(right, up, orthoForward.clone().negate());
+    this.ghostRotMatrix.makeBasis(
+      right,
+      up,
+      this.tempGhostNegFwd.copy(orthoForward).negate()
+    );
     this.ghostGroup.quaternion.setFromRotationMatrix(this.ghostRotMatrix);
-    this.ghostGroup.position.set(gx, gy, gz);
+    this.ghostGroup.position.set(this.tempGhostPos.x, gy, this.tempGhostPos.z);
 
-    // Deck roll around longitudinal axis
-    this.ghostDeckGroup.rotation.z = glean;
+    // Natural surfskate carving lean from local path curvature + subtle rhythmic pump sway
+    const du = Math.min(0.045, 2.2 / Math.max(10.0, this.curveTotalLength));
+    const uPrev = Math.max(0, u - du);
+    const uNext = Math.min(1, u + du);
+    this.curve.getTangentAt(uPrev, this.tempTanPrev);
+    this.curve.getTangentAt(uNext, this.tempTanNext);
+    const pLen = Math.hypot(this.tempTanPrev.x, this.tempTanPrev.z) || 1;
+    const nLen = Math.hypot(this.tempTanNext.x, this.tempTanNext.z) || 1;
+    const crossY =
+      (this.tempTanPrev.x / pLen) * (this.tempTanNext.z / nLen) -
+      (this.tempTanPrev.z / pLen) * (this.tempTanNext.x / nLen);
+    const pumpSway = ghostSpeed > 0.5 ? Math.sin(timeSec * 3.8) * 0.075 : 0;
+    const targetLean = THREE.MathUtils.clamp(crossY * 1.35 + pumpSway, -0.52, 0.52);
 
-    // Procedural subtle surfing motion
-    const bob = Math.sin(timeSec * 6) * 0.015;
-    this.ghostSurferGroup.position.y = bob;
-
-    // Floating label stays above deck
-    this.ghostLabelSprite.position.set(0, 1.42 + bob * 0.5, 0);
+    this.ghostSkater.update(dt, timeSec, ghostSpeed, targetLean, right, up);
   }
 
   public failChallenge(reason: string): void {
     this.isActive = false;
     this.retriggerCooldown = 1.5;
     this.progressIdx = 0;
+    this.ghostCurveU = 0;
     this.ghostGroup.visible = false;
+    this.ghostSkater.resetTrail();
 
     this.startGateGroup.visible = true;
     this.flowLineGroup.visible = false;
@@ -2116,7 +2096,9 @@ export class FlowLineChallenge {
     this.isActive = false;
     this.retriggerCooldown = 2.0;
     this.progressIdx = 0;
+    this.ghostCurveU = 0;
     this.ghostGroup.visible = false;
+    this.ghostSkater.resetTrail();
 
     this.startGateGroup.visible = true;
     this.flowLineGroup.visible = false;
@@ -2133,6 +2115,7 @@ export class FlowLineChallenge {
         tier: this.currentTier,
         bestTimeSec: Number(elapsed.toFixed(2)),
         date: new Date().toISOString(),
+        routeSignature: this.currentRouteSignature,
         isVirtualPace: false,
         samples: this.currentRunSamples,
       };
@@ -2181,14 +2164,60 @@ export class FlowLineChallenge {
     this.retriggerCooldown = 0;
     this.runElapsedSec = 0;
     this.ghostSampleTimer = 0;
+    this.ghostSamplePlaybackIdx = 0;
+    this.ghostCurveU = 0;
+    this.activeGhostSamples = [];
     this.currentRunSamples = [];
 
     this.ghostGroup.visible = false;
+    this.ghostSkater.resetTrail();
     this.startGateGroup.visible = true;
     this.flowLineGroup.visible = false;
     this.finishGateGroup.visible = false;
 
     this.hud.setFlowLineHint(null);
     this.closeExportModal();
+  }
+
+  public dispose(): void {
+    this.ghostSkater?.dispose();
+
+    if (this.tubeMesh) {
+      this.tubeMesh.geometry?.dispose();
+    }
+    this.tubeMaterial?.dispose();
+
+    for (const c of this.chevronMarkers) {
+      c.geometry?.dispose();
+      const mats = Array.isArray(c.material) ? c.material : [c.material];
+      for (const m of mats) m?.dispose();
+    }
+    this.chevronMarkers = [];
+
+    for (const p of this.pulseMarkers) {
+      p.geometry?.dispose();
+      const mats = Array.isArray(p.material) ? p.material : [p.material];
+      for (const m of mats) m?.dispose();
+    }
+    this.pulseMarkers = [];
+
+    const disposeGroup = (grp: THREE.Group) => {
+      grp.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const m = child as THREE.Mesh;
+          m.geometry?.dispose();
+          const mats = Array.isArray(m.material) ? m.material : [m.material];
+          for (const mat of mats) mat?.dispose();
+        } else if ((child as THREE.Sprite).isSprite) {
+          const s = child as THREE.Sprite;
+          s.material?.map?.dispose();
+          s.material?.dispose();
+        }
+      });
+    };
+    disposeGroup(this.startGateGroup);
+    disposeGroup(this.finishGateGroup);
+
+    this.group.removeFromParent();
   }
 }
