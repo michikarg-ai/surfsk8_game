@@ -104,6 +104,7 @@
         position: relative;
         width: 100%;
         height: 100%;
+        height: 100vh;
         height: 100dvh;
         height: var(--app-height, 100dvh);
         max-height: 100dvh;
@@ -1020,6 +1021,11 @@
       #landing-overlay {
         position: absolute;
         inset: 0;
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        height: var(--app-height, 100dvh);
+        padding-bottom: env(safe-area-inset-bottom);
         z-index: 40;
         background: #0d0f14 url('/textures/landing_page_background.jpeg') center center / cover no-repeat;
         display: flex;
@@ -1173,21 +1179,49 @@
         bottom: max(20px, env(safe-area-inset-bottom));
         width: 350px;
         max-width: 380px;
+        max-height: calc(var(--app-height, 100dvh) - max(88px, calc(env(safe-area-inset-top) + env(safe-area-inset-bottom) + 78px)));
         display: flex;
         flex-direction: column;
-        justify-content: space-between;
-        gap: 9px;
         background: rgba(16, 15, 14, 0.88);
         backdrop-filter: blur(14px);
         -webkit-backdrop-filter: blur(14px);
         border: 1.5px solid rgba(255, 255, 255, 0.16);
         border-radius: 10px;
-        padding: 12px 14px;
+        padding: 0;
         box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75), 0 0 24px rgba(242, 116, 31, 0.12);
         z-index: 10;
         pointer-events: auto;
+        overflow: hidden;
+      }
+      .landing-panel-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 9px;
+        padding: 12px 14px 10px;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(242, 116, 31, 0.55) transparent;
+      }
+      .landing-panel-scroll::-webkit-scrollbar {
+        width: 4px;
+      }
+      .landing-panel-scroll::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .landing-panel-scroll::-webkit-scrollbar-thumb {
+        background: rgba(242, 116, 31, 0.55);
+        border-radius: 999px;
+      }
+      .landing-panel-footer {
+        flex-shrink: 0;
+        padding: 9px 14px 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.14);
+        background: linear-gradient(180deg, rgba(20, 18, 16, 0.82) 0%, rgba(12, 11, 10, 0.96) 100%);
       }
       .landing-panel-section {
         display: flex;
@@ -1631,7 +1665,7 @@
         align-items: center;
         justify-content: center;
         padding: 0 14px;
-        margin-top: 2px;
+        margin-top: 0;
         flex-shrink: 0;
       }
       #landing-start-btn:hover {
@@ -1717,8 +1751,15 @@
           max-width: 440px;
           margin: 0 auto;
           max-height: calc(var(--app-height, 100dvh) - 170px);
-          padding: 8px 10px;
+          padding: 0;
+        }
+        .landing-panel-scroll {
+          padding: 8px 10px 6px;
           gap: 6px;
+          justify-content: flex-start;
+        }
+        .landing-panel-footer {
+          padding: 6px 10px 8px;
         }
         .landing-setup-stack {
           gap: 4px;
@@ -1754,7 +1795,8 @@
         }
         #landing-start-btn {
           height: 42px;
-          margin-top: 1px;
+          min-height: 42px;
+          margin-top: 0;
         }
         .start-btn-label {
           font-size: 18px;
@@ -1816,15 +1858,34 @@
           bottom: max(6px, env(safe-area-inset-bottom));
           width: 320px;
           max-width: 44vw;
-          padding: 5px 8px;
-          gap: 3.5px;
-          max-height: calc(var(--app-height, 100dvh) - 42px);
+          margin: 0;
+          padding: 0;
+          max-height: calc(var(--app-height, 100dvh) - max(42px, calc(env(safe-area-inset-top) + env(safe-area-inset-bottom) + 38px)));
+        }
+        .landing-panel-scroll {
+          padding: 6px 8px 5px;
+          gap: 4px;
+          justify-content: flex-start;
+        }
+        .landing-panel-footer {
+          padding: 6px 8px 6px;
+        }
+        .landing-panel-section {
+          gap: 3px;
+        }
+        .step-badge {
+          width: 17px;
+          height: 17px;
+          font-size: 11px;
+        }
+        .section-title {
+          font-size: 13px;
         }
         .landing-setup-stack {
           gap: 3px;
         }
         .sel-section {
-          padding: 2px 5px;
+          padding: 2.5px 6px;
           gap: 1px;
         }
         .sel-row-label {
@@ -1840,6 +1901,13 @@
         .board-icon-svg {
           max-height: 24px;
         }
+        .landing-park-actions {
+          margin-top: 1px;
+        }
+        .landing-inspect-btn {
+          padding: 1.5px 7px;
+          font-size: 10px;
+        }
         .sel-player-name {
           font-size: 15px;
         }
@@ -1851,25 +1919,26 @@
           font-size: 11px;
         }
         .sel-arrow {
-          width: 22px;
+          width: 24px;
           height: 24px;
           font-size: 13px;
         }
         .mode-pill-btn {
-          padding: 3px 2px;
+          padding: 4px 2px;
           font-size: 9.5px;
         }
         .landing-mode-desc {
           font-size: 9px;
           padding: 2px 5px;
-          min-height: 14px;
+          min-height: 15px;
         }
         #landing-start-btn {
-          height: 34px;
-          margin-top: 1px;
+          height: 42px;
+          min-height: 42px;
+          margin-top: 0;
         }
         .start-btn-label {
-          font-size: 16px;
+          font-size: 17px;
         }
         .start-btn-sub {
           display: none;
@@ -1898,8 +1967,91 @@
       }
 
       /* -------------------------------------------------------------
+         Responsive: Compact Mobile Landscape w/ URL Bar (max-height: 430px)
+         ------------------------------------------------------------- */
+      @media (max-height: 430px) and (orientation: landscape), (pointer: coarse) and (orientation: landscape) and (max-height: 430px) {
+        .landing-top-bar {
+          padding: max(3px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 2px max(10px, env(safe-area-inset-left));
+        }
+        .landing-title {
+          font-size: 18px;
+        }
+        .landing-rank-badge {
+          font-size: 9.5px;
+          padding: 1.5px 5px;
+        }
+        .landing-aux-pill {
+          padding: 2px 5px;
+          min-width: 26px;
+          height: 26px;
+        }
+        .landing-control-panel {
+          top: max(32px, calc(env(safe-area-inset-top) + 30px));
+          bottom: max(4px, env(safe-area-inset-bottom));
+          max-height: calc(var(--app-height, 100dvh) - max(36px, calc(env(safe-area-inset-top) + env(safe-area-inset-bottom) + 34px)));
+        }
+        .landing-panel-scroll {
+          padding: 4px 7px 4px;
+          gap: 3px;
+        }
+        .landing-panel-footer {
+          padding: 5px 7px 5px;
+        }
+        .landing-setup-stack {
+          gap: 2.5px;
+        }
+        .sel-section {
+          padding: 2px 5px;
+          gap: 0.5px;
+        }
+        .sel-row-label {
+          font-size: 8.5px;
+        }
+        .sel-player-name {
+          font-size: 14px;
+        }
+        .park-slot-wrap,
+        .board-slot-wrap {
+          height: 24px;
+        }
+        .park-thumb {
+          height: 24px;
+        }
+        .board-icon-svg {
+          max-height: 20px;
+        }
+        .sel-subtitle {
+          font-size: 10.5px;
+        }
+        .sel-arrow {
+          width: 22px;
+          height: 22px;
+          font-size: 12px;
+        }
+        #landing-start-btn {
+          height: 40px;
+          min-height: 40px;
+        }
+        .start-btn-icon {
+          font-size: 16px;
+        }
+        .start-btn-label {
+          font-size: 16px;
+        }
+        .landing-progression-box {
+          top: max(32px, calc(env(safe-area-inset-top) + 30px));
+          padding: 4px 7px;
+        }
+      }
+
+      /* -------------------------------------------------------------
          Reel-mode Overrides (9:16 vertical on desktop)
          ------------------------------------------------------------- */
+      @media (min-width: 768px) and (min-height: 520px) {
+        body.reel-mode #landing-overlay {
+          height: 100%;
+        }
+      }
       body.reel-mode .landing-top-bar {
         padding: 10px 14px 6px;
       }
@@ -1915,7 +2067,15 @@
         max-width: 420px;
         margin: 0 auto;
         max-height: calc(var(--app-height, 100dvh) - 180px);
-        padding: 8px 10px;
+        padding: 0;
+      }
+      body.reel-mode .landing-panel-scroll {
+        padding: 8px 10px 6px;
+        gap: 6px;
+        justify-content: flex-start;
+      }
+      body.reel-mode .landing-panel-footer {
+        padding: 6px 10px 8px;
       }
       body.reel-mode .landing-progression-box {
         right: 10px;
@@ -3588,15 +3748,28 @@
       }
       @media (max-height: 540px) and (orientation: landscape), (pointer: coarse) and (orientation: landscape) and (max-height: 640px) {
         .landing-rider-name-row {
-          padding: 2px 6px;
+          padding: 2.5px 6px;
           gap: 6px;
         }
         .landing-rider-label {
           font-size: 9px;
         }
         .landing-rider-input {
-          padding: 2px 6px;
+          padding: 2.5px 6px;
           font-size: 11.5px;
+        }
+      }
+      @media (max-height: 430px) and (orientation: landscape), (pointer: coarse) and (orientation: landscape) and (max-height: 430px) {
+        .landing-rider-name-row {
+          padding: 2px 5px;
+          gap: 5px;
+        }
+        .landing-rider-label {
+          font-size: 8.5px;
+        }
+        .landing-rider-input {
+          padding: 2px 5px;
+          font-size: 11px;
         }
       }
 
@@ -4078,8 +4251,9 @@
 
         <!-- Left Side Selection Panel (Setup, Mode, CTA) -->
         <aside class="landing-control-panel" id="landing-control-panel">
-          <!-- Step 1: Setup Card with Skater, Park, Board stacked untereinander -->
-          <div class="landing-panel-section landing-setup-section" id="landing-select-board">
+          <div class="landing-panel-scroll">
+            <!-- Step 1: Setup Card with Skater, Park, Board stacked untereinander -->
+            <div class="landing-panel-section landing-setup-section" id="landing-select-board">
             <div class="landing-section-header">
               <div class="section-title-wrap">
                 <span class="step-badge">1</span>
@@ -4284,15 +4458,18 @@
               ⏱️ 120s Highscore Hunt — Carve hot-spots, land tricks &amp; collect pretzels.
             </div>
           </div>
+          </div>
 
-          <!-- Primary CTA Button -->
-          <button id="landing-start-btn" type="button" aria-label="Drop In / Start Game">
-            <span class="start-btn-skew-wrap">
-              <span class="start-btn-icon">⚡</span>
-              <span class="start-btn-label">DROP IN</span>
-              <span class="start-btn-sub">PRESS ENTER</span>
-            </span>
-          </button>
+          <!-- Always-Pinned Primary CTA Footer -->
+          <div class="landing-panel-footer">
+            <button id="landing-start-btn" type="button" aria-label="Drop In / Start Game">
+              <span class="start-btn-skew-wrap">
+                <span class="start-btn-icon">⚡</span>
+                <span class="start-btn-label">DROP IN</span>
+                <span class="start-btn-sub">PRESS ENTER</span>
+              </span>
+            </button>
+          </div>
         </aside>
 
         <!-- Top Right Challenges Card -->
