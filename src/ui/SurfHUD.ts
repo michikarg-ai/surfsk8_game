@@ -2,6 +2,15 @@ import { ManeuverEvent, SurfskateController, TruckFeelPreset } from '../physics/
 import { AspectMode, CameraStyle } from '../camera/SurfCamera';
 import { AtmosphereMode } from '../world/ImGefildeScene';
 import { SessionSummaryData, SkaterRankInfo, SurfMission } from '../progression/SurfProgression';
+import {
+  fetchLeaderboard,
+  getPlayerName,
+  LeaderboardEntry,
+  LeaderboardPark,
+  setPlayerName,
+  submitScore,
+  ValidLeaderboardPark,
+} from '../services/LeaderboardService';
 
 export type DriveControlMode = 'arrows' | 'wasd';
 
@@ -71,6 +80,15 @@ export class SurfHUD {
   private summaryModalEl: HTMLElement | null = null;
   private summaryRetryCallback: (() => void) | null = null;
   private summaryGarageCallback: (() => void) | null = null;
+  private summaryOpenLeaderboardCallback: ((park: LeaderboardPark) => void) | null = null;
+  private summaryCurrentScore = 0;
+  private summaryCurrentParkId: ValidLeaderboardPark = 'im_gefilde';
+  private summaryLbToken = 0;
+  private summaryPlayerInputEl: HTMLInputElement | null = null;
+  private summarySubmitBtnEl: HTMLButtonElement | null = null;
+  private summaryLbStatusEl: HTMLElement | null = null;
+  private summaryLbListEl: HTMLElement | null = null;
+  private summaryLbFullBtnEl: HTMLButtonElement | null = null;
 
   public controlMode: DriveControlMode = 'arrows';
   private btnControlsEl: HTMLButtonElement | null = null;
@@ -127,6 +145,39 @@ export class SurfHUD {
     this.dockMissionsListEl = document.getElementById('dock-missions-list');
     this.missionToastEl = document.getElementById('hud-mission-toast');
     this.summaryModalEl = document.getElementById('session-summary-modal');
+    this.summaryPlayerInputEl = document.getElementById('summary-player-name') as HTMLInputElement | null;
+    this.summarySubmitBtnEl = document.getElementById('summary-submit-score') as HTMLButtonElement | null;
+    this.summaryLbStatusEl = document.getElementById('summary-lb-status');
+    this.summaryLbListEl = document.getElementById('summary-lb-list');
+    this.summaryLbFullBtnEl = document.getElementById('summary-lb-open-full') as HTMLButtonElement | null;
+
+    if (this.summaryPlayerInputEl) {
+      this.summaryPlayerInputEl.value = getPlayerName();
+      this.summaryPlayerInputEl.addEventListener('blur', () => {
+        if (this.summaryPlayerInputEl) {
+          this.summaryPlayerInputEl.value = setPlayerName(this.summaryPlayerInputEl.value);
+        }
+      });
+      this.summaryPlayerInputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+          void this.handleSummaryScoreSubmit();
+        }
+      });
+    }
+    if (this.summarySubmitBtnEl) {
+      this.summarySubmitBtnEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        void this.handleSummaryScoreSubmit();
+      });
+    }
+    if (this.summaryLbFullBtnEl) {
+      this.summaryLbFullBtnEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.summaryOpenLeaderboardCallback?.(this.summaryCurrentParkId);
+      });
+    }
 
     const btnRetry = document.getElementById('summary-btn-retry');
     const btnGarage = document.getElementById('summary-btn-garage');
@@ -152,6 +203,11 @@ export class SurfHUD {
     this.setDockOpen(false);
     document.getElementById('dock-toggle')!.addEventListener('click', () => this.toggleDock());
     window.addEventListener('keydown', (e) => {
+      const activeEl = document.activeElement as HTMLElement | null;
+      const tag = activeEl?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || activeEl?.isContentEditable) {
+        return;
+      }
       if (e.code === 'KeyH') this.toggleDock();
     });
     this.flowFillEl = document.getElementById('hud-flow-fill')!;
@@ -683,11 +739,18 @@ export class SurfHUD {
   public openSessionSummary(
     summary: SessionSummaryData,
     onRetry: () => void,
-    onGarage: () => void
+    onGarage: () => void,
+    onOpenLeaderboard?: (park: LeaderboardPark) => void
   ): void {
     if (!this.summaryModalEl) return;
     this.summaryRetryCallback = onRetry;
     this.summaryGarageCallback = onGarage;
+    this.summaryOpenLeaderboardCallback = onOpenLeaderboard ?? null;
+
+    const parkId: ValidLeaderboardPark =
+      summary.parkId === 'airport_skatepark' ? 'airport_skatepark' : 'im_gefilde';
+    this.summaryCurrentScore = Math.max(0, Math.round(summary.score));
+    this.summaryCurrentParkId = parkId;
 
     const iconEl = document.getElementById('summary-medal-icon');
     const titleEl = document.getElementById('summary-medal-title');
@@ -731,7 +794,151 @@ export class SurfHUD {
         .join('');
     }
 
+    const savedName = getPlayerName();
+    if (this.summaryPlayerInputEl) {
+      this.summaryPlayerInputEl.value = savedName;
+    }
+
+    const token = ++this.summaryLbToken;
     this.summaryModalEl.classList.remove('hidden');
+
+    if (savedName.length >= 2 && this.summaryCurrentScore > 0) {
+      void this.submitAndRefreshSummaryLeaderboard(
+        savedName,
+        this.summaryCurrentScore,
+        parkId,
+        token
+      );
+    } else {
+      this.setSummaryLbStatus(
+        this.summaryCurrentScore > 0
+          ? 'Rider-Namen eingeben & SAVE klicken für die Rangliste!'
+          : 'Score > 0 erforderlich für die Rangliste.',
+        ''
+      );
+      void this.refreshSummaryLeaderboard(parkId, savedName, token);
+    }
+  }
+
+  private setSummaryLbStatus(text: string, variant: '' | 'success' | 'error'): void {
+    if (!this.summaryLbStatusEl) return;
+    this.summaryLbStatusEl.textContent = text;
+    this.summaryLbStatusEl.className = variant ? `summary-lb-status ${variant}` : 'summary-lb-status';
+  }
+
+  private async handleSummaryScoreSubmit(): Promise<void> {
+    if (!this.summaryPlayerInputEl) return;
+    const cleanName = setPlayerName(this.summaryPlayerInputEl.value);
+    this.summaryPlayerInputEl.value = cleanName;
+
+    const landingInput = document.getElementById('landing-player-name') as HTMLInputElement | null;
+    if (landingInput) {
+      landingInput.value = cleanName;
+    }
+
+    if (cleanName.length < 2) {
+      this.setSummaryLbStatus('Bitte mindestens 2 Zeichen eingeben (Buchstaben/Zahlen).', 'error');
+      this.summaryPlayerInputEl.focus();
+      return;
+    }
+    if (this.summaryCurrentScore <= 0) {
+      this.setSummaryLbStatus('Score muss größer als 0 sein.', 'error');
+      return;
+    }
+
+    const token = ++this.summaryLbToken;
+    await this.submitAndRefreshSummaryLeaderboard(
+      cleanName,
+      this.summaryCurrentScore,
+      this.summaryCurrentParkId,
+      token
+    );
+  }
+
+  private async submitAndRefreshSummaryLeaderboard(
+    name: string,
+    score: number,
+    parkId: ValidLeaderboardPark,
+    token: number
+  ): Promise<void> {
+    if (this.summarySubmitBtnEl) {
+      this.summarySubmitBtnEl.disabled = true;
+    }
+    this.setSummaryLbStatus('⏳ Speichere Score...', '');
+
+    const result = await submitScore(name, score, parkId);
+    if (token !== this.summaryLbToken) return;
+
+    if (this.summarySubmitBtnEl) {
+      this.summarySubmitBtnEl.disabled = false;
+    }
+
+    if (!result.ok) {
+      this.setSummaryLbStatus(result.error || 'Speichern fehlgeschlagen.', 'error');
+      await this.refreshSummaryLeaderboard(parkId, name, token);
+      return;
+    }
+
+    const rankText = result.rank !== null ? `Platz #${result.rank}` : 'Gespeichert';
+    const bestText = result.bestScore.toLocaleString();
+    const newBestTag = result.isNewBest ? ' • ★ NEUER BESTWERT!' : '';
+    const sourceTag = result.source === 'local' ? ' (Local Preview)' : '';
+    this.setSummaryLbStatus(`✅ ${rankText} • Best: ${bestText}${newBestTag}${sourceTag}`, 'success');
+
+    await this.refreshSummaryLeaderboard(parkId, result.name, token);
+  }
+
+  private async refreshSummaryLeaderboard(
+    parkId: ValidLeaderboardPark,
+    highlightName: string,
+    token: number
+  ): Promise<void> {
+    if (!this.summaryLbListEl) return;
+    const { entries } = await fetchLeaderboard(parkId, 5);
+    if (token !== this.summaryLbToken) return;
+    this.renderSummaryLeaderboardRows(entries, highlightName);
+  }
+
+  private renderSummaryLeaderboardRows(entries: LeaderboardEntry[], highlightName: string): void {
+    if (!this.summaryLbListEl) return;
+    this.summaryLbListEl.innerHTML = '';
+
+    if (entries.length === 0) {
+      const emptyEl = document.createElement('div');
+      emptyEl.className = 'summary-lb-status';
+      emptyEl.textContent = 'Noch keine Park-Einträge — sichere dir Platz #1!';
+      this.summaryLbListEl.appendChild(emptyEl);
+      return;
+    }
+
+    const target = highlightName.trim().toLowerCase();
+    for (const entry of entries) {
+      const row = document.createElement('div');
+      const isMe = target.length >= 2 && entry.name.toLowerCase() === target;
+      row.className = `summary-lb-row${isMe ? ' is-me' : ''}`;
+
+      const rankEl = document.createElement('span');
+      rankEl.className = 'summary-lb-row-rank';
+      rankEl.textContent =
+        entry.rank === 1
+          ? '🥇'
+          : entry.rank === 2
+            ? '🥈'
+            : entry.rank === 3
+              ? '🥉'
+              : `#${entry.rank}`;
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'summary-lb-row-name';
+      nameEl.textContent = entry.name;
+
+      const scoreEl = document.createElement('span');
+      scoreEl.className = 'summary-lb-row-score';
+      scoreEl.textContent = entry.score.toLocaleString();
+
+      row.append(rankEl, nameEl, scoreEl);
+      this.summaryLbListEl.appendChild(row);
+    }
   }
 
   public closeSessionSummary(): void {

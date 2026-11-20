@@ -340,6 +340,17 @@ class SurfskateMunichGame {
     if (tabKeyboard) tabKeyboard.addEventListener('click', () => this.switchHelpTab('keyboard'));
 
     window.addEventListener('keydown', (e) => {
+      const activeEl = document.activeElement as HTMLElement | null;
+      const activeTag = activeEl?.tagName;
+      if (
+        activeTag === 'INPUT' ||
+        activeTag === 'TEXTAREA' ||
+        activeTag === 'SELECT' ||
+        activeEl?.isContentEditable
+      ) {
+        return;
+      }
+
       this.audio.initOnFirstGesture();
       const code = e.code;
 
@@ -355,6 +366,13 @@ class SurfskateMunichGame {
       }
 
       if (this.landingPage.isVisible) {
+        if (code === 'Escape') {
+          this.landingPage.handleKeyDown(code);
+          return;
+        }
+        if (this.landingPage.isLeaderboardModalOpen()) {
+          return;
+        }
         if (code === 'Enter' || code === 'NumpadEnter') {
           e.preventDefault();
           this.landingPage.startGame();
@@ -381,6 +399,14 @@ class SurfskateMunichGame {
           this.toggleMusic();
         } else if (code === 'KeyU' || code === 'KeyQ') {
           this.cycleGraphicsQuality();
+        }
+        return;
+      }
+
+      if (this.landingPage.isLeaderboardModalOpen()) {
+        if (code === 'Escape') {
+          e.preventDefault();
+          this.landingPage.closeLeaderboardModal();
         }
         return;
       }
@@ -729,7 +755,10 @@ class SurfskateMunichGame {
     if (this.summaryShownForSession || this.hud.endlessMode) return;
     this.summaryShownForSession = true;
     this.keys.clear();
-    const activeParkId = this.landingPage.getSelectedPark().id;
+    const activeParkId =
+      this.landingPage.getSelectedPark().id === 'airport_skatepark'
+        ? 'airport_skatepark'
+        : 'im_gefilde';
     const summary = this.progression.getSessionSummary(
       activeParkId,
       this.hud.totalScore,
@@ -744,6 +773,9 @@ class SurfskateMunichGame {
       },
       () => {
         this.pauseGameAndOpenLanding();
+      },
+      (park) => {
+        this.landingPage.openLeaderboardModal(park);
       }
     );
   }

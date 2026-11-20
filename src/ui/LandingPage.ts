@@ -3,6 +3,13 @@ import { SkaterVisuals } from '../entities/SkaterVisuals';
 import { ParkSurface } from '../physics/ParkSurface';
 import { SurfskateController } from '../physics/SurfskateController';
 import { GameModeId, SkaterRankInfo, SurfMission } from '../progression/SurfProgression';
+import {
+  fetchLeaderboard,
+  getPlayerName,
+  LeaderboardEntry,
+  LeaderboardPark,
+  setPlayerName,
+} from '../services/LeaderboardService';
 
 export type SelectorCategory = 'skater' | 'skatepark' | 'board';
 export type LandingFocusRow = 'skater' | 'park' | 'board' | 'mode' | 'start';
@@ -109,6 +116,13 @@ export class LandingPage {
   private modePillBtns: HTMLButtonElement[] = [];
   private rankBadgeEl: HTMLElement | null = null;
   private missionsListEl: HTMLElement | null = null;
+  private riderNameInputEl: HTMLInputElement | null = null;
+  private leaderboardModalEl: HTMLElement | null = null;
+  private lbListEl: HTMLElement | null = null;
+  private lbSourceBadgeEl: HTMLElement | null = null;
+  private lbTabBtns: HTMLButtonElement[] = [];
+  private activeLbPark: LeaderboardPark = 'all';
+  private lbFetchToken = 0;
 
   private modeDescriptions: Record<GameModeId, string> = {
     jam: '⏱️ 120s Highscore Hunt — Carve hot-spots, land tricks & collect pretzels.',
@@ -128,7 +142,10 @@ export class LandingPage {
     this.noteEl = document.getElementById('landing-ig-note')!;
     this.noteTextEl = document.getElementById('landing-ig-note-text')!;
     this.startBtnEl = document.getElementById('landing-start-btn')!;
-    this.playerNameEl = document.getElementById('landing-player-name') || this.overlayEl.querySelector('.sel-player-name');
+    this.playerNameEl =
+      document.getElementById('landing-skater-name') ||
+      this.overlayEl.querySelector('.sel-player-name');
+    this.riderNameInputEl = document.getElementById('landing-player-name') as HTMLInputElement | null;
     this.parkSubtitleEl = document.getElementById('landing-park-subtitle') || this.overlayEl.querySelector('#sel-section-skatepark .sel-subtitle');
     this.parkThumbImgEl = document.getElementById('landing-park-thumb') as HTMLImageElement || this.overlayEl.querySelector('.park-thumb');
     this.parkInspectBtnEl = document.getElementById('landing-park-inspect-btn');
@@ -462,11 +479,167 @@ export class LandingPage {
     termsOkBtn?.addEventListener('click', closeTerms);
     termsBackdrop?.addEventListener('click', closeTerms);
 
+    // Rider Name Input (Leaderboard Nickname)
+    if (this.riderNameInputEl) {
+      this.riderNameInputEl.value = getPlayerName();
+      this.riderNameInputEl.addEventListener('input', () => {
+        if (this.riderNameInputEl) {
+          setPlayerName(this.riderNameInputEl.value);
+        }
+      });
+      this.riderNameInputEl.addEventListener('blur', () => {
+        if (this.riderNameInputEl) {
+          this.riderNameInputEl.value = setPlayerName(this.riderNameInputEl.value);
+        }
+      });
+      this.riderNameInputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+          this.riderNameInputEl?.blur();
+        }
+      });
+    }
+
+    // Global Leaderboard Modal (#leaderboard-modal)
+    this.leaderboardModalEl = document.getElementById('leaderboard-modal');
+    this.lbListEl = document.getElementById('lb-list');
+    this.lbSourceBadgeEl = document.getElementById('lb-source-badge');
+    const lbOpenBtn = document.getElementById('btn-leaderboard');
+    const lbCloseBtn = document.getElementById('lb-modal-close');
+    const lbOkBtn = document.getElementById('lb-modal-ok-btn');
+    const lbBackdrop = document.getElementById('lb-modal-backdrop');
+
+    lbOpenBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.openLeaderboardModal('all');
+    });
+    lbCloseBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.closeLeaderboardModal();
+    });
+    lbOkBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.closeLeaderboardModal();
+    });
+    lbBackdrop?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.closeLeaderboardModal();
+    });
+
+    if (this.leaderboardModalEl) {
+      this.lbTabBtns = Array.from(
+        this.leaderboardModalEl.querySelectorAll<HTMLButtonElement>('#lb-tabs .lb-tab-btn')
+      );
+      this.lbTabBtns.forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const park = (btn.dataset.park || 'all') as LeaderboardPark;
+          void this.loadLeaderboardTab(park);
+        });
+      });
+    }
+
     this.updateActiveSectionVisuals();
   }
 
+  public syncRiderNameInput(): void {
+    if (this.riderNameInputEl) {
+      this.riderNameInputEl.value = getPlayerName();
+    }
+  }
+
+  public isLeaderboardModalOpen(): boolean {
+    return Boolean(this.leaderboardModalEl && !this.leaderboardModalEl.classList.contains('hidden'));
+  }
+
+  public openLeaderboardModal(park: LeaderboardPark = 'all'): void {
+    if (!this.leaderboardModalEl) return;
+    this.leaderboardModalEl.classList.remove('hidden');
+    void this.loadLeaderboardTab(park);
+  }
+
+  public closeLeaderboardModal(): void {
+    this.leaderboardModalEl?.classList.add('hidden');
+  }
+
+  private async loadLeaderboardTab(park: LeaderboardPark): Promise<void> {
+    this.activeLbPark = park;
+    this.lbTabBtns.forEach((btn) => {
+      const active = btn.dataset.park === park;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+
+    const token = ++this.lbFetchToken;
+    if (this.lbListEl) {
+      this.lbListEl.innerHTML = '<div class="lb-state-msg">⏳ Lade Rangliste...</div>';
+    }
+
+    const { entries, source } = await fetchLeaderboard(park, 15);
+    if (token !== this.lbFetchToken) return;
+
+    if (this.lbSourceBadgeEl) {
+      this.lbSourceBadgeEl.textContent = source === 'global' ? 'GLOBAL LIVE' : 'LOCAL PREVIEW';
+      this.lbSourceBadgeEl.classList.toggle('local', source !== 'global');
+    }
+
+    this.renderLeaderboardEntries(entries);
+  }
+
+  private renderLeaderboardEntries(entries: LeaderboardEntry[]): void {
+    if (!this.lbListEl) return;
+    if (entries.length === 0) {
+      this.lbListEl.innerHTML =
+        '<div class="lb-state-msg">🏄 Noch keine Scores eingetragen — starte eine 2-Min Session und hol dir Platz #1!</div>';
+      return;
+    }
+
+    const currentPlayer = getPlayerName().toLowerCase();
+    this.lbListEl.innerHTML = '';
+
+    for (const entry of entries) {
+      const row = document.createElement('div');
+      const rankClass = entry.rank <= 3 ? ` rank-${entry.rank}` : '';
+      const isMe = currentPlayer.length >= 2 && entry.name.toLowerCase() === currentPlayer;
+      row.className = `lb-row${rankClass}${isMe ? ' is-me' : ''}`;
+
+      const rankEl = document.createElement('span');
+      rankEl.className = 'lb-rank';
+      rankEl.textContent =
+        entry.rank === 1
+          ? '🥇'
+          : entry.rank === 2
+            ? '🥈'
+            : entry.rank === 3
+              ? '🥉'
+              : `#${entry.rank}`;
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'lb-name';
+      nameEl.textContent = isMe ? `${entry.name} (DU)` : entry.name;
+
+      const scoreEl = document.createElement('span');
+      scoreEl.className = 'lb-score';
+      scoreEl.textContent = entry.score.toLocaleString();
+
+      row.append(rankEl, nameEl, scoreEl);
+      this.lbListEl.appendChild(row);
+    }
+  }
+
   public handleKeyDown(code: string): void {
+    const activeEl = document.activeElement as HTMLElement | null;
+    const tag = activeEl?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || activeEl?.isContentEditable) {
+      return;
+    }
+
     if (code === 'Escape') {
+      if (this.isLeaderboardModalOpen()) {
+        this.closeLeaderboardModal();
+        return;
+      }
       const termsModal = document.getElementById('terms-modal');
       if (termsModal && !termsModal.classList.contains('hidden')) {
         termsModal.classList.add('hidden');
@@ -690,6 +863,10 @@ export class LandingPage {
 
   public startGame(): void {
     if (!this.isVisible) return;
+    if (this.riderNameInputEl) {
+      this.riderNameInputEl.value = setPlayerName(this.riderNameInputEl.value);
+    }
+    this.closeLeaderboardModal();
     const termsModal = document.getElementById('terms-modal');
     termsModal?.classList.add('hidden');
     this.isVisible = false;
@@ -707,6 +884,7 @@ export class LandingPage {
   public show(): void {
     this.isVisible = true;
     this.overlayEl.classList.remove('hidden');
+    this.syncRiderNameInput();
     this.updateActiveSectionVisuals();
     this.handleResize();
   }

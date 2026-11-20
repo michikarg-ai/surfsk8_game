@@ -3380,6 +3380,489 @@
           font-size: 20px;
         }
       }
+
+      /* =====================================================================
+         GLOBAL LEADERBOARD, RIDER NAME & SUMMARY HIGHSCORE (Issue #29)
+         ===================================================================== */
+      .landing-aux-pill-gold {
+        border-color: rgba(250, 204, 21, 0.65);
+        color: var(--yellow);
+        background: rgba(250, 204, 21, 0.12);
+      }
+      .landing-aux-pill-gold:hover {
+        border-color: #fde047;
+        background: rgba(250, 204, 21, 0.24);
+      }
+
+      .landing-rider-name-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(24, 22, 20, 0.72);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 7px;
+        padding: 4px 8px;
+        transition: border-color 0.18s ease, background 0.18s ease;
+      }
+      .landing-rider-name-row:focus-within {
+        border-color: var(--yellow);
+        background: rgba(30, 26, 22, 0.92);
+        box-shadow: 0 0 12px rgba(250, 204, 21, 0.25);
+      }
+      .landing-rider-label {
+        font-family: var(--font-hud);
+        font-size: 10.5px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        color: var(--yellow);
+        text-transform: uppercase;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .landing-rider-input {
+        flex: 1;
+        min-width: 0;
+        background: rgba(0, 0, 0, 0.42);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 4px;
+        padding: 4px 8px;
+        font-family: var(--font-hud);
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        color: #ffffff;
+        outline: none;
+        transition: border-color 0.15s ease;
+      }
+      .landing-rider-input::placeholder {
+        color: #94a3b8;
+        font-weight: 600;
+        font-size: 11.5px;
+      }
+      .landing-rider-input:focus {
+        border-color: var(--orange);
+      }
+      @media (max-height: 540px) and (orientation: landscape), (pointer: coarse) and (orientation: landscape) and (max-height: 640px) {
+        .landing-rider-name-row {
+          padding: 2px 6px;
+          gap: 6px;
+        }
+        .landing-rider-label {
+          font-size: 9px;
+        }
+        .landing-rider-input {
+          padding: 2px 6px;
+          font-size: 11.5px;
+        }
+      }
+
+      /* Leaderboard Modal (#leaderboard-modal) */
+      .lb-modal-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 9800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+      }
+      .lb-modal-overlay.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .lb-modal-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(6, 8, 12, 0.84);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+      .lb-modal-card {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        max-width: 560px;
+        max-height: 88dvh;
+        display: flex;
+        flex-direction: column;
+        background: linear-gradient(155deg, rgba(26, 23, 20, 0.98) 0%, rgba(14, 13, 12, 0.99) 100%);
+        border: 1.5px solid rgba(255, 255, 255, 0.22);
+        border-top: 4px solid var(--yellow);
+        border-radius: 10px;
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.9), 0 0 36px rgba(250, 204, 21, 0.18);
+        color: #f5f5f5;
+        overflow: hidden;
+      }
+      .lb-header {
+        padding: 16px 20px 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .lb-badge {
+        display: inline-block;
+        font-family: var(--font-hud);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        color: var(--orange);
+        text-transform: uppercase;
+        margin-bottom: 2px;
+      }
+      .lb-title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .lb-title {
+        font-family: var(--font-hud);
+        font-size: 24px;
+        font-weight: 900;
+        letter-spacing: 0.04em;
+        line-height: 1.05;
+        margin: 0;
+        color: #ffffff;
+        text-transform: uppercase;
+      }
+      .lb-source-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-family: var(--font-hud);
+        font-size: 10.5px;
+        font-weight: 800;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        padding: 2px 7px;
+        border-radius: 4px;
+        background: rgba(16, 185, 129, 0.16);
+        border: 1px solid rgba(16, 185, 129, 0.45);
+        color: #34d399;
+      }
+      .lb-source-badge.local {
+        background: rgba(148, 163, 184, 0.14);
+        border-color: rgba(148, 163, 184, 0.35);
+        color: #cbd5e1;
+      }
+      .lb-close-btn {
+        background: transparent;
+        border: none;
+        color: #9ca3af;
+        font-size: 28px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 2px 6px;
+        transition: color 0.15s ease;
+      }
+      .lb-close-btn:hover {
+        color: #ffffff;
+      }
+      .lb-tabs {
+        display: flex;
+        gap: 6px;
+        padding: 10px 20px;
+        background: rgba(0, 0, 0, 0.28);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .lb-tab-btn {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        color: #cbd5e1;
+        font-family: var(--font-hud);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        padding: 7px 6px;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        white-space: nowrap;
+      }
+      .lb-tab-btn:hover {
+        border-color: var(--yellow);
+        color: #ffffff;
+      }
+      .lb-tab-btn.active {
+        background: linear-gradient(135deg, #f2741f 0%, #d9460f 100%);
+        border-color: var(--yellow);
+        color: #ffffff;
+        box-shadow: 0 3px 12px rgba(242, 116, 31, 0.38);
+      }
+      .lb-body {
+        padding: 12px 20px;
+        overflow-y: auto;
+        flex: 1;
+        min-height: 220px;
+      }
+      .lb-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .lb-row {
+        display: grid;
+        grid-template-columns: 44px 1fr auto;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        font-family: var(--font-hud);
+      }
+      .lb-row.rank-1 {
+        background: linear-gradient(90deg, rgba(250, 204, 21, 0.22), rgba(250, 204, 21, 0.06));
+        border-color: rgba(250, 204, 21, 0.55);
+      }
+      .lb-row.rank-2 {
+        background: linear-gradient(90deg, rgba(226, 232, 240, 0.18), rgba(226, 232, 240, 0.05));
+        border-color: rgba(226, 232, 240, 0.42);
+      }
+      .lb-row.rank-3 {
+        background: linear-gradient(90deg, rgba(249, 115, 22, 0.2), rgba(249, 115, 22, 0.05));
+        border-color: rgba(249, 115, 22, 0.45);
+      }
+      .lb-row.is-me {
+        border-color: #00d6c3;
+        box-shadow: inset 0 0 0 1px rgba(0, 214, 195, 0.45), 0 0 14px rgba(0, 214, 195, 0.18);
+      }
+      .lb-rank {
+        font-size: 15px;
+        font-weight: 900;
+        color: #94a3b8;
+        text-align: center;
+      }
+      .lb-row.rank-1 .lb-rank {
+        color: #fde047;
+        font-size: 18px;
+      }
+      .lb-row.rank-2 .lb-rank {
+        color: #e2e8f0;
+        font-size: 17px;
+      }
+      .lb-row.rank-3 .lb-rank {
+        color: #fb923c;
+        font-size: 17px;
+      }
+      .lb-name {
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+        color: #f8fafc;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .lb-row.is-me .lb-name {
+        color: #5eead4;
+      }
+      .lb-score {
+        font-size: 16px;
+        font-weight: 900;
+        color: var(--yellow);
+        font-variant-numeric: tabular-nums;
+      }
+      .lb-state-msg {
+        text-align: center;
+        padding: 36px 14px;
+        font-family: var(--font-hud);
+        font-size: 14px;
+        font-weight: 700;
+        color: #94a3b8;
+      }
+      .lb-footer {
+        padding: 12px 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        background: rgba(14, 12, 10, 0.72);
+      }
+      .lb-footer-hint {
+        font-family: var(--font-hud);
+        font-size: 11px;
+        font-weight: 700;
+        color: #94a3b8;
+      }
+      .lb-ok-btn {
+        background: linear-gradient(135deg, #f2741f, #c2410c);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        color: #ffffff;
+        font-family: var(--font-hud);
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 7px 18px;
+        border-radius: 4px;
+        cursor: pointer;
+        transform: skewX(var(--skew));
+      }
+      .lb-ok-btn:hover {
+        background: linear-gradient(135deg, #ff8c3b, #d94b11);
+      }
+      body.reel-mode .lb-modal-card {
+        max-width: 94vw;
+      }
+      @media (max-width: 560px) {
+        .lb-tabs {
+          padding: 8px 12px;
+          gap: 4px;
+        }
+        .lb-tab-btn {
+          font-size: 10.5px;
+          padding: 6px 4px;
+        }
+        .lb-header,
+        .lb-body,
+        .lb-footer {
+          padding-left: 14px;
+          padding-right: 14px;
+        }
+      }
+
+      /* Session Summary Global Highscore Block */
+      .summary-lb-section {
+        background: rgba(0, 0, 0, 0.38);
+        border: 1px solid rgba(250, 204, 21, 0.28);
+        border-radius: 6px;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .summary-lb-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .summary-lb-title {
+        font-size: 13.5px;
+        font-weight: 900;
+        letter-spacing: 0.07em;
+        color: var(--yellow);
+        text-transform: uppercase;
+      }
+      .summary-lb-full-btn {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #e2e8f0;
+        font-family: var(--font-hud);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        padding: 3px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.14s ease;
+      }
+      .summary-lb-full-btn:hover {
+        border-color: var(--yellow);
+        color: var(--yellow);
+      }
+      .summary-lb-form {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .summary-lb-input {
+        flex: 1;
+        min-width: 0;
+        background: rgba(15, 14, 13, 0.9);
+        border: 1.5px solid rgba(255, 255, 255, 0.2);
+        border-radius: 5px;
+        padding: 6px 10px;
+        font-family: var(--font-hud);
+        font-size: 14px;
+        font-weight: 800;
+        color: #ffffff;
+        outline: none;
+      }
+      .summary-lb-input:focus {
+        border-color: var(--yellow);
+      }
+      .summary-lb-save-btn {
+        background: linear-gradient(135deg, #facc15, #f97316);
+        color: #111111;
+        border: none;
+        border-radius: 5px;
+        padding: 7px 12px;
+        font-family: var(--font-hud);
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: filter 0.14s ease, transform 0.14s ease;
+      }
+      .summary-lb-save-btn:hover {
+        filter: brightness(1.08);
+        transform: translateY(-1px);
+      }
+      .summary-lb-save-btn:disabled {
+        opacity: 0.6;
+        cursor: wait;
+      }
+      .summary-lb-status {
+        font-size: 12px;
+        font-weight: 700;
+        color: #cbd5e1;
+        min-height: 16px;
+      }
+      .summary-lb-status.success {
+        color: #34d399;
+      }
+      .summary-lb-status.error {
+        color: #f87171;
+      }
+      .summary-lb-list {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .summary-lb-row {
+        display: grid;
+        grid-template-columns: 32px 1fr auto;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 8px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.04);
+        font-size: 12.5px;
+        font-weight: 700;
+      }
+      .summary-lb-row.is-me {
+        background: rgba(0, 214, 195, 0.14);
+        border: 1px solid rgba(0, 214, 195, 0.45);
+        color: #5eead4;
+      }
+      .summary-lb-row-rank {
+        font-weight: 900;
+        color: #94a3b8;
+      }
+      .summary-lb-row-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .summary-lb-row-score {
+        font-weight: 900;
+        color: var(--yellow);
+        font-variant-numeric: tabular-nums;
+      }
     </style>
   </head>
   <body>
@@ -3402,6 +3885,9 @@
             <div class="landing-rank-badge" id="landing-rank-badge">🥉 LVL 1 • GROM</div>
           </div>
           <nav class="landing-utility-nav" aria-label="Game Utilities">
+            <button id="btn-leaderboard" type="button" class="landing-aux-pill landing-aux-pill-gold" title="Global Top Scores / Leaderboard">
+              <span class="aux-icon">🏆</span><span class="aux-text">TOP SCORES</span>
+            </button>
             <button id="landing-sound-btn" type="button" class="landing-aux-pill" title="Toggle Sound / Music [M]">
               <span class="aux-icon">🔊</span><span class="aux-text">SOUND</span>
             </button>
@@ -3441,7 +3927,7 @@
                 <div class="sel-picker">
                   <button class="sel-arrow" data-kind="skater" data-dir="-1" aria-label="Previous skater">&#10094;</button>
                   <div class="sel-info-center">
-                    <span class="sel-player-name" id="landing-player-name">LUKAS</span>
+                    <span class="sel-player-name" id="landing-skater-name">LUKAS</span>
                     <div class="sel-stats">
                       <span>FLOW 92</span>
                       <span>PUMP 88</span>
@@ -3588,6 +4074,20 @@
                   <button class="sel-arrow" data-kind="board" data-dir="1" aria-label="Next board">&#10095;</button>
                 </div>
               </div>
+
+              <!-- Rider Name (Leaderboard Nickname) -->
+              <div class="landing-rider-name-row">
+                <label for="landing-player-name" class="landing-rider-label">🏷️ RIDER</label>
+                <input
+                  id="landing-player-name"
+                  type="text"
+                  class="landing-rider-input"
+                  maxlength="16"
+                  autocomplete="nickname"
+                  spellcheck="false"
+                  placeholder="Rider Name (Leaderboard)"
+                />
+              </div>
             </div>
           </div>
 
@@ -3692,6 +4192,9 @@
                   </li>
                   <li>
                     <strong>Local Storage (<code class="terms-code">localStorage</code>):</strong> Zur Speicherung Ihrer persönlichen Einstellungen (Steuerungs-Modus <code class="terms-code">surfsk8.controlMode</code>, Grafik-Preset <code class="terms-code">surfsk8.graphicsPreset</code>), des Skater-Rangs &amp; Missions-Fortschritts (<code class="terms-code">surfsk8.progression.v1</code>) sowie Flow-Line-Bestzeiten &amp; Ghosts (<code class="terms-code">surfsk8.flowGhost.*</code>) nutzen wir den lokalen Speicher Ihres Browsers. Es findet keine Übertragung dieser Daten an Dritte statt.
+                  </li>
+                  <li>
+                    <strong>Globale Rangliste (Leaderboard / Upstash Redis):</strong> Wenn Sie freiwillig einen Rider-Namen (Nickname) eingeben und einen Highscore speichern, werden dieser Nickname und Ihr erzielter Score dauerhaft in <strong>Upstash Redis</strong> (über Vercel Serverless Functions) gespeichert, um die öffentliche globale Rangliste darzustellen (Art. 6 Abs. 1 lit. a/f DSGVO). Bitte verwenden Sie hierbei keinen Klarnamen.
                   </li>
                   <li>
                     <strong>Externe Links:</strong> Die Website enthält Verlinkungen zum externen sozialen Netzwerk Instagram (<a href="https://www.instagram.com/surfskate_munich/" target="_blank" rel="noopener noreferrer" class="terms-link">@surfskate_munich</a>). Beim Klick auf den Link gelten die Datenschutzbestimmungen von Meta Platforms.
@@ -3881,6 +4384,37 @@
         </div>
       </div>
 
+      <!-- Global Highscore Leaderboard Modal (#leaderboard-modal — Issue #29) -->
+      <div class="lb-modal-overlay hidden" id="leaderboard-modal" role="dialog" aria-modal="true" aria-labelledby="lb-modal-title">
+        <div class="lb-modal-backdrop" id="lb-modal-backdrop"></div>
+        <div class="lb-modal-card">
+          <div class="lb-header">
+            <div>
+              <span class="lb-badge">GLOBAL TOP 15 HIGHSCORES</span>
+              <div class="lb-title-row">
+                <h2 class="lb-title" id="lb-modal-title">🏆 TOP SCORES</h2>
+                <span class="lb-source-badge" id="lb-source-badge">GLOBAL LIVE</span>
+              </div>
+            </div>
+            <button id="lb-modal-close" class="lb-close-btn" type="button" aria-label="Close Leaderboard">&times;</button>
+          </div>
+          <div class="lb-tabs" id="lb-tabs" role="tablist" aria-label="Park Leaderboard Filter">
+            <button type="button" class="lb-tab-btn active" data-park="all" role="tab" aria-selected="true">🌍 ALL PARKS</button>
+            <button type="button" class="lb-tab-btn" data-park="im_gefilde" role="tab" aria-selected="false">🌲 IM WIESENGRUND</button>
+            <button type="button" class="lb-tab-btn" data-park="airport_skatepark" role="tab" aria-selected="false">✈️ AIRPORT PARK</button>
+          </div>
+          <div class="lb-body">
+            <div class="lb-list" id="lb-list">
+              <div class="lb-state-msg">⏳ Loading leaderboard...</div>
+            </div>
+          </div>
+          <div class="lb-footer">
+            <span class="lb-footer-hint">Jeder Rider behält seinen persönlichen Best-Score.</span>
+            <button id="lb-modal-ok-btn" type="button" class="lb-ok-btn">CLOSE</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Interactive Session Summary Modal (Issue #17 & #19) -->
       <div class="session-summary-overlay hidden" id="session-summary-modal" role="dialog" aria-modal="true" aria-labelledby="summary-medal-title">
         <div class="session-summary-backdrop" id="session-summary-backdrop"></div>
@@ -3921,6 +4455,27 @@
               <span class="summary-rank-sub">SURF-CHALLENGES</span>
             </div>
             <div id="summary-missions-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+          </div>
+
+          <div class="summary-lb-section">
+            <div class="summary-lb-header">
+              <span class="summary-lb-title" id="summary-lb-title">🏆 GLOBAL HIGHSCORE</span>
+              <button type="button" class="summary-lb-full-btn" id="summary-lb-open-full">TOP 15 ↗</button>
+            </div>
+            <div class="summary-lb-form">
+              <input
+                id="summary-player-name"
+                type="text"
+                class="summary-lb-input"
+                maxlength="16"
+                autocomplete="nickname"
+                spellcheck="false"
+                placeholder="Rider Name (min. 2 Zeichen)"
+              />
+              <button type="button" class="summary-lb-save-btn" id="summary-submit-score">🏆 SAVE</button>
+            </div>
+            <div class="summary-lb-status" id="summary-lb-status"></div>
+            <div class="summary-lb-list" id="summary-lb-list"></div>
           </div>
 
           <div class="summary-actions">
