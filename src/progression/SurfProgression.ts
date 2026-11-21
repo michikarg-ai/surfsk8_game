@@ -1,4 +1,5 @@
 import { ManeuverEvent, SurfskateController } from '../physics/SurfskateController';
+import { formatNum, onLangChange, t, TranslationKey } from '../i18n/i18n';
 
 export type GameModeId = 'jam' | 'flow_cup' | 'zen';
 
@@ -76,169 +77,79 @@ const NO_MEDAL: MedalInfo = {
 
 interface MissionTemplate {
   id: string;
-  title: string;
-  shortTitle: string;
   target: number;
   unit?: string;
+}
+
+function getMissionTitle(baseId: string): string {
+  return t(`mission.${baseId}.title` as TranslationKey);
+}
+
+function getMissionShortTitle(baseId: string): string {
+  return t(`mission.${baseId}.short` as TranslationKey);
+}
+
+function getMedalLabel(id: MedalInfo['id']): string {
+  return t(`medal.${id}` as TranslationKey);
+}
+
+function getMedalShortLabel(id: MedalInfo['id']): string {
+  switch (id) {
+    case 'bronze':
+      return t('medal.bronzeShort');
+    case 'silver':
+      return t('medal.silverShort');
+    case 'gold':
+      return t('medal.goldShort');
+    case 'sick':
+      return t('medal.sickShort');
+    default:
+      return t('medal.none');
+  }
 }
 
 const LEVEL_MISSION_SETS: MissionTemplate[][] = [
   // Level 1: Grom
   [
-    {
-      id: 'l1_carves_snaps',
-      title: 'Lande 3 Carves oder Snaps in einer Session',
-      shortTitle: '3 Carves / Snaps landen',
-      target: 3,
-    },
-    {
-      id: 'l1_pretzels_3',
-      title: 'Sammle 3 Brezeln im Park',
-      shortTitle: '3 Brezeln sammeln',
-      target: 3,
-    },
-    {
-      id: 'l1_score_2500',
-      title: 'Erreiche 2.500 Punkte Session-Score',
-      shortTitle: '2.500 PTS Session-Score',
-      target: 2500,
-      unit: 'PTS',
-    },
+    { id: 'l1_carves_snaps', target: 3 },
+    { id: 'l1_pretzels_3', target: 3 },
+    { id: 'l1_score_2500', target: 2500, unit: 'PTS' },
   ],
   // Level 2: Asphalt Surfer
   [
-    {
-      id: 'l2_bert_layback',
-      title: 'Lande 2 Bert Slides oder Laybacks',
-      shortTitle: '2 Bert Slides / Laybacks',
-      target: 2,
-    },
-    {
-      id: 'l2_combo_1500',
-      title: 'Erreiche eine 1.500-Punkte-Combo',
-      shortTitle: '1.500 PTS Combo stehen',
-      target: 1500,
-      unit: 'PTS',
-    },
-    {
-      id: 'l2_surfzone_8s',
-      title: 'Halte 8 Sekunden lang >= 80% Flow (Surf-Zone)',
-      shortTitle: '8s in der Surf-Zone (80%+ Flow)',
-      target: 8,
-      unit: 's',
-    },
+    { id: 'l2_bert_layback', target: 2 },
+    { id: 'l2_combo_1500', target: 1500, unit: 'PTS' },
+    { id: 'l2_surfzone_8s', target: 8, unit: 's' },
   ],
   // Level 3: Bowl Carver
   [
-    {
-      id: 'l3_flow_line',
-      title: "Schaffe eine 'Follow the Flow'-Line",
-      shortTitle: "'Follow the Flow'-Line schaffen",
-      target: 1,
-    },
-    {
-      id: 'l3_pretzels_5',
-      title: 'Sammle alle 5 Brezeln in einer Session',
-      shortTitle: 'Alle 5 Brezeln sammeln',
-      target: 5,
-    },
-    {
-      id: 'l3_score_12000',
-      title: 'Erreiche 12.000 Punkte (Silber-Medaille)',
-      shortTitle: '12.000 PTS (Silber-Medaille)',
-      target: 12000,
-      unit: 'PTS',
-    },
+    { id: 'l3_flow_line', target: 1 },
+    { id: 'l3_pretzels_5', target: 5 },
+    { id: 'l3_score_12000', target: 12000, unit: 'PTS' },
   ],
   // Level 4: Park Local
   [
-    {
-      id: 'l4_indy_360',
-      title: 'Lande 3 Indy Grabs oder 360 Airs',
-      shortTitle: '3 Indy Grabs / 360 Spins',
-      target: 3,
-    },
-    {
-      id: 'l4_hotspot_tricks',
-      title: 'Scorte 2 Tricks in einer 🔥 Hot-Spot-Zone',
-      shortTitle: '2 Tricks im 🔥 Hot-Spot',
-      target: 2,
-    },
-    {
-      id: 'l4_combo_4000',
-      title: 'Erreiche eine 4.000-Punkte-Combo',
-      shortTitle: '4.000 PTS Combo stehen',
-      target: 4000,
-      unit: 'PTS',
-    },
+    { id: 'l4_indy_360', target: 3 },
+    { id: 'l4_hotspot_tricks', target: 2 },
+    { id: 'l4_combo_4000', target: 4000, unit: 'PTS' },
   ],
   // Level 5: Style Master
   [
-    {
-      id: 'l5_perfect_tricks',
-      title: 'Lande 4 verschiedene Surf-Tricks in einer Session',
-      shortTitle: '4 verschiedene Surf-Tricks',
-      target: 4,
-    },
-    {
-      id: 'l5_surfzone_15s',
-      title: 'Halte 15 Sekunden lang >= 80% Flow (Surf-Zone)',
-      shortTitle: '15s in der Surf-Zone (80%+ Flow)',
-      target: 15,
-      unit: 's',
-    },
-    {
-      id: 'l5_score_25000',
-      title: 'Erreiche 25.000 Punkte (Gold-Medaille)',
-      shortTitle: '25.000 PTS (Gold-Medaille)',
-      target: 25000,
-      unit: 'PTS',
-    },
+    { id: 'l5_perfect_tricks', target: 4 },
+    { id: 'l5_surfzone_15s', target: 15, unit: 's' },
+    { id: 'l5_score_25000', target: 25000, unit: 'PTS' },
   ],
   // Level 6+: Soul Surfer Legend (Rotating Pro Challenges Set A)
   [
-    {
-      id: 'l6_hotspot_4',
-      title: 'Scorte 4 Tricks in einer 🔥 Hot-Spot-Zone',
-      shortTitle: '4 Tricks im 🔥 Hot-Spot',
-      target: 4,
-    },
-    {
-      id: 'l6_combo_8000',
-      title: 'Erreiche eine 8.000-Punkte-Monster-Combo',
-      shortTitle: '8.000 PTS Monster-Combo',
-      target: 8000,
-      unit: 'PTS',
-    },
-    {
-      id: 'l6_score_45000',
-      title: 'Erreiche 45.000 Punkte (💎 Sick Score)',
-      shortTitle: '45.000 PTS (💎 Sick Score)',
-      target: 45000,
-      unit: 'PTS',
-    },
+    { id: 'l6_hotspot_4', target: 4 },
+    { id: 'l6_combo_8000', target: 8000, unit: 'PTS' },
+    { id: 'l6_score_45000', target: 45000, unit: 'PTS' },
   ],
   // Level 7+: Rotating Pro Challenges Set B
   [
-    {
-      id: 'l7_flow_lines_2',
-      title: "Schaffe 2 'Follow the Flow'-Lines in einer Session",
-      shortTitle: "2 'Follow the Flow'-Lines",
-      target: 2,
-    },
-    {
-      id: 'l7_surfzone_22s',
-      title: 'Halte 22 Sekunden lang >= 80% Flow (Surf-Zone)',
-      shortTitle: '22s in der Surf-Zone',
-      target: 22,
-      unit: 's',
-    },
-    {
-      id: 'l7_snaps_5',
-      title: 'Lande 5 Snaps oder Bert Slides an der Lip',
-      shortTitle: '5 Snaps / Bert Slides',
-      target: 5,
-    },
+    { id: 'l7_flow_lines_2', target: 2 },
+    { id: 'l7_surfzone_22s', target: 22, unit: 's' },
+    { id: 'l7_snaps_5', target: 5 },
   ],
 ];
 
@@ -262,6 +173,17 @@ export class SurfProgression {
   constructor() {
     this.state = this.loadState();
     this.rebuildActiveMissions();
+    onLangChange(() => {
+      this.refreshMissionTexts();
+    });
+  }
+
+  public refreshMissionTexts(): void {
+    for (const m of this.missions) {
+      const baseId = m.id.replace(/_lvl\d+$/, '');
+      m.title = getMissionTitle(baseId);
+      m.shortTitle = getMissionShortTitle(baseId);
+    }
   }
 
   private loadState(): PersistedProgressionState {
@@ -328,10 +250,11 @@ export class SurfProgression {
     const templates = this.getTemplatesForLevel(this.state.rankLevel);
     this.missions = templates.map((tpl) => {
       const done = this.state.completedMissionIds.includes(tpl.id);
+      const baseId = tpl.id.replace(/_lvl\d+$/, '');
       return {
         id: tpl.id,
-        title: tpl.title,
-        shortTitle: tpl.shortTitle,
+        title: getMissionTitle(baseId),
+        shortTitle: getMissionShortTitle(baseId),
         target: tpl.target,
         progress: done ? tpl.target : 0,
         completed: done,
@@ -530,13 +453,14 @@ export class SurfProgression {
     nextMedal: MedalInfo | null;
     pointsToNextMedal: number;
   } {
-    let earned: MedalInfo = NO_MEDAL;
-    let next: MedalInfo | null = PARK_MEDALS[0];
+    let earned: MedalInfo = { ...NO_MEDAL, label: getMedalLabel('none') };
+    let next: MedalInfo | null = { ...PARK_MEDALS[0], label: getMedalLabel(PARK_MEDALS[0].id) };
 
     for (let i = 0; i < PARK_MEDALS.length; i++) {
       if (score >= PARK_MEDALS[i].threshold) {
-        earned = PARK_MEDALS[i];
-        next = PARK_MEDALS[i + 1] ?? null;
+        earned = { ...PARK_MEDALS[i], label: getMedalLabel(PARK_MEDALS[i].id) };
+        const nextTpl = PARK_MEDALS[i + 1];
+        next = nextTpl ? { ...nextTpl, label: getMedalLabel(nextTpl.id) } : null;
       }
     }
 
@@ -605,20 +529,34 @@ export class SurfProgression {
     if (nextMedal && pointsToNextMedal > 0) {
       const ratio = score / nextMedal.threshold;
       if (ratio >= 0.62 || pointsToNextMedal <= 2500) {
-        return `🔥 FAST ${nextMedal.label.replace(' MEDAILLE', '')}! Nur noch ${pointsToNextMedal.toLocaleString()} Punkte bis ${nextMedal.icon} ${nextMedal.label}! Versuch's direkt nochmal!`;
+        return t('nearmiss.medalClose', {
+          medalShort: getMedalShortLabel(nextMedal.id),
+          pts: formatNum(pointsToNextMedal),
+          icon: nextMedal.icon,
+          medalLabel: nextMedal.label,
+        });
       }
     }
 
     if (halfDoneMission) {
       const rem = Math.max(1, halfDoneMission.target - halfDoneMission.progress);
       const unitStr = halfDoneMission.unit ? ` ${halfDoneMission.unit}` : '';
-      return `⚡ FAST GESCHAFFT: Noch ${rem.toLocaleString()}${unitStr} für deine Mission „${halfDoneMission.shortTitle}“!`;
+      return t('nearmiss.missionHalf', {
+        rem: formatNum(rem),
+        unit: unitStr,
+        mission: halfDoneMission.shortTitle,
+      });
     }
 
     if (nextMedal) {
-      return `🎯 NÄCHSTES ZIEL: Noch ${pointsToNextMedal.toLocaleString()} Punkte bis ${nextMedal.icon} ${nextMedal.label} (${nextMedal.threshold.toLocaleString()} PTS)!`;
+      return t('nearmiss.nextGoal', {
+        pts: formatNum(pointsToNextMedal),
+        icon: nextMedal.icon,
+        medalLabel: nextMedal.label,
+        threshold: formatNum(nextMedal.threshold),
+      });
     }
 
-    return `👑 SICK SCORE LEGEND! Du hast den Park komplett dominiert — knackst du deinen eigenen Rekord?`;
+    return t('nearmiss.sickLegend');
   }
 }

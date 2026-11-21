@@ -10,6 +10,14 @@ import {
   LeaderboardPark,
   setPlayerName,
 } from '../services/LeaderboardService';
+import {
+  applyDomTranslations,
+  formatNum,
+  getLang,
+  onLangChange,
+  t,
+  toggleLang,
+} from '../i18n/i18n';
 
 export type SelectorCategory = 'skater' | 'skatepark' | 'board';
 export type LandingFocusRow = 'skater' | 'park' | 'board' | 'mode' | 'start';
@@ -137,12 +145,28 @@ export class LandingPage {
   private lbTabBtns: HTMLButtonElement[] = [];
   private activeLbPark: LeaderboardPark = 'all';
   private lbFetchToken = 0;
+  private langToggleBtnEl: HTMLElement | null = null;
+  private lastIsFs = false;
+  private lastSoundActive = true;
+  private lastQualityPreset = 'auto';
+  private lastQualityEffective = 'high';
+  private lastRank: SkaterRankInfo | null = null;
+  private lastMissions: SurfMission[] = [];
+  private lastLbEntries: LeaderboardEntry[] = [];
+  private lastLbSource: 'global' | 'local' = 'global';
+  private lbHasLoaded = false;
 
-  private modeDescriptions: Record<GameModeId, string> = {
-    jam: '⏱️ 120s Highscore Hunt — Carve hot-spots, land tricks & collect pretzels.',
-    flow_cup: '🌊 Follow the Flow — Carve through gates, keep momentum & lock lines.',
-    zen: '🌅 Endless Free Surf — No timer, no stress: cruise the bowl & carve sunset lines.',
-  };
+  private getModeDesc(mode: GameModeId): string {
+    switch (mode) {
+      case 'flow_cup':
+        return t('mode.flowCupDesc');
+      case 'zen':
+        return t('mode.zenDesc');
+      case 'jam':
+      default:
+        return t('mode.jamDesc');
+    }
+  }
 
   constructor(
     parkSurface: ParkSurface,
@@ -170,8 +194,9 @@ export class LandingPage {
     this.soundBtnEl = document.getElementById('landing-sound-btn');
     this.modeDescEl = document.getElementById('landing-mode-desc');
     this.missionsCountEl = document.getElementById('landing-missions-count');
+    this.langToggleBtnEl = document.getElementById('btn-lang-toggle');
     if (this.modeDescEl) {
-      this.modeDescEl.textContent = this.modeDescriptions[this.selectedGameMode] || this.modeDescriptions.jam;
+      this.modeDescEl.textContent = this.getModeDesc(this.selectedGameMode);
     }
 
     this.renderer = new THREE.WebGLRenderer({
@@ -236,7 +261,40 @@ export class LandingPage {
     this.skaterVisuals.trailMesh.visible = false;
 
     this.bindUIEvents();
+    this.updateLangToggleDisplay();
+    applyDomTranslations(document);
+    onLangChange(() => {
+      this.refreshLocalizedUI();
+    });
     this.handleResize();
+  }
+
+  private updateLangToggleDisplay(): void {
+    if (!this.langToggleBtnEl) return;
+    const lang = getLang();
+    this.langToggleBtnEl.querySelectorAll<HTMLElement>('[data-lang-opt]').forEach((el) => {
+      el.classList.toggle('active', el.getAttribute('data-lang-opt') === lang);
+    });
+  }
+
+  private refreshLocalizedUI(): void {
+    this.updateLangToggleDisplay();
+    if (this.modeDescEl) {
+      this.modeDescEl.textContent = this.getModeDesc(this.selectedGameMode);
+    }
+    this.updateFullscreenLabel(this.lastIsFs);
+    this.updateSoundLabel(this.lastSoundActive);
+    this.updateQualityLabel(this.lastQualityPreset, this.lastQualityEffective);
+    if (this.lastRank) {
+      this.updateProgressionDisplay(this.lastRank, this.lastMissions);
+    }
+    if (this.lbHasLoaded) {
+      if (this.lbSourceBadgeEl) {
+        this.lbSourceBadgeEl.textContent =
+          this.lastLbSource === 'global' ? t('lb.sourceGlobal') : t('lb.sourceLocal');
+      }
+      this.renderLeaderboardEntries(this.lastLbEntries);
+    }
   }
 
   public async load(): Promise<void> {
@@ -302,7 +360,7 @@ export class LandingPage {
     } catch {}
     this.syncModePills();
     if (this.modeDescEl) {
-      this.modeDescEl.textContent = this.modeDescriptions[mode] || this.modeDescriptions.jam;
+      this.modeDescEl.textContent = this.getModeDesc(mode);
     }
     this.onSelectGameMode?.(mode);
   }
@@ -314,20 +372,23 @@ export class LandingPage {
   }
 
   public updateProgressionDisplay(rank: SkaterRankInfo, missions: SurfMission[]): void {
+    this.lastRank = rank;
+    this.lastMissions = missions;
     if (this.rankBadgeEl) {
       this.rankBadgeEl.textContent = rank.fullLabel;
     }
     if (this.missionsCountEl) {
       const done = missions.filter((m) => m.completed).length;
-      this.missionsCountEl.textContent = `${done}/${missions.length} DONE`;
+      this.missionsCountEl.textContent = t('landing.missionsCount', { done, total: missions.length });
     }
     if (this.missionsListEl) {
+      const doneText = t('common.done');
       this.missionsListEl.innerHTML = missions
         .map((m) => {
           const check = m.completed ? '☑️' : '⬜';
           const progStr = m.completed
-            ? 'DONE'
-            : `${m.progress.toLocaleString()}/${m.target.toLocaleString()}${m.unit ? ' ' + m.unit : ''}`;
+            ? doneText
+            : `${formatNum(m.progress)}/${formatNum(m.target)}${m.unit ? ' ' + m.unit : ''}`;
           return `
             <div class="landing-mission-row ${m.completed ? 'done' : ''}">
               <span class="m-title">${check} ${m.shortTitle}</span>
@@ -367,6 +428,13 @@ export class LandingPage {
       this.soundBtnEl.addEventListener('click', (e) => {
         e.stopPropagation();
         this.onToggleSound?.();
+      });
+    }
+
+    if (this.langToggleBtnEl) {
+      this.langToggleBtnEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleLang();
       });
     }
 
@@ -615,14 +683,19 @@ export class LandingPage {
 
     const token = ++this.lbFetchToken;
     if (this.lbListEl) {
-      this.lbListEl.innerHTML = '<div class="lb-state-msg">⏳ Lade Rangliste...</div>';
+      this.lbListEl.innerHTML = `<div class="lb-state-msg">${t('lb.loading')}</div>`;
     }
 
     const { entries, source } = await fetchLeaderboard(park, 15);
     if (token !== this.lbFetchToken) return;
 
+    this.lastLbEntries = entries;
+    this.lastLbSource = source;
+    this.lbHasLoaded = true;
+
     if (this.lbSourceBadgeEl) {
-      this.lbSourceBadgeEl.textContent = source === 'global' ? 'GLOBAL LIVE' : 'LOCAL PREVIEW';
+      this.lbSourceBadgeEl.textContent =
+        source === 'global' ? t('lb.sourceGlobal') : t('lb.sourceLocal');
       this.lbSourceBadgeEl.classList.toggle('local', source !== 'global');
     }
 
@@ -632,12 +705,12 @@ export class LandingPage {
   private renderLeaderboardEntries(entries: LeaderboardEntry[]): void {
     if (!this.lbListEl) return;
     if (entries.length === 0) {
-      this.lbListEl.innerHTML =
-        '<div class="lb-state-msg">🏄 Noch keine Scores eingetragen — starte eine 2-Min Session und hol dir Platz #1!</div>';
+      this.lbListEl.innerHTML = `<div class="lb-state-msg">${t('lb.empty')}</div>`;
       return;
     }
 
     const currentPlayer = getPlayerName().toLowerCase();
+    const youTag = t('lb.youTag');
     this.lbListEl.innerHTML = '';
 
     for (const entry of entries) {
@@ -659,11 +732,11 @@ export class LandingPage {
 
       const nameEl = document.createElement('span');
       nameEl.className = 'lb-name';
-      nameEl.textContent = isMe ? `${entry.name} (DU)` : entry.name;
+      nameEl.textContent = isMe ? `${entry.name} (${youTag})` : entry.name;
 
       const scoreEl = document.createElement('span');
       scoreEl.className = 'lb-score';
-      scoreEl.textContent = entry.score.toLocaleString();
+      scoreEl.textContent = formatNum(entry.score);
 
       row.append(rankEl, nameEl, scoreEl);
       this.lbListEl.appendChild(row);
@@ -871,11 +944,12 @@ export class LandingPage {
   }
 
   public updateFullscreenLabel(isFs: boolean): void {
+    this.lastIsFs = isFs;
     if (this.fullscreenBtnEl) {
       const iconPath = isFs
         ? 'M4 14h6m0 0v6m0-6L3 21m17-7h-6m0 0v6m0-6l7 7M10 4v6m0 0H4m6 0L3 3m10 7h6m-6 0V4m0 6l7-7'
         : 'M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3';
-      const label = isFs ? 'EXIT FULLSCREEN' : 'FULLSCREEN';
+      const label = isFs ? t('nav.exitFullscreen') : t('nav.fullscreen');
       this.fullscreenBtnEl.innerHTML = `
         <svg class="landing-fs-icon aux-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="${iconPath}"/>
@@ -886,9 +960,10 @@ export class LandingPage {
   }
 
   public updateSoundLabel(isActive: boolean): void {
+    this.lastSoundActive = isActive;
     if (this.soundBtnEl) {
       const icon = isActive ? '🔊' : '🔇';
-      const text = isActive ? 'SOUND: ON' : 'SOUND: OFF';
+      const text = isActive ? t('nav.soundOn') : t('nav.soundOff');
       const iconEl = this.soundBtnEl.querySelector('.aux-icon');
       const textEl = this.soundBtnEl.querySelector('.aux-text');
       if (iconEl && textEl) {
@@ -972,9 +1047,11 @@ export class LandingPage {
   }
 
   public updateQualityLabel(preset: string, effective: string): void {
+    this.lastQualityPreset = preset;
+    this.lastQualityEffective = effective;
     if (!this.qualityBtnEl) return;
     const label = preset === 'auto' ? `AUTO (${effective.toUpperCase()})` : preset.toUpperCase();
-    this.qualityBtnEl.innerHTML = `<span class="aux-icon">⚡</span> <span class="aux-text">QUALITY: ${label}</span>`;
+    this.qualityBtnEl.innerHTML = `<span class="aux-icon">⚡</span> <span class="aux-text">${t('nav.qualityLabel', { label })}</span>`;
   }
 
   public update(timeSec: number, dt: number): void {

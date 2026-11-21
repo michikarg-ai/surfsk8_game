@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SurfHUD } from '../ui/SurfHUD';
 import { SurfAudio } from '../audio/SurfAudio';
 import { track } from '@vercel/analytics';
+import { t } from '../i18n/i18n';
 
 export interface PretzelConfig {
   id: number;
@@ -309,11 +310,14 @@ export class PretzelCollectibles {
     if (isAllCollected) {
       // 500 bonus points for finding all 5 pretzels!
       this.hud.addBonusScore(50 + 500);
-      this.hud.showTrickBanner('🥨 ALLE BRETZELN! +500 BONUS!', true);
+      this.hud.showTrickBanner(t('pretzel.allBonus'), true);
     } else {
       // 50 points per pretzel
       this.hud.addBonusScore(50);
-      this.hud.showTrickBanner(`🥨 BRETZEL! +50 (${this.collectedCount}/${this.totalCount})`, false);
+      this.hud.showTrickBanner(
+        t('pretzel.single', { count: this.collectedCount, total: this.totalCount }),
+        false
+      );
     }
 
     this.hud.updatePretzelCount(this.collectedCount, this.totalCount);

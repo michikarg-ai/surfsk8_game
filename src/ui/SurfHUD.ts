@@ -11,6 +11,7 @@ import {
   submitScore,
   ValidLeaderboardPark,
 } from '../services/LeaderboardService';
+import { formatNum, onLangChange, t } from '../i18n/i18n';
 
 export type DriveControlMode = 'arrows' | 'wasd';
 
@@ -113,6 +114,24 @@ export class SurfHUD {
   private coachHintEl: HTMLDivElement;
   private snapBannerAnimation: Animation | null = null;
   private flowLineHint: string | null = null;
+
+  // Cached state for live language switching
+  private lastBtnState?: {
+    aspect: AspectMode;
+    atmosphere: AtmosphereMode;
+    cameraStyle: CameraStyle;
+    truckPreset: TruckFeelPreset;
+    autoFlow: boolean;
+    musicActive: boolean;
+    trackLabel: string;
+  };
+  private lastQualityState?: {
+    preset: 'auto' | 'high' | 'medium' | 'low';
+    effective: 'high' | 'medium' | 'low';
+  };
+  private lastTouchEnabled?: boolean;
+  private lastIsFullscreen?: boolean;
+  private lastMissionsState?: { rank: SkaterRankInfo; missions: SurfMission[] };
 
   constructor(private callbacks: HUDCallbacks) {
     this.injectSnapStyles();
@@ -264,6 +283,38 @@ export class SurfHUD {
       this.btnQualityEl.addEventListener('click', () => this.callbacks.onCycleQuality?.());
     }
     btnResetEl.addEventListener('click', () => this.callbacks.onResetSession());
+
+    onLangChange(() => {
+      this.refreshLocalizedUI();
+    });
+  }
+
+  private refreshLocalizedUI(): void {
+    this.setControlMode(this.controlMode);
+    if (this.lastBtnState) {
+      const s = this.lastBtnState;
+      this.updateButtons(
+        s.aspect,
+        s.atmosphere,
+        s.cameraStyle,
+        s.truckPreset,
+        s.autoFlow,
+        s.musicActive,
+        s.trackLabel
+      );
+    }
+    if (this.lastQualityState) {
+      this.updateQualityButton(this.lastQualityState.preset, this.lastQualityState.effective);
+    }
+    if (this.lastTouchEnabled !== undefined) {
+      this.updateTouchButton(this.lastTouchEnabled);
+    }
+    if (this.lastIsFullscreen !== undefined) {
+      this.updateFullscreenState(this.lastIsFullscreen);
+    }
+    if (this.lastMissionsState) {
+      this.updateMissionsWidget(this.lastMissionsState.rank, this.lastMissionsState.missions);
+    }
   }
 
   public onManeuver(ev: ManeuverEvent): void {
@@ -309,11 +360,11 @@ export class SurfHUD {
 
     // 2. Session Timer (2:00 countdown, Overtime-Combo, or Endless Zen)
     if (isZen) {
-      this.timerEl.textContent = '∞ ZEN SURF';
+      this.timerEl.textContent = t('hud.zenTimer');
       this.timerEl.classList.remove('urgent', 'overtime');
       this.sessionBlockEl?.classList.remove('overtime');
       this.sessionBlockEl?.classList.add('zen-mode');
-      if (this.sessionLabelEl) this.sessionLabelEl.textContent = 'Free Surf';
+      if (this.sessionLabelEl) this.sessionLabelEl.textContent = t('hud.freeSurf');
     } else {
       this.sessionBlockEl?.classList.remove('zen-mode');
       if (!this.sessionEnded) {
@@ -341,15 +392,15 @@ export class SurfHUD {
       }
 
       if (this.isOvertime && !this.sessionEnded) {
-        this.timerEl.textContent = '🔥 OVERTIME!';
+        this.timerEl.textContent = t('hud.overtime');
         this.timerEl.classList.remove('urgent');
         this.timerEl.classList.add('overtime');
         this.sessionBlockEl?.classList.add('overtime');
-        if (this.sessionLabelEl) this.sessionLabelEl.textContent = 'Keep Combo Alive!';
+        if (this.sessionLabelEl) this.sessionLabelEl.textContent = t('hud.keepCombo');
       } else {
         this.timerEl.classList.remove('overtime');
         this.sessionBlockEl?.classList.remove('overtime');
-        if (this.sessionLabelEl) this.sessionLabelEl.textContent = 'Session';
+        if (this.sessionLabelEl) this.sessionLabelEl.textContent = t('hud.session');
         const mins = Math.floor(this.sessionTimeRemaining / 60);
         const secs = Math.floor(this.sessionTimeRemaining % 60);
         const tenths = Math.floor((this.sessionTimeRemaining % 1) * 10);
@@ -374,7 +425,7 @@ export class SurfHUD {
     this.flowTrackEl.classList.toggle('surf-zone', inSurfZone);
     this.flowCardEl?.classList.toggle('surf-zone', inSurfZone);
     if (this.flowTitleEl) {
-      this.flowTitleEl.textContent = inSurfZone ? '🔥 SURF-ZONE 1.5X' : 'Flow';
+      this.flowTitleEl.textContent = inSurfZone ? t('hud.surfZone') : t('hud.flow');
     }
     const activeSegs = Math.round((flowPct / 100) * this.flowSegEls.length);
     for (let i = 0; i < this.flowSegEls.length; i++) {
@@ -383,7 +434,7 @@ export class SurfHUD {
 
     // Pump rhythm feedback ribbon (right edge): only show on PERFECT PUMP, otherwise hidden
     if (ctrl.pumpSyncQuality === 'PERFECT PUMP!') {
-      this.pumpBadgeEl.textContent = 'PERFECT PUMP';
+      this.pumpBadgeEl.textContent = t('hud.perfectPump');
       this.pumpBadgeEl.className = 'pump-badge perfect';
     } else {
       this.pumpBadgeEl.className = 'pump-badge neutral';
@@ -400,20 +451,20 @@ export class SurfHUD {
       this.snapHintEl.textContent = ctrl.snapFeedback;
       this.snapHintEl.className = 'visible fail';
     } else if (ctrl.indyGrabReady && !ctrl.indyGrabActive) {
-      this.snapHintEl.textContent = 'INDY GRAB — HOLD SPACE';
+      this.snapHintEl.textContent = t('hud.indyHold');
       this.snapHintEl.className = 'visible ready';
     } else if (ctrl.indyGrabActive) {
-      this.snapHintEl.textContent = 'TWEAK THE INDY!';
+      this.snapHintEl.textContent = t('hud.indyTweak');
       this.snapHintEl.className = 'visible ready';
     } else if (ctrl.snapWindow === 'READY' && !ctrl.snapActive) {
       const snapKey = this.controlMode === 'arrows' ? 'Q' : 'O';
-      this.snapHintEl.textContent = `SNAP READY — press ${snapKey}`;
+      this.snapHintEl.textContent = t('hud.snapReady', { key: snapKey });
       this.snapHintEl.className = 'visible ready';
     } else if (ctrl.snapWindow === 'TOO_SLOW') {
-      this.snapHintEl.textContent = 'Too slow to snap';
+      this.snapHintEl.textContent = t('hud.snapTooSlow');
       this.snapHintEl.className = 'visible dim';
     } else if (ctrl.snapWindow === 'TOO_FAST') {
-      this.snapHintEl.textContent = 'Too fast to snap';
+      this.snapHintEl.textContent = t('hud.snapTooFast');
       this.snapHintEl.className = 'visible dim';
     } else {
       this.snapHintEl.className = '';
@@ -428,7 +479,9 @@ export class SurfHUD {
     }
 
     if (ctrl.isBailing) {
-      this.coachHintEl.textContent = `WIPEOUT: ${ctrl.bailReason || 'Lande gerade in Fahrtrichtung!'}`;
+      this.coachHintEl.textContent = t('hud.wipeoutPrefix', {
+        reason: ctrl.bailReason || t('hud.wipeoutFallback'),
+      });
       this.coachHintEl.className = 'visible bail';
     } else if (this.flowLineHint) {
       this.coachHintEl.textContent = this.flowLineHint;
@@ -442,6 +495,7 @@ export class SurfHUD {
         hint = hint
           .replace(/press [↑W] once to push off/i, 'tap ▲ PUMP to push off')
           .replace(/press [↑W]/i, 'tap ▲ PUMP')
+          .replace(/drücke [↑W] einmal zum Pushen/i, 'tippe ▲ PUMP zum Losfahren')
           .replace(/← →/g, '◀ ▶');
       }
       this.coachHintEl.textContent = hint;
@@ -451,10 +505,10 @@ export class SurfHUD {
         document.body.classList.contains('has-touch-controls') ||
         (typeof window !== 'undefined' && window.innerWidth <= 960);
       if (isTouch) {
-        this.coachHintEl.textContent = 'Tap ▲ PUMP to push off';
+        this.coachHintEl.textContent = t('hud.pushTouch');
       } else {
         const pushKey = this.controlMode === 'arrows' ? '↑' : 'W';
-        this.coachHintEl.textContent = `Press ${pushKey} once to push off`;
+        this.coachHintEl.textContent = t('hud.pushKey', { key: pushKey });
       }
       this.coachHintEl.className = 'visible idle';
     } else {
@@ -640,9 +694,9 @@ export class SurfHUD {
     this.totalScore += points;
     if (this.totalScore > this.bestCombo) {
       this.bestCombo = this.totalScore;
-      this.bestComboEl.textContent = this.bestCombo.toLocaleString();
+      this.bestComboEl.textContent = formatNum(this.bestCombo);
     }
-    this.scoreEl.textContent = this.totalScore.toLocaleString();
+    this.scoreEl.textContent = formatNum(this.totalScore);
     this.scoreEl.style.transform = 'scale3d(1.22, 1.22, 1)';
     this.scoreEl.style.color = '#fbbf24';
     setTimeout(() => {
@@ -719,26 +773,28 @@ export class SurfHUD {
     }
     this.hotSpotPillEl.classList.remove('hidden');
     this.hotSpotPillEl.classList.toggle('inside', isInside);
-    const secStr = `${Math.ceil(remainingSec)}s`;
+    const sec = Math.ceil(remainingSec);
     this.hotSpotPillTextEl.textContent = isInside
-      ? `🔥 2X HOT SPOT ACTIVE • ${spotName} (${secStr})`
-      : `🔥 HOT SPOT: ${spotName} (2X SCORE — ${secStr})`;
+      ? t('hud.hotSpotInside', { spot: spotName, sec })
+      : t('hud.hotSpotOutside', { spot: spotName, sec });
   }
 
   public updateMissionsWidget(rank: SkaterRankInfo, missions: SurfMission[]): void {
+    this.lastMissionsState = { rank, missions };
     if (this.hudRankLabelEl) {
       this.hudRankLabelEl.textContent = rank.fullLabel;
     }
     if (this.dockRankTitleEl) {
-      this.dockRankTitleEl.textContent = `Surf-Challenges • ${rank.fullLabel}`;
+      this.dockRankTitleEl.textContent = t('hud.surfChallengesRank', { rank: rank.fullLabel });
     }
 
+    const doneText = t('common.done');
     const html = missions
       .map((m) => {
         const check = m.completed ? '☑️' : '⬜';
         const progStr = m.completed
-          ? 'DONE'
-          : `${m.progress.toLocaleString()}/${m.target.toLocaleString()}${m.unit ? ' ' + m.unit : ''}`;
+          ? doneText
+          : `${formatNum(m.progress)}/${formatNum(m.target)}${m.unit ? ' ' + m.unit : ''}`;
         return `
           <div class="hud-mission-item ${m.completed ? 'done' : ''}">
             <span>${check} ${m.shortTitle}</span>
@@ -797,20 +853,21 @@ export class SurfHUD {
     if (iconEl) iconEl.textContent = summary.medal.icon;
     if (titleEl) titleEl.textContent = summary.medal.label;
     if (hsBadgeEl) hsBadgeEl.classList.toggle('hidden', !summary.isNewHighScore);
-    if (scoreEl) scoreEl.textContent = summary.score.toLocaleString();
-    if (comboEl) comboEl.textContent = summary.bestCombo.toLocaleString();
+    if (scoreEl) scoreEl.textContent = formatNum(summary.score);
+    if (comboEl) comboEl.textContent = formatNum(summary.bestCombo);
     if (pretzelsEl) pretzelsEl.textContent = `🥨 ${summary.pretzels}/5`;
     if (nearMissEl) nearMissEl.textContent = summary.nearMissHint;
     if (rankEl) rankEl.textContent = summary.rank.fullLabel;
 
     if (missionsListEl) {
+      const completeText = t('summary.missionComplete');
       missionsListEl.innerHTML = summary.missions
         .map((m) => {
           const pct = Math.min(100, Math.round((m.progress / Math.max(1, m.target)) * 100));
           const check = m.completed ? '☑️' : '⬜';
           const progStr = m.completed
-            ? 'COMPLETE!'
-            : `${m.progress.toLocaleString()} / ${m.target.toLocaleString()}${m.unit ? ' ' + m.unit : ''}`;
+            ? completeText
+            : `${formatNum(m.progress)} / ${formatNum(m.target)}${m.unit ? ' ' + m.unit : ''}`;
           return `
             <div class="summary-mission-card ${m.completed ? 'done' : ''}">
               <div class="summary-mission-top">
@@ -844,8 +901,8 @@ export class SurfHUD {
     } else {
       this.setSummaryLbStatus(
         this.summaryCurrentScore > 0
-          ? 'Rider-Namen eingeben & SAVE klicken für die Rangliste!'
-          : 'Score > 0 erforderlich für die Rangliste.',
+          ? t('summary.lbEnterName')
+          : t('summary.lbNeedScore'),
         ''
       );
       void this.refreshSummaryLeaderboard(parkId, savedName, token);
@@ -869,12 +926,12 @@ export class SurfHUD {
     }
 
     if (cleanName.length < 2) {
-      this.setSummaryLbStatus('Bitte mindestens 2 Zeichen eingeben (Buchstaben/Zahlen).', 'error');
+      this.setSummaryLbStatus(t('summary.lbNameMinError'), 'error');
       this.summaryPlayerInputEl.focus();
       return;
     }
     if (this.summaryCurrentScore <= 0) {
-      this.setSummaryLbStatus('Score muss größer als 0 sein.', 'error');
+      this.setSummaryLbStatus(t('summary.lbScoreMinError'), 'error');
       return;
     }
 
@@ -896,7 +953,7 @@ export class SurfHUD {
     if (this.summarySubmitBtnEl) {
       this.summarySubmitBtnEl.disabled = true;
     }
-    this.setSummaryLbStatus('⏳ Speichere Score...', '');
+    this.setSummaryLbStatus(t('summary.lbSaving'), '');
 
     const result = await submitScore(name, score, parkId);
     if (token !== this.summaryLbToken) return;
@@ -906,16 +963,19 @@ export class SurfHUD {
     }
 
     if (!result.ok) {
-      this.setSummaryLbStatus(result.error || 'Speichern fehlgeschlagen.', 'error');
+      this.setSummaryLbStatus(result.error || t('summary.lbSaveFailed'), 'error');
       await this.refreshSummaryLeaderboard(parkId, name, token);
       return;
     }
 
-    const rankText = result.rank !== null ? `Platz #${result.rank}` : 'Gespeichert';
-    const bestText = result.bestScore.toLocaleString();
-    const newBestTag = result.isNewBest ? ' • ★ NEUER BESTWERT!' : '';
-    const sourceTag = result.source === 'local' ? ' (Local Preview)' : '';
-    this.setSummaryLbStatus(`✅ ${rankText} • Best: ${bestText}${newBestTag}${sourceTag}`, 'success');
+    const rankText = result.rank !== null ? t('summary.lbRank', { rank: result.rank }) : t('summary.lbSaved');
+    const bestText = formatNum(result.bestScore);
+    const newBestTag = result.isNewBest ? t('summary.lbNewBest') : '';
+    const sourceTag = result.source === 'local' ? t('summary.lbLocalTag') : '';
+    this.setSummaryLbStatus(
+      t('summary.lbBestLine', { rankText, bestText, newBestTag, sourceTag }),
+      'success'
+    );
 
     await this.refreshSummaryLeaderboard(parkId, result.name, token);
   }
@@ -938,7 +998,7 @@ export class SurfHUD {
     if (entries.length === 0) {
       const emptyEl = document.createElement('div');
       emptyEl.className = 'summary-lb-status';
-      emptyEl.textContent = 'Noch keine Park-Einträge — sichere dir Platz #1!';
+      emptyEl.textContent = t('summary.lbEmpty');
       this.summaryLbListEl.appendChild(emptyEl);
       return;
     }
@@ -985,7 +1045,7 @@ export class SurfHUD {
     this.controlMode = mode;
     if (this.btnControlsEl) {
       this.btnControlsEl.textContent =
-        mode === 'arrows' ? '🎮 Steuerung: Pfeiltasten [Tab]' : '🎮 Steuerung: WASD [Tab]';
+        mode === 'arrows' ? t('dock.ctrlArrows') : t('dock.ctrlWasd');
       this.btnControlsEl.classList.toggle('active-auto', mode === 'wasd');
     }
     this.renderDockCheatSheet();
@@ -996,27 +1056,27 @@ export class SurfHUD {
       const kbHtml =
         this.controlMode === 'arrows'
           ? `
-          <div class="trick-row"><span class="key">Q</span><span class="trick-name">Snap</span><span class="trick-how">top of a wall, right speed</span></div>
-          <div class="trick-row"><span class="key">W</span><span class="trick-name">Layback</span><span class="trick-how">hold in a fast, deep turn</span></div>
-          <div class="trick-row"><span class="key">A</span><span class="trick-name">Bertslide</span><span class="trick-how">hold while leaning into a turn</span></div>
-          <div class="trick-row"><span class="key">S</span><span class="trick-name">FS Reverse 360</span><span class="trick-how">while carving → with speed</span></div>
-          <div class="trick-row"><span class="key">␣</span> / <span class="key">I</span><span class="trick-name">Indy Grab</span><span class="trick-how">ollie off a wall, hold in air</span></div>
+          <div class="trick-row"><span class="key">Q</span><span class="trick-name">Snap</span><span class="trick-how">${t('dock.trickSnap')}</span></div>
+          <div class="trick-row"><span class="key">W</span><span class="trick-name">Layback</span><span class="trick-how">${t('dock.trickLayback')}</span></div>
+          <div class="trick-row"><span class="key">A</span><span class="trick-name">Bertslide</span><span class="trick-how">${t('dock.trickBert')}</span></div>
+          <div class="trick-row"><span class="key">S</span><span class="trick-name">FS Reverse 360</span><span class="trick-how">${t('dock.trickReverse')}</span></div>
+          <div class="trick-row"><span class="key">␣</span> / <span class="key">I</span><span class="trick-name">Indy Grab</span><span class="trick-how">${t('dock.trickIndy')}</span></div>
         `.trim()
           : `
-          <div class="trick-row"><span class="key">O</span><span class="trick-name">Snap</span><span class="trick-how">top of a wall, right speed</span></div>
-          <div class="trick-row"><span class="key">P</span><span class="trick-name">Layback</span><span class="trick-how">hold in a fast, deep turn</span></div>
-          <div class="trick-row"><span class="key">K</span><span class="trick-name">Bertslide</span><span class="trick-how">hold while leaning into a turn</span></div>
-          <div class="trick-row"><span class="key">L</span><span class="trick-name">FS Reverse 360</span><span class="trick-how">while carving → with speed</span></div>
-          <div class="trick-row"><span class="key">␣</span> / <span class="key">I</span><span class="trick-name">Indy Grab</span><span class="trick-how">ollie off a wall, hold in air</span></div>
+          <div class="trick-row"><span class="key">O</span><span class="trick-name">Snap</span><span class="trick-how">${t('dock.trickSnap')}</span></div>
+          <div class="trick-row"><span class="key">P</span><span class="trick-name">Layback</span><span class="trick-how">${t('dock.trickLayback')}</span></div>
+          <div class="trick-row"><span class="key">K</span><span class="trick-name">Bertslide</span><span class="trick-how">${t('dock.trickBert')}</span></div>
+          <div class="trick-row"><span class="key">L</span><span class="trick-name">FS Reverse 360</span><span class="trick-how">${t('dock.trickReverse')}</span></div>
+          <div class="trick-row"><span class="key">␣</span> / <span class="key">I</span><span class="trick-name">Indy Grab</span><span class="trick-how">${t('dock.trickIndy')}</span></div>
         `.trim();
 
       const mobileHtml = `
-        <div class="trick-row"><span class="key">OLLIE</span><span class="trick-name">Ollie (Air)</span><span class="trick-how">abspringen an Lippe / Airs</span></div>
-        <div class="trick-row"><span class="key">HOLD OLLIE</span><span class="trick-name">Indy Grab (Air)</span><span class="trick-how">in der Luft halten</span></div>
-        <div class="trick-row"><span class="key">TRICK</span><span class="trick-name">360 Spin / Flip (Air)</span><span class="trick-how">Air Spin &amp; Coping Snap</span></div>
-        <div class="trick-row"><span class="key">◀ / ▶ + TRICK</span><span class="trick-name">Bert Slide (Wall)</span><span class="trick-how">in der Kurve halten</span></div>
-        <div class="trick-row"><span class="key">TRICK (COPING)</span><span class="trick-name">Lip Trick / Stall</span><span class="trick-how">an der Bowl-Kante</span></div>
-        <div class="trick-row"><span class="key">COMPRESS</span><span class="trick-name">Crouch &amp; Speed Pump</span><span class="trick-how">Kniebeuge vor Transition</span></div>
+        <div class="trick-row"><span class="key">OLLIE</span><span class="trick-name">Ollie (Air)</span><span class="trick-how">${t('dock.mobOllie')}</span></div>
+        <div class="trick-row"><span class="key">HOLD OLLIE</span><span class="trick-name">Indy Grab (Air)</span><span class="trick-how">${t('dock.mobIndy')}</span></div>
+        <div class="trick-row"><span class="key">TRICK</span><span class="trick-name">360 Spin / Flip (Air)</span><span class="trick-how">${t('dock.mobTrick')}</span></div>
+        <div class="trick-row"><span class="key">◀ / ▶ + TRICK</span><span class="trick-name">Bert Slide (Wall)</span><span class="trick-how">${t('dock.mobBert')}</span></div>
+        <div class="trick-row"><span class="key">TRICK (COPING)</span><span class="trick-name">Lip Trick / Stall</span><span class="trick-how">${t('dock.mobLip')}</span></div>
+        <div class="trick-row"><span class="key">COMPRESS</span><span class="trick-name">Crouch &amp; Speed Pump</span><span class="trick-how">${t('dock.mobCompress')}</span></div>
       `.trim();
 
       this.tricksListEl.innerHTML = `
@@ -1029,31 +1089,31 @@ export class SurfHUD {
       const kbHtml =
         this.controlMode === 'arrows'
           ? `
-          <div class="ctrl-row"><span class="key">↑</span> one push-off from a standstill</div>
-          <div class="ctrl-row"><span class="key">←</span><span class="key">→</span> carve — alternate in rhythm to pump</div>
-          <div class="ctrl-row"><span class="key">↓</span><span class="key">⇧</span> compress on a wall drop = stronger pump</div>
-          <div class="ctrl-row"><span class="key">␣</span> ollie</div>
-          <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4/O</span> camera positions & 3D orbit</div>
-          <div class="ctrl-row"><span class="key">Tab</span> switch to WASD driving</div>
-          <div class="ctrl-row"><span class="key">M</span> mute music / <span class="key">N</span> next song</div>
+          <div class="ctrl-row"><span class="key">↑</span> ${t('dock.kbPush')}</div>
+          <div class="ctrl-row"><span class="key">←</span><span class="key">→</span> ${t('dock.kbCarve')}</div>
+          <div class="ctrl-row"><span class="key">↓</span><span class="key">⇧</span> ${t('dock.kbCompress')}</div>
+          <div class="ctrl-row"><span class="key">␣</span> ${t('dock.kbOllie')}</div>
+          <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4/O</span> ${t('dock.kbCam')}</div>
+          <div class="ctrl-row"><span class="key">Tab</span> ${t('dock.kbSwitchWasd')}</div>
+          <div class="ctrl-row"><span class="key">M</span> ${t('dock.kbMusic')}</div>
         `.trim()
           : `
-          <div class="ctrl-row"><span class="key">W</span> one push-off from a standstill</div>
-          <div class="ctrl-row"><span class="key">A</span><span class="key">D</span> carve — alternate in rhythm to pump</div>
-          <div class="ctrl-row"><span class="key">S</span><span class="key">⇧</span> compress on a wall drop = stronger pump</div>
-          <div class="ctrl-row"><span class="key">␣</span> ollie</div>
-          <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4/O</span> camera positions & 3D orbit</div>
-          <div class="ctrl-row"><span class="key">Tab</span> switch to Pfeiltasten driving</div>
-          <div class="ctrl-row"><span class="key">M</span> mute music / <span class="key">N</span> next song</div>
+          <div class="ctrl-row"><span class="key">W</span> ${t('dock.kbPush')}</div>
+          <div class="ctrl-row"><span class="key">A</span><span class="key">D</span> ${t('dock.kbCarve')}</div>
+          <div class="ctrl-row"><span class="key">S</span><span class="key">⇧</span> ${t('dock.kbCompress')}</div>
+          <div class="ctrl-row"><span class="key">␣</span> ${t('dock.kbOllie')}</div>
+          <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4/O</span> ${t('dock.kbCam')}</div>
+          <div class="ctrl-row"><span class="key">Tab</span> ${t('dock.kbSwitchArrows')}</div>
+          <div class="ctrl-row"><span class="key">M</span> ${t('dock.kbMusic')}</div>
         `.trim();
 
       const mobileHtml = `
-        <div class="ctrl-row"><span class="key">◀</span><span class="key">▶</span> carve — in den Bowl-Wänden carven</div>
-        <div class="ctrl-row"><span class="key">▲ PUMP</span> Schwung holen &amp; pushen</div>
-        <div class="ctrl-row"><span class="key">▼ BRAKE</span> abbremsen &amp; kontrollieren</div>
-        <div class="ctrl-row"><span class="key">OLLIE</span> abspringen an der Lippe / Airs</div>
-        <div class="ctrl-row"><span class="key">TRICK</span> Snap, Bert, Layback &amp; 360</div>
-        <div class="ctrl-row"><span class="key">COMPRESS</span> Kniebeuge vor Transition</div>
+        <div class="ctrl-row"><span class="key">◀</span><span class="key">▶</span> ${t('dock.mobRideCarve')}</div>
+        <div class="ctrl-row"><span class="key">▲ PUMP</span> ${t('dock.mobRidePump')}</div>
+        <div class="ctrl-row"><span class="key">▼ BRAKE</span> ${t('dock.mobRideBrake')}</div>
+        <div class="ctrl-row"><span class="key">OLLIE</span> ${t('dock.mobRideOllie')}</div>
+        <div class="ctrl-row"><span class="key">TRICK</span> ${t('dock.mobRideTrick')}</div>
+        <div class="ctrl-row"><span class="key">COMPRESS</span> ${t('dock.mobRideCompress')}</div>
       `.trim();
 
       this.ridingListEl.innerHTML = `
@@ -1065,49 +1125,58 @@ export class SurfHUD {
 
   public updateButtons(
     aspect: AspectMode,
-    _atmosphere: AtmosphereMode,
+    atmosphere: AtmosphereMode,
     cameraStyle: CameraStyle,
     truckPreset: TruckFeelPreset,
     autoFlow: boolean,
     musicActive = true,
     trackLabel = '1/3'
   ): void {
+    this.lastBtnState = {
+      aspect,
+      atmosphere,
+      cameraStyle,
+      truckPreset,
+      autoFlow,
+      musicActive,
+      trackLabel,
+    };
     this.btnAspectEl.textContent =
-      aspect === '9:16' ? '📱 9:16 IG Reel Mode [R]' : '🖥️ 16:9 Desktop [R]';
+      aspect === '9:16' ? t('dock.aspectReel') : t('dock.aspectDesktop');
     this.btnAspectEl.classList.toggle('active-reel', aspect === '9:16');
 
     if (this.btnAtmosphereEl) {
-      this.btnAtmosphereEl.textContent = '🌙 Floodlit Munich Night';
+      this.btnAtmosphereEl.textContent = t('dock.atmosphereNight');
     }
 
     const camLabels: Record<CameraStyle, string> = {
-      follow: '🎥 Follow Cam [1]',
-      filmer: '📹 Filmer Cam [2]',
-      mural: '🌴 Palm Mural Cam [3]',
-      orbit: '🔍 3D Orbit Inspect [4 / O]',
+      follow: t('dock.camFollow'),
+      filmer: t('dock.camFilmer'),
+      mural: t('dock.camMural'),
+      orbit: t('dock.camOrbit'),
     };
     this.btnCameraEl.textContent = camLabels[cameraStyle];
 
     if (this.btnControlsEl) {
       this.btnControlsEl.textContent =
-        this.controlMode === 'arrows' ? '🎮 Steuerung: Pfeiltasten [Tab]' : '🎮 Steuerung: WASD [Tab]';
+        this.controlMode === 'arrows' ? t('dock.ctrlArrows') : t('dock.ctrlWasd');
       this.btnControlsEl.classList.toggle('active-auto', this.controlMode === 'wasd');
     }
 
     const truckLabels: Record<TruckFeelPreset, string> = {
-      smooth: '🛹 Truck: Smooth [T]',
-      balanced: '🛹 Truck: Balanced [T]',
-      snappy: '🛹 Truck: Snappy [T]',
+      smooth: t('dock.truckSmooth'),
+      balanced: t('dock.truckBalanced'),
+      snappy: t('dock.truckSnappy'),
     };
     this.btnTruckFeelEl.textContent = truckLabels[truckPreset];
 
-    this.btnAutoFlowEl.textContent = autoFlow ? '🤖 Auto-Shred: ON [J]' : '🎮 Manual Control [J]';
+    this.btnAutoFlowEl.textContent = autoFlow ? t('dock.autoShredOn') : t('dock.manualControl');
     this.btnAutoFlowEl.classList.toggle('active-auto', autoFlow);
 
     if (this.btnMusicEl) {
       this.btnMusicEl.textContent = musicActive
-        ? `🎵 Track ${trackLabel} [M] [N]`
-        : '🔇 Music: OFF [M]';
+        ? t('dock.musicTrack', { track: trackLabel })
+        : t('dock.musicOff');
       this.btnMusicEl.classList.toggle('active-auto', musicActive);
     }
   }
@@ -1116,26 +1185,29 @@ export class SurfHUD {
     preset: 'auto' | 'high' | 'medium' | 'low',
     effective: 'high' | 'medium' | 'low'
   ): void {
+    this.lastQualityState = { preset, effective };
     if (!this.btnQualityEl) return;
     const labels = {
-      auto: `⚡ Quality: AUTO (${effective.toUpperCase()}) [U]`,
-      high: '⚡ Quality: HIGH [U]',
-      medium: '⚡ Quality: MEDIUM [U]',
-      low: '⚡ Quality: PERFORMANCE [U]',
+      auto: t('dock.qualityAuto', { eff: effective.toUpperCase() }),
+      high: t('dock.qualityHigh'),
+      medium: t('dock.qualityMedium'),
+      low: t('dock.qualityLow'),
     };
     this.btnQualityEl.textContent = labels[preset];
     this.btnQualityEl.classList.toggle('active-auto', preset === 'auto');
   }
 
   public updateTouchButton(enabled: boolean): void {
+    this.lastTouchEnabled = enabled;
     if (!this.btnTouchEl) return;
-    this.btnTouchEl.textContent = enabled ? '📱 Touch Controls: ON' : '📱 Touch Controls: OFF';
+    this.btnTouchEl.textContent = enabled ? t('dock.touchOn') : t('dock.touchOff');
     this.btnTouchEl.classList.toggle('active-auto', enabled);
   }
 
   public updateFullscreenState(isFs: boolean): void {
+    this.lastIsFullscreen = isFs;
     if (this.btnFullscreenEl) {
-      this.btnFullscreenEl.textContent = isFs ? 'Exit Fullscreen' : 'Fullscreen';
+      this.btnFullscreenEl.textContent = isFs ? t('dock.exitFullscreen') : t('dock.fullscreen');
       this.btnFullscreenEl.classList.toggle('active-auto', isFs);
     }
     if (this.btnHudFullscreenEl) {
@@ -1163,7 +1235,7 @@ export class SurfHUD {
 
   private renderCombo(): void {
     const totalCombo = this.activeComboBase * this.comboMultiplier;
-    this.comboPointsEl.textContent = `${this.activeComboBase.toLocaleString()} × ${this.comboMultiplier} = ${totalCombo.toLocaleString()}`;
+    this.comboPointsEl.textContent = `${formatNum(this.activeComboBase)} × ${this.comboMultiplier} = ${formatNum(totalCombo)}`;
     this.comboStringEl.textContent = this.comboManeuvers.join('  +  ');
   }
 
@@ -1173,8 +1245,8 @@ export class SurfHUD {
     if (landed > this.bestCombo) {
       this.bestCombo = landed;
     }
-    this.scoreEl.textContent = this.totalScore.toLocaleString();
-    this.bestComboEl.textContent = this.bestCombo.toLocaleString();
+    this.scoreEl.textContent = formatNum(this.totalScore);
+    this.bestComboEl.textContent = formatNum(this.bestCombo);
 
     this.activeComboBase = 0;
     this.comboMultiplier = 0;

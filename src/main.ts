@@ -15,6 +15,7 @@ import { ScooterRiderNPC } from './world/ScooterRiderNPC';
 import { HotSpotZone } from './world/HotSpotZone';
 import { GameModeId, SurfProgression } from './progression/SurfProgression';
 import { inject, track } from '@vercel/analytics';
+import { applyDomTranslations, onLangChange, t } from './i18n/i18n';
 
 // Initialize Vercel Web Analytics
 inject();
@@ -140,12 +141,12 @@ class SurfskateMunichGame {
     };
     this.progression = new SurfProgression();
     this.progression.onMissionCompleted = (mission) => {
-      this.hud.showMissionToast(`🎯 MISSION COMPLETE: ${mission.shortTitle}!`);
+      this.hud.showMissionToast(t('hud.missionCompleteToast', { title: mission.shortTitle }));
       this.syncProgressionUI();
     };
     this.progression.onRankUp = (newRank) => {
-      this.hud.showMissionToast(`👑 RANK UP: ${newRank.fullLabel}!`);
-      this.hud.showTrickBanner(`RANK UP: ${newRank.title}!`, true);
+      this.hud.showMissionToast(t('hud.rankUpToast', { rank: newRank.fullLabel }));
+      this.hud.showTrickBanner(t('hud.rankUpBanner', { title: newRank.title }), true);
       this.syncProgressionUI();
     };
 
@@ -169,7 +170,7 @@ class SurfskateMunichGame {
     this.hotSpotZone = new HotSpotZone(this.scene, this.parkSurface);
     this.hotSpotZone.onHotSpotActivated = (spot, durationSec) => {
       this.hud.showMissionToast(
-        `🔥 HOT SPOT: ${spot.name} (2X SCORE — ${Math.round(durationSec)}s)!`
+        t('hud.hotSpotToast', { spot: spot.name, sec: Math.round(durationSec) })
       );
     };
 
@@ -187,7 +188,7 @@ class SurfskateMunichGame {
         this.resetSession();
         if (this.gameMode === 'flow_cup') {
           (this.flowLine as unknown as { setTier?: (t: 0 | 1 | 2) => void }).setTier?.(0);
-          this.hud.showTrickBanner('🌊 FLOW CUP — FOLLOW THE LINE!', true);
+          this.hud.showTrickBanner(t('hud.flowCupBanner'), true);
         }
         this.audio.resume();
         this.lastTime = performance.now();
@@ -231,6 +232,13 @@ class SurfskateMunichGame {
     this.bindEvents();
     this.handleResize();
     this.syncHUDButtons();
+    applyDomTranslations(document);
+    onLangChange(() => {
+      this.progression.refreshMissionTexts();
+      this.syncProgressionUI();
+      this.syncHUDButtons();
+      this.syncFullscreenUI();
+    });
     this.initAssets();
   }
 
@@ -807,15 +815,15 @@ class SurfskateMunichGame {
       if (isRec) {
         pill.classList.remove('hidden');
         pill.classList.add('is-recording');
-        pillText.textContent = `🔴 REC: ${pts} PTS — [L] FINISH`;
+        pillText.textContent = t('rec.pillActive', { pts });
       } else if (hasRecorded) {
         pill.classList.remove('hidden');
         pill.classList.remove('is-recording');
-        pillText.textContent = `📋 LINE: ${pts} PTS — [L] REC NEW`;
+        pillText.textContent = t('rec.pillSaved', { pts });
       } else if (isDev) {
         pill.classList.remove('hidden');
         pill.classList.remove('is-recording');
-        pillText.textContent = `🔴 REC FLOW LINE [L]`;
+        pillText.textContent = t('rec.pillIdle');
       } else {
         pill.classList.add('hidden');
         pill.classList.remove('is-recording');
@@ -826,11 +834,11 @@ class SurfskateMunichGame {
       if (isRec) {
         btnRec.classList.remove('hidden');
         btnRec.classList.add('is-recording');
-        btnLabel.textContent = `⏹ STOP [L]`;
+        btnLabel.textContent = t('rec.btnStop');
       } else if (showDevButtons) {
         btnRec.classList.remove('hidden');
         btnRec.classList.remove('is-recording');
-        btnLabel.textContent = `🔴 REC LINE [L]`;
+        btnLabel.textContent = t('rec.btnStart');
       } else {
         btnRec.classList.add('hidden');
         btnRec.classList.remove('is-recording');
@@ -1103,13 +1111,13 @@ class SurfskateMunichGame {
           this.effectiveQuality = 'medium';
           this.applyEffectiveQuality();
           this.timeSinceLastQualityChange = 0;
-          this.hud.showTrickBanner('AUTO QUALITY: MEDIUM', false);
+          this.hud.showTrickBanner(t('hud.autoQualityBanner', { quality: 'MEDIUM' }), false);
           this.syncHUDButtons();
         } else if (this.currentFps < 40 && this.effectiveQuality === 'medium') {
           this.effectiveQuality = 'low';
           this.applyEffectiveQuality();
           this.timeSinceLastQualityChange = 0;
-          this.hud.showTrickBanner('AUTO QUALITY: PERFORMANCE', false);
+          this.hud.showTrickBanner(t('hud.autoQualityBanner', { quality: 'PERFORMANCE' }), false);
           this.syncHUDButtons();
         }
       }

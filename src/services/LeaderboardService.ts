@@ -1,3 +1,5 @@
+import { t } from '../i18n/i18n';
+
 export type LeaderboardPark = 'all' | 'im_gefilde' | 'airport_skatepark';
 export type ValidLeaderboardPark = 'im_gefilde' | 'airport_skatepark';
 
@@ -165,7 +167,7 @@ export async function submitScore(
       rank: null,
       isNewBest: false,
       source: 'local',
-      error: 'Rider-Name muss mindestens 2 Zeichen lang sein.',
+      error: t('lbErr.nameMin'),
     };
   }
 
@@ -178,7 +180,7 @@ export async function submitScore(
       rank: null,
       isNewBest: false,
       source: 'local',
-      error: 'Score muss zwischen 1 und 500.000 liegen.',
+      error: t('lbErr.scoreRange'),
     };
   }
 
@@ -247,7 +249,7 @@ export async function submitScore(
           rank: localRank,
           isNewBest: false,
           source: 'global',
-          error: data?.error || 'Ungültige Eingabe.',
+          error: data?.error || t('lbErr.invalidInput'),
         };
       }
     }

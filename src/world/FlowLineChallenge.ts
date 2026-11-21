@@ -4,6 +4,7 @@ import { SurfHUD } from '../ui/SurfHUD';
 import { SurfAudio } from '../audio/SurfAudio';
 import { SurfskateController } from '../physics/SurfskateController';
 import { FlowGhostSkater } from './FlowGhostSkater';
+import { onLangChange, t } from '../i18n/i18n';
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
@@ -749,6 +750,10 @@ export class FlowLineChallenge {
     this.finishGateGroup.visible = false;
     this.ghostGroup.visible = false;
     this.progressIdx = 0;
+
+    onLangChange(() => {
+      this.updateStartGateVisuals();
+    });
   }
 
   public getCurrentTierConfig(): FlowLineTierConfig {
@@ -1167,8 +1172,8 @@ export class FlowLineChallenge {
 
     // 4. Floating Canvas Label Sprite: "FINISH GATE (+BONUS)"
     this.finishLabelSprite = createTextSprite(
-      '🏁 FINISH GATE',
-      `+${cfg.bonusPoints} FLOW BONUS`,
+      t('flow.finishGate'),
+      t('flow.finishBonus', { pts: cfg.bonusPoints }),
       '#ffd166'
     );
     this.finishLabelSprite.position.set(0, 0.95, 0);
@@ -1219,7 +1224,7 @@ export class FlowLineChallenge {
     const pb = this.getPersonalBest(this.currentParkId, this.currentTier);
     const subtitle =
       pb !== null
-        ? `PB: ${pb.toFixed(1)}s • SKATE IN TO START`
+        ? t('flow.pbStart', { pb: pb.toFixed(1) })
         : `${cfg.desc} • +${cfg.bonusPoints} PTS`;
 
     updateTextSprite(this.startLabelSprite, cfg.shortName, subtitle, cfg.accentColor);
@@ -1243,8 +1248,8 @@ export class FlowLineChallenge {
     if (this.finishLabelSprite) {
       updateTextSprite(
         this.finishLabelSprite,
-        '🏁 FINISH GATE',
-        `+${cfg.bonusPoints} FLOW BONUS`,
+        t('flow.finishGate'),
+        t('flow.finishBonus', { pts: cfg.bonusPoints }),
         '#ffd166'
       );
     }
@@ -1266,7 +1271,7 @@ export class FlowLineChallenge {
     }
 
     if (this.isActive) {
-      this.failChallenge('PARK CHANGED');
+      this.failChallenge(t('flow.parkChanged'), false);
     }
 
     this.progressIdx = 0;
@@ -1316,7 +1321,7 @@ export class FlowLineChallenge {
           this.buildCurveFromWaypoints(this.recordedPoints);
         }
         this.hud.setFlowLineHint(
-          `🔴 REC FLOW LINE: ${this.recordedPoints.length} pts — Press [L] to finish & export`
+          t('rec.hintRecording', { pts: this.recordedPoints.length })
         );
         this.onRecordingStateChange?.(true, this.recordedPoints.length);
       }
@@ -1379,7 +1384,7 @@ export class FlowLineChallenge {
 
     // 1. Wipeout / Bail ends the challenge
     if (controller.isBailing) {
-      this.failChallenge('FLOW LINE LOST!');
+      this.failChallenge(t('flow.lost'), true);
       return;
     }
 
@@ -1416,7 +1421,7 @@ export class FlowLineChallenge {
 
     // 3. Check if skater is too far away from the line (tier-dependent tolerance)
     if (distToLine > cfg.maxAllowedDistance) {
-      this.failChallenge('FLOW LINE ENDED — TOO FAR!');
+      this.failChallenge(t('flow.tooFar'), false);
       return;
     }
 
@@ -1509,11 +1514,11 @@ export class FlowLineChallenge {
       this.closeExportModal();
 
       this.hud.showTrickBanner(
-        '🔴 REC FLOW LINE — SKATE & PRESS [L] TO FINISH',
+        t('rec.bannerStart'),
         true
       );
       this.hud.setFlowLineHint(
-        '🔴 RECORDING FLOW LINE (1 pt) — Press [L] to stop'
+        t('rec.hintStart')
       );
       this.onRecordingStateChange?.(true, 1);
     } else {
@@ -1559,15 +1564,15 @@ export class FlowLineChallenge {
 
         this.openExportModal(code);
         this.hud.showTrickBanner(
-          `FLOW LINE SAVED: ${this.recordedPoints.length} PTS!`,
+          t('rec.bannerSaved', { pts: this.recordedPoints.length }),
           true
         );
         this.hud.setFlowLineHint(
-          'FLOW LINE READY — Enter Start Gate to test line'
+          t('rec.hintSaved')
         );
         this.onRecordingStateChange?.(false, this.recordedPoints.length);
       } else {
-        this.hud.showTrickBanner('REC CANCELLED (NEED >= 3 PTS)', false);
+        this.hud.showTrickBanner(t('rec.bannerCancelled'), false);
         this.hud.setFlowLineHint(null);
         this.rebuildCurrentTierCurve();
         this.startGateGroup.visible = true;
@@ -1600,7 +1605,7 @@ export class FlowLineChallenge {
       textarea.value = code;
     }
     if (title) {
-      title.textContent = `🌊 FLOW LINE EXPORT (${this.recordedPoints.length} PTS)`;
+      title.textContent = t('flowModal.titleCount', { count: this.recordedPoints.length });
     }
     modal?.classList.remove('hidden');
   }
@@ -1629,21 +1634,21 @@ export class FlowLineChallenge {
         <div class="flowline-modal-card">
           <div class="flowline-modal-header">
             <div>
-              <span class="flowline-badge">DEV MODE • WAYPOINTS RECORDER</span>
-              <h2 class="flowline-title" id="flowline-modal-title">🌊 FLOW LINE EXPORT</h2>
+              <span class="flowline-badge" data-i18n="flowModal.badge">${t('flowModal.badge')}</span>
+              <h2 class="flowline-title" id="flowline-modal-title">${t('flowModal.title')}</h2>
             </div>
             <button class="flowline-close-btn" id="flowline-modal-x-btn" type="button" aria-label="Close">✕</button>
           </div>
           <div class="flowline-modal-body">
-            <p class="flowline-desc">
-              Your custom Flow Line was recorded live in Skatepark! Copy this snippet to chat or directly into <code class="flowline-code">FlowLineChallenge.WAYPOINTS_2D</code>:
+            <p class="flowline-desc" data-i18n-html="flowModal.desc">
+              ${t('flowModal.desc')}
             </p>
             <textarea id="flowline-export-textarea" class="flowline-textarea" readonly spellcheck="false"></textarea>
           </div>
           <div class="flowline-modal-footer">
-            <button id="flowline-modal-copy-btn" type="button" class="flowline-btn flowline-btn-primary">📋 COPY WAYPOINTS</button>
-            <button id="flowline-modal-test-btn" type="button" class="flowline-btn flowline-btn-accent">▶ TEST RECORDED LINE</button>
-            <button id="flowline-modal-close-btn" type="button" class="flowline-btn flowline-btn-ghost">CLOSE</button>
+            <button id="flowline-modal-copy-btn" type="button" class="flowline-btn flowline-btn-primary" data-i18n="flowModal.copyBtn">${t('flowModal.copyBtn')}</button>
+            <button id="flowline-modal-test-btn" type="button" class="flowline-btn flowline-btn-accent" data-i18n="flowModal.testBtn">${t('flowModal.testBtn')}</button>
+            <button id="flowline-modal-close-btn" type="button" class="flowline-btn flowline-btn-ghost" data-i18n="common.close">${t('common.close')}</button>
           </div>
         </div>
       `;
@@ -1666,10 +1671,9 @@ export class FlowLineChallenge {
         textarea.select();
         try {
           void navigator.clipboard?.writeText(textarea.value);
-          const origText = copyBtn.textContent;
-          copyBtn.textContent = 'COPIED TO CLIPBOARD! ✓';
+          copyBtn.textContent = t('flowModal.copiedBtn');
           setTimeout(() => {
-            copyBtn.textContent = origText;
+            copyBtn.textContent = t('flowModal.copyBtn');
           }, 2000);
         } catch {
           document.execCommand('copy');
@@ -1685,8 +1689,8 @@ export class FlowLineChallenge {
         this.startGateGroup.visible = true;
         this.finishGateGroup.visible = true;
         this.flowLineGroup.visible = true;
-        this.hud.showTrickBanner('READY TO TEST — RIDE TO START GATE!', true);
-        this.hud.setFlowLineHint('🌊 ENTER START GATE TO BEGIN CHALLENGE');
+        this.hud.showTrickBanner(t('rec.bannerTestReady'), true);
+        this.hud.setFlowLineHint(t('rec.hintTestReady'));
       });
 
       closeBtn?.addEventListener('click', () => this.closeExportModal());
@@ -2071,7 +2075,7 @@ export class FlowLineChallenge {
     this.ghostSkater.update(dt, timeSec, ghostSpeed, targetLean, right, up);
   }
 
-  public failChallenge(reason: string): void {
+  public failChallenge(reason: string, isBail = false): void {
     this.isActive = false;
     this.retriggerCooldown = 1.5;
     this.progressIdx = 0;
@@ -2084,7 +2088,7 @@ export class FlowLineChallenge {
     this.finishGateGroup.visible = false;
 
     this.hud.setFlowLineHint(null);
-    if (reason === 'FLOW LINE LOST!') {
+    if (isBail) {
       this.hud.showBailBanner(reason);
     } else {
       this.hud.showTrickBanner(reason, false);
@@ -2129,12 +2133,12 @@ export class FlowLineChallenge {
       }
       this.hud.awardBonusPoints(
         cfg.bonusPoints,
-        `🏆 NEW RECORD! ${elapsed.toFixed(1)}s (+${cfg.bonusPoints} PTS)`
+        t('flow.newRecord', { time: elapsed.toFixed(1), pts: cfg.bonusPoints })
       );
     } else {
       this.hud.awardBonusPoints(
         cfg.bonusPoints,
-        `FLOW LINE COMPLETE! ${elapsed.toFixed(1)}s (+${cfg.bonusPoints} PTS)`
+        t('flow.complete', { time: elapsed.toFixed(1), pts: cfg.bonusPoints })
       );
     }
 

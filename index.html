@@ -1186,6 +1186,20 @@
         display: inline-block;
         flex-shrink: 0;
       }
+      .landing-aux-pill-lang .aux-lang-code {
+        font-weight: 900;
+        letter-spacing: 0.06em;
+      }
+      .landing-aux-pill-lang .aux-lang-sep {
+        opacity: 0.45;
+        margin: 0 1px;
+      }
+      .landing-aux-pill-lang .aux-lang-opt.active {
+        color: var(--yellow);
+      }
+      .landing-aux-pill-lang .aux-lang-opt:not(.active) {
+        opacity: 0.55;
+      }
 
       /* 2. Left-side Selection & Action Panel */
       .landing-control-panel {
@@ -1762,6 +1776,13 @@
         .landing-aux-pill .aux-text {
           display: none;
         }
+        .landing-aux-pill-lang {
+          padding: 5px 6px;
+          min-width: 28px;
+        }
+        .landing-aux-pill-lang .aux-icon {
+          display: none;
+        }
         .landing-control-panel {
           position: absolute;
           left: max(10px, env(safe-area-inset-left));
@@ -1873,6 +1894,13 @@
           height: 28px;
         }
         .landing-aux-pill .aux-text {
+          display: none;
+        }
+        .landing-aux-pill-lang {
+          padding: 5px 6px;
+          min-width: 28px;
+        }
+        .landing-aux-pill-lang .aux-icon {
           display: none;
         }
         .landing-control-panel {
@@ -2087,6 +2115,9 @@
       body.reel-mode .landing-aux-pill .aux-text {
         display: none;
       }
+      body.reel-mode .landing-aux-pill-lang .aux-icon {
+        display: none;
+      }
       body.reel-mode .landing-control-panel {
         left: 10px;
         right: 10px;
@@ -2249,6 +2280,26 @@
       }
       .terms-link:hover {
         color: #ffffff;
+      }
+      .terms-en-summary {
+        margin-bottom: 18px;
+        padding: 12px 14px;
+        background: rgba(0, 214, 195, 0.08);
+        border: 1px solid rgba(0, 214, 195, 0.35);
+        border-left: 3px solid var(--teal);
+        border-radius: 6px;
+      }
+      .terms-en-summary.hidden {
+        display: none;
+      }
+      .terms-en-summary .terms-section-title {
+        color: var(--teal);
+      }
+      .terms-en-note {
+        font-size: 12.5px;
+        color: var(--muted);
+        font-style: italic;
+        margin-bottom: 0 !important;
       }
       .terms-footer {
         padding: 14px 24px;
@@ -4405,7 +4456,7 @@
           </svg>
         </div>
         <div class="loader-title-row">
-          <span class="loader-text">Loading SRFSK8 Game</span>
+          <span class="loader-text" data-i18n="loader.text">Loading SRFSK8 Game</span>
           <span class="loader-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
         </div>
         <div class="loader-wave-track" aria-hidden="true">
@@ -4425,26 +4476,29 @@
             <div class="landing-rank-badge" id="landing-rank-badge">🥉 LVL 1 • GROM</div>
           </div>
           <nav class="landing-utility-nav" aria-label="Game Utilities">
-            <button id="btn-leaderboard" type="button" class="landing-aux-pill landing-aux-pill-gold" title="Global Top Scores / Leaderboard">
-              <span class="aux-icon">🏆</span><span class="aux-text">TOP SCORES</span>
+            <button id="btn-leaderboard" type="button" class="landing-aux-pill landing-aux-pill-gold" title="Global Top Scores / Leaderboard" data-i18n-title="nav.leaderboardTitle">
+              <span class="aux-icon">🏆</span><span class="aux-text" data-i18n="nav.leaderboard">TOP SCORES</span>
             </button>
-            <button id="landing-sound-btn" type="button" class="landing-aux-pill" title="Toggle Sound / Music [M]">
+            <button id="landing-sound-btn" type="button" class="landing-aux-pill" title="Toggle Sound / Music [M]" data-i18n-title="nav.soundTitle">
               <span class="aux-icon">🔊</span><span class="aux-text">SOUND</span>
             </button>
-            <button id="landing-quality-btn" type="button" class="landing-aux-pill" title="Toggle Graphics Quality [Q]">
+            <button id="landing-quality-btn" type="button" class="landing-aux-pill" title="Toggle Graphics Quality [Q]" data-i18n-title="nav.qualityTitle">
               <span class="aux-icon">⚡</span><span class="aux-text">QUALITY</span>
             </button>
-            <button id="landing-fullscreen-btn" type="button" class="landing-aux-pill" title="Toggle Fullscreen">
+            <button id="landing-fullscreen-btn" type="button" class="landing-aux-pill" title="Toggle Fullscreen" data-i18n-title="nav.fullscreenTitle">
               <svg class="landing-fs-icon aux-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
               </svg>
-              <span class="aux-text">FULLSCREEN</span>
+              <span class="aux-text" data-i18n="nav.fullscreen">FULLSCREEN</span>
             </button>
-            <button id="landing-help-btn" type="button" class="landing-aux-pill" title="Controls &amp; Help">
-              <span class="aux-icon">❓</span><span class="aux-text">CONTROLS</span>
+            <button id="landing-help-btn" type="button" class="landing-aux-pill" title="Controls &amp; Help" data-i18n-title="nav.helpTitle">
+              <span class="aux-icon">❓</span><span class="aux-text" data-i18n="nav.help">CONTROLS</span>
             </button>
-            <button id="landing-terms-btn" type="button" class="landing-aux-pill" title="Impressum &amp; Privacy Policy">
-              <span class="aux-icon">📜</span><span class="aux-text">IMPRESSUM / PRIVACY</span>
+            <button id="landing-terms-btn" type="button" class="landing-aux-pill" title="Impressum &amp; Privacy Policy" data-i18n-title="nav.termsTitle">
+              <span class="aux-icon">📜</span><span class="aux-text" data-i18n="nav.terms">IMPRESSUM / PRIVACY</span>
+            </button>
+            <button id="btn-lang-toggle" type="button" class="landing-aux-pill landing-aux-pill-lang" title="Switch Language: Deutsch / English" data-i18n-title="nav.langTitle">
+              <span class="aux-icon">🌐</span><span class="aux-lang-code"><span class="aux-lang-opt" data-lang-opt="de">DE</span><span class="aux-lang-sep">/</span><span class="aux-lang-opt" data-lang-opt="en">EN</span></span>
             </button>
           </nav>
         </header>
@@ -4457,14 +4511,14 @@
             <div class="landing-section-header">
               <div class="section-title-wrap">
                 <span class="step-badge">1</span>
-                <span class="section-title">SETUP</span>
+                <span class="section-title" data-i18n="landing.setup">SETUP</span>
               </div>
             </div>
 
             <div class="landing-setup-stack">
               <!-- Item 1: Skater -->
               <div class="sel-section active" id="sel-section-skater">
-                <div class="sel-row-label">SKATER</div>
+                <div class="sel-row-label" data-i18n="landing.skater">SKATER</div>
                 <div class="sel-picker">
                   <button class="sel-arrow" data-kind="skater" data-dir="-1" aria-label="Previous skater">&#10094;</button>
                   <div class="sel-info-center">
@@ -4481,7 +4535,7 @@
 
               <!-- Item 2: Skatepark -->
               <div class="sel-section" id="sel-section-skatepark">
-                <div class="sel-row-label">SKATEPARK</div>
+                <div class="sel-row-label" data-i18n="landing.skatepark">SKATEPARK</div>
                 <div class="sel-picker">
                   <button class="sel-arrow" data-kind="skatepark" data-dir="-1" aria-label="Previous skatepark">&#10094;</button>
                   <div class="sel-park-center">
@@ -4493,16 +4547,16 @@
                       <div class="slot-view slot-notice-view" id="park-notice-view">
                         <div class="notice-badge">
                           <svg class="notice-ig-icon" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689-.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
-                          <span>MORE TO COME!</span>
+                          <span data-i18n="landing.moreToCome">MORE TO COME!</span>
                         </div>
-                        <div class="notice-text">
+                        <div class="notice-text" data-i18n-html="landing.noticePark">
                           Tell us on <a href="https://www.instagram.com/surfskate_munich/" target="_blank" rel="noopener noreferrer">@surfskate_munich</a> which <strong>skatepark</strong> you want to see next!
                         </div>
-                        <button class="notice-dismiss" id="park-notice-dismiss" title="Show photo">&times;</button>
+                        <button class="notice-dismiss" id="park-notice-dismiss" title="Show photo" data-i18n-title="landing.showPhoto">&times;</button>
                       </div>
                     </div>
                     <div class="landing-park-actions">
-                      <button id="landing-park-inspect-btn" type="button" class="landing-inspect-btn" title="Inspect 3D Park">
+                      <button id="landing-park-inspect-btn" type="button" class="landing-inspect-btn" title="Inspect 3D Park" data-i18n="landing.view3d" data-i18n-title="landing.view3dTitle">
                         🔍 3D VIEW
                       </button>
                     </div>
@@ -4513,7 +4567,7 @@
 
               <!-- Item 3: Board -->
               <div class="sel-section" id="sel-section-board">
-                <div class="sel-row-label">BOARD</div>
+                <div class="sel-row-label" data-i18n="landing.board">BOARD</div>
                 <div class="sel-picker">
                   <button class="sel-arrow" data-kind="board" data-dir="-1" aria-label="Previous board">&#10094;</button>
                   <div class="sel-board-center">
@@ -4603,12 +4657,12 @@
                       <div class="slot-view slot-notice-view" id="board-notice-view">
                         <div class="notice-badge">
                           <svg class="notice-ig-icon" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689-.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
-                          <span>MORE TO COME!</span>
+                          <span data-i18n="landing.moreToCome">MORE TO COME!</span>
                         </div>
-                        <div class="notice-text">
+                        <div class="notice-text" data-i18n-html="landing.noticeBoard">
                           Tell us on <a href="https://www.instagram.com/surfskate_munich/" target="_blank" rel="noopener noreferrer">@surfskate_munich</a> which <strong>board</strong> you want to see next!
                         </div>
-                        <button class="notice-dismiss" id="board-notice-dismiss" title="Show board icon">&times;</button>
+                        <button class="notice-dismiss" id="board-notice-dismiss" title="Show board icon" data-i18n-title="landing.showBoard">&times;</button>
                       </div>
                     </div>
                   </div>
@@ -4618,7 +4672,7 @@
 
               <!-- Rider Name (Leaderboard Nickname) -->
               <div class="landing-rider-name-row">
-                <label for="landing-player-name" class="landing-rider-label">🏷️ RIDER</label>
+                <label for="landing-player-name" class="landing-rider-label" data-i18n="landing.riderLabel">🏷️ RIDER</label>
                 <input
                   id="landing-player-name"
                   type="text"
@@ -4627,6 +4681,7 @@
                   autocomplete="nickname"
                   spellcheck="false"
                   placeholder="Rider Name (Leaderboard)"
+                  data-i18n-placeholder="landing.riderPlaceholder"
                 />
               </div>
             </div>
@@ -4637,21 +4692,21 @@
             <div class="landing-section-header">
               <div class="section-title-wrap">
                 <span class="step-badge">2</span>
-                <span class="section-title">GAME MODE</span>
+                <span class="section-title" data-i18n="landing.gameMode">GAME MODE</span>
               </div>
             </div>
             <div class="landing-mode-selector" id="landing-mode-selector" role="group" aria-label="Select Game Mode">
               <button type="button" class="mode-pill-btn active" data-mode="jam">
                 <span class="mode-icon">⏱️</span>
-                <span class="mode-text">2-MIN JAM</span>
+                <span class="mode-text" data-i18n="landing.modeJam">2-MIN JAM</span>
               </button>
               <button type="button" class="mode-pill-btn" data-mode="flow_cup">
                 <span class="mode-icon">🌊</span>
-                <span class="mode-text">FLOW CUP</span>
+                <span class="mode-text" data-i18n="landing.modeFlowCup">FLOW CUP</span>
               </button>
               <button type="button" class="mode-pill-btn" data-mode="zen">
                 <span class="mode-icon">🌅</span>
-                <span class="mode-text">FREE SURF</span>
+                <span class="mode-text" data-i18n="landing.modeZen">FREE SURF</span>
               </button>
             </div>
             <div class="landing-mode-desc" id="landing-mode-desc">
@@ -4665,8 +4720,8 @@
             <button id="landing-start-btn" type="button" aria-label="Drop In / Start Game">
               <span class="start-btn-skew-wrap">
                 <span class="start-btn-icon">⚡</span>
-                <span class="start-btn-label">DROP IN</span>
-                <span class="start-btn-sub">PRESS ENTER</span>
+                <span class="start-btn-label" data-i18n="landing.dropIn">DROP IN</span>
+                <span class="start-btn-sub" data-i18n="landing.pressEnter">PRESS ENTER</span>
               </span>
             </button>
           </div>
@@ -4677,7 +4732,7 @@
           <div class="landing-section-header" id="landing-missions-header">
             <div class="section-title-wrap">
               <span class="step-badge">🎯</span>
-              <span class="section-title">CHALLENGES</span>
+              <span class="section-title" data-i18n="landing.challenges">CHALLENGES</span>
             </div>
             <span class="landing-missions-counter" id="landing-missions-count">0/3 DONE</span>
           </div>
@@ -4699,11 +4754,25 @@
             <button id="terms-modal-close" class="terms-close-btn" aria-label="Close Terms">&times;</button>
             
             <div class="terms-header">
-              <span class="terms-badge">LEGAL, IMPRESSUM &amp; PRIVACY</span>
-              <h2 id="terms-modal-title" class="terms-title">SRFSK8 MUNICH — IMPRESSUM, PRIVACY &amp; TERMS</h2>
+              <span class="terms-badge" data-i18n="terms.badge">LEGAL, IMPRESSUM &amp; PRIVACY</span>
+              <h2 id="terms-modal-title" class="terms-title" data-i18n="terms.title">SRFSK8 MUNICH — IMPRESSUM, PRIVACY &amp; TERMS</h2>
             </div>
 
             <div class="terms-content">
+              <section class="terms-section terms-en-summary" id="terms-en-summary" data-lang-only="en">
+                <h3 class="terms-section-title">English Summary (Legal Notice, Privacy &amp; Terms)</h3>
+                <p>
+                  <strong>SRFSK8 Munich</strong> is a non-commercial indie 3D web game and tribute to surfskate culture in Munich (Michael Karg, Kranzberg, Germany • <a href="mailto:michi.karg@gmail.com" class="terms-link">michi.karg@gmail.com</a>).
+                </p>
+                <ul class="terms-list">
+                  <li><strong>Privacy &amp; Hosting:</strong> Hosted on Vercel with cookieless, anonymized Vercel Web Analytics. Your settings, progression &amp; Flow Line ghosts stay locally in your browser (<code class="terms-code">localStorage</code>).</li>
+                  <li><strong>Global Leaderboard:</strong> If you optionally enter a nickname and submit a score, your nickname and score are stored in Upstash Redis to display the public Top 15 leaderboard. Please do not use your real name.</li>
+                  <li><strong>Safety Disclaimer:</strong> Virtual physics simulation only — always wear a certified helmet and pads when skating in real life.</li>
+                </ul>
+                <p class="terms-en-note">
+                  Below is the legally required German Impressum (§ 5 DDG) and full GDPR (DSGVO) privacy policy.
+                </p>
+              </section>
               <section class="terms-section">
                 <h3 class="terms-section-title">1. Impressum (§ 5 DDG)</h3>
                 <p>
@@ -4781,7 +4850,7 @@
             </div>
 
             <div class="terms-footer">
-              <button id="terms-modal-ok-btn" type="button" class="terms-ok-btn">GOT IT &amp; CLOSE</button>
+              <button id="terms-modal-ok-btn" type="button" class="terms-ok-btn" data-i18n="terms.okBtn">GOT IT &amp; CLOSE</button>
             </div>
           </div>
         </div>
@@ -4794,54 +4863,54 @@
             
             <div class="help-header">
               <div class="help-header-top">
-                <span class="help-badge">HOW TO PLAY</span>
+                <span class="help-badge" data-i18n="help.badge">HOW TO PLAY</span>
               </div>
-              <h2 id="help-modal-title" class="help-title">STEUERUNG &amp; BOWL-GUIDE</h2>
+              <h2 id="help-modal-title" class="help-title" data-i18n="help.title">CONTROLS &amp; BOWL GUIDE</h2>
               <div class="help-tabs">
-                <button id="help-tab-mobile" class="help-tab-btn" type="button"><span>📱 Touch-Steuerung</span></button>
-                <button id="help-tab-keyboard" class="help-tab-btn" type="button"><span>⌨️ PC Tastatur</span></button>
+                <button id="help-tab-mobile" class="help-tab-btn" type="button"><span data-i18n="help.tabMobile">📱 Touch Controls</span></button>
+                <button id="help-tab-keyboard" class="help-tab-btn" type="button"><span data-i18n="help.tabKeyboard">⌨️ PC Keyboard</span></button>
               </div>
             </div>
 
             <div class="help-content">
               <!-- Mobile Touch Controls Section (#help-controls-mobile) -->
               <div id="help-controls-mobile" class="help-controls-section">
-                <div class="help-section-title">📱 SMARTPHONE / TOUCH-STEUERUNG</div>
+                <div class="help-section-title" data-i18n="help.mobileSectionTitle">📱 SMARTPHONE / TOUCH CONTROLS</div>
                 <div class="help-grid">
                   <div class="help-item">
                     <span class="help-btn-tag">◀ / ▶ CARVE</span>
-                    <div class="help-item-desc">
-                      <strong>Einlenken &amp; Bowl-Wände:</strong> In den Bowl-Wänden carven &amp; Schwung aufbauen
+                    <div class="help-item-desc" data-i18n-html="help.mobCarve">
+                      <strong>Carve &amp; Bowl Walls:</strong> Carve the bowl walls &amp; build momentum
                     </div>
                   </div>
                   <div class="help-item">
                     <span class="help-btn-tag">▲ PUMP</span>
-                    <div class="help-item-desc">
-                      <strong>Schwung holen:</strong> Pushen aus dem Stand &amp; in der Transition pumpen für Speed
+                    <div class="help-item-desc" data-i18n-html="help.mobPump">
+                      <strong>Gain Speed:</strong> Push off from standstill &amp; pump in transitions
                     </div>
                   </div>
                   <div class="help-item">
                     <span class="help-btn-tag">▼ BRAKE</span>
-                    <div class="help-item-desc">
-                      <strong>Abbremsen:</strong> Kontrollieren &amp; Tempo drosseln
+                    <div class="help-item-desc" data-i18n-html="help.mobBrake">
+                      <strong>Slow Down:</strong> Control your line &amp; scrub speed
                     </div>
                   </div>
                   <div class="help-item">
                     <span class="help-btn-tag">OLLIE</span>
-                    <div class="help-item-desc">
-                      <strong>Abspringen:</strong> An der Lippe für Airs abspringen (in der Luft halten für Indy Grab)
+                    <div class="help-item-desc" data-i18n-html="help.mobOllie">
+                      <strong>Pop Airs:</strong> Pop off the lip for airs (hold in mid-air for Indy Grab)
                     </div>
                   </div>
                   <div class="help-item">
                     <span class="help-btn-tag">TRICK</span>
-                    <div class="help-item-desc">
-                      <strong>Surf-Manöver:</strong> In der Luft oder am Coping für Spins, Grabs &amp; Stalls
+                    <div class="help-item-desc" data-i18n-html="help.mobTrick">
+                      <strong>Surf Moves:</strong> Spins, Grabs &amp; Lip Stalls in air or on coping
                     </div>
                   </div>
                   <div class="help-item">
                     <span class="help-btn-tag">COMPRESS</span>
-                    <div class="help-item-desc">
-                      <strong>Kompression:</strong> Tief in die Knie gehen (Speed aufbauen vor Transition / für Airs loslassen)
+                    <div class="help-item-desc" data-i18n-html="help.mobCompress">
+                      <strong>Compression:</strong> Crouch low before transitions for speed, release for airs
                     </div>
                   </div>
                 </div>
@@ -4849,55 +4918,55 @@
 
               <!-- PC Keyboard Controls Section (#help-controls-keyboard) -->
               <div id="help-controls-keyboard" class="help-controls-section">
-                <div class="help-section-title">⌨️ PC TASTATUR-STEUERUNG</div>
+                <div class="help-section-title" data-i18n="help.kbSectionTitle">⌨️ PC KEYBOARD CONTROLS</div>
                 <div class="help-grid">
                   <div class="help-item">
-                    <span class="help-key-tag">← / → oder A / D</span>
-                    <div class="help-item-desc">
-                      <strong>Carve &amp; Pump:</strong> In den Kurven carven &amp; rhythmisch pumpen für Speed
+                    <span class="help-key-tag" data-i18n="help.kbCarveKey">← / → or A / D</span>
+                    <div class="help-item-desc" data-i18n-html="help.kbCarve">
+                      <strong>Carve &amp; Pump:</strong> Carve turns &amp; pump rhythmically for speed
                     </div>
                   </div>
                   <div class="help-item">
-                    <span class="help-key-tag">↑ oder W</span>
-                    <div class="help-item-desc">
-                      <strong>Push-Off:</strong> Aus dem Stand anrollen &amp; Schwung holen
+                    <span class="help-key-tag" data-i18n="help.kbPushKey">↑ or W</span>
+                    <div class="help-item-desc" data-i18n-html="help.kbPush">
+                      <strong>Push-Off:</strong> Push off from a standstill &amp; build initial speed
                     </div>
                   </div>
                   <div class="help-item">
-                    <span class="help-key-tag">↓ oder S / Shift</span>
-                    <div class="help-item-desc">
-                      <strong>Compress &amp; Brake:</strong> Kniebeuge für Speed in der Transition / Abbremsen
+                    <span class="help-key-tag" data-i18n="help.kbBrakeKey">↓ or S / Shift</span>
+                    <div class="help-item-desc" data-i18n-html="help.kbBrake">
+                      <strong>Compress &amp; Brake:</strong> Crouch into transitions for speed / brake
                     </div>
                   </div>
                   <div class="help-item">
                     <span class="help-key-tag">Space</span>
-                    <div class="help-item-desc">
-                      <strong>Ollie &amp; Grab:</strong> Abspringen an der Coping-Kante / Halten für Indy Grab
+                    <div class="help-item-desc" data-i18n-html="help.kbOllie">
+                      <strong>Ollie &amp; Grab:</strong> Pop off the coping lip / hold in air for Indy Grab
                     </div>
                   </div>
                   <div class="help-item">
                     <span class="help-key-tag">Q / W / A / S</span>
-                    <div class="help-item-desc">
-                      <strong>Surf-Tricks:</strong> Q = Snap, W = Layback, A = Bertslide, S = FS Reverse 360
+                    <div class="help-item-desc" data-i18n-html="help.kbTricks">
+                      <strong>Surf Tricks:</strong> Q = Snap, W = Layback, A = Bertslide, S = FS Reverse 360
                     </div>
                   </div>
                   <div class="help-item">
                     <span class="help-key-tag">1 / 2 / 3 / 4 / O</span>
-                    <div class="help-item-desc">
-                      <strong>Kamera:</strong> Follow Cam, Drohnen-Kamera oder 3D-Orbit
+                    <div class="help-item-desc" data-i18n-html="help.kbCam">
+                      <strong>Camera:</strong> Follow Cam, Filmer Cam, or 3D Orbit Inspect
                     </div>
                   </div>
                 </div>
               </div>
 
               <!-- General Pro-Tip Footer -->
-              <div class="help-pro-tip">
-                💡 <strong>TIPP:</strong> Pumpe in den Kurven und nutze COMPRESS + OLLIE an den Bowl-Wänden für maximale Airtime &amp; Highscores!
+              <div class="help-pro-tip" data-i18n-html="help.proTip">
+                💡 <strong>PRO TIP:</strong> Pump through the turns and combine COMPRESS + OLLIE at the bowl walls for massive airtime &amp; high scores!
               </div>
             </div>
 
             <div class="help-footer">
-              <button id="help-modal-ok-btn" type="button" class="help-ok-btn">VERSTANDEN &amp; LOS</button>
+              <button id="help-modal-ok-btn" type="button" class="help-ok-btn" data-i18n="help.okBtn">GOT IT — LET'S RIDE</button>
             </div>
           </div>
         </div>
@@ -4909,21 +4978,21 @@
         <div class="flowline-modal-card">
           <div class="flowline-modal-header">
             <div>
-              <span class="flowline-badge">DEV MODE • WAYPOINTS RECORDER</span>
-              <h2 class="flowline-title" id="flowline-modal-title">🌊 FLOW LINE EXPORT</h2>
+              <span class="flowline-badge" data-i18n="flowModal.badge">DEV MODE • WAYPOINTS RECORDER</span>
+              <h2 class="flowline-title" id="flowline-modal-title" data-i18n="flowModal.title">🌊 FLOW LINE EXPORT</h2>
             </div>
             <button class="flowline-close-btn" id="flowline-modal-x-btn" type="button" aria-label="Close">✕</button>
           </div>
           <div class="flowline-modal-body">
-            <p class="flowline-desc">
-              Your custom Flow Line was recorded live in Skatepark "Im Wiesengrund"! Copy this snippet to chat or directly into <code class="flowline-code">FlowLineChallenge.WAYPOINTS_2D</code>:
+            <p class="flowline-desc" data-i18n-html="flowModal.desc">
+              Your custom Flow Line was recorded live in the skatepark! Copy this snippet to chat or directly into <code class="flowline-code">FlowLineChallenge.WAYPOINTS_2D</code>:
             </p>
             <textarea id="flowline-export-textarea" class="flowline-textarea" readonly spellcheck="false"></textarea>
           </div>
           <div class="flowline-modal-footer">
-            <button id="flowline-modal-copy-btn" type="button" class="flowline-btn flowline-btn-primary">📋 COPY WAYPOINTS</button>
-            <button id="flowline-modal-test-btn" type="button" class="flowline-btn flowline-btn-accent">▶ TEST RECORDED LINE</button>
-            <button id="flowline-modal-close-btn" type="button" class="flowline-btn flowline-btn-ghost">CLOSE</button>
+            <button id="flowline-modal-copy-btn" type="button" class="flowline-btn flowline-btn-primary" data-i18n="flowModal.copyBtn">📋 COPY WAYPOINTS</button>
+            <button id="flowline-modal-test-btn" type="button" class="flowline-btn flowline-btn-accent" data-i18n="flowModal.testBtn">▶ TEST RECORDED LINE</button>
+            <button id="flowline-modal-close-btn" type="button" class="flowline-btn flowline-btn-ghost" data-i18n="common.close">CLOSE</button>
           </div>
         </div>
       </div>
@@ -4934,27 +5003,27 @@
         <div class="lb-modal-card">
           <div class="lb-header">
             <div>
-              <span class="lb-badge">GLOBAL TOP 15 HIGHSCORES</span>
+              <span class="lb-badge" data-i18n="lb.badge">GLOBAL TOP 15 HIGHSCORES</span>
               <div class="lb-title-row">
-                <h2 class="lb-title" id="lb-modal-title">🏆 TOP SCORES</h2>
+                <h2 class="lb-title" id="lb-modal-title" data-i18n="lb.title">🏆 TOP SCORES</h2>
                 <span class="lb-source-badge" id="lb-source-badge">GLOBAL LIVE</span>
               </div>
             </div>
             <button id="lb-modal-close" class="lb-close-btn" type="button" aria-label="Close Leaderboard">&times;</button>
           </div>
           <div class="lb-tabs" id="lb-tabs" role="tablist" aria-label="Park Leaderboard Filter">
-            <button type="button" class="lb-tab-btn active" data-park="all" role="tab" aria-selected="true">🌍 ALL PARKS</button>
-            <button type="button" class="lb-tab-btn" data-park="im_gefilde" role="tab" aria-selected="false">🌲 IM WIESENGRUND</button>
-            <button type="button" class="lb-tab-btn" data-park="airport_skatepark" role="tab" aria-selected="false">✈️ AIRPORT PARK</button>
+            <button type="button" class="lb-tab-btn active" data-park="all" role="tab" aria-selected="true" data-i18n="lb.tabAll">🌍 ALL PARKS</button>
+            <button type="button" class="lb-tab-btn" data-park="im_gefilde" role="tab" aria-selected="false" data-i18n="lb.tabWiesengrund">🌲 IM WIESENGRUND</button>
+            <button type="button" class="lb-tab-btn" data-park="airport_skatepark" role="tab" aria-selected="false" data-i18n="lb.tabAirport">✈️ AIRPORT PARK</button>
           </div>
           <div class="lb-body">
             <div class="lb-list" id="lb-list">
-              <div class="lb-state-msg">⏳ Loading leaderboard...</div>
+              <div class="lb-state-msg" data-i18n="lb.loading">⏳ Loading leaderboard...</div>
             </div>
           </div>
           <div class="lb-footer">
-            <span class="lb-footer-hint">Jeder Rider behält seinen persönlichen Best-Score.</span>
-            <button id="lb-modal-ok-btn" type="button" class="lb-ok-btn">CLOSE</button>
+            <span class="lb-footer-hint" data-i18n="lb.footerHint">Each rider keeps their personal best score.</span>
+            <button id="lb-modal-ok-btn" type="button" class="lb-ok-btn" data-i18n="common.close">CLOSE</button>
           </div>
         </div>
       </div>
@@ -4968,43 +5037,42 @@
               <div class="summary-medal-wrap">
                 <span class="summary-medal-icon" id="summary-medal-icon">🥇</span>
                 <div class="summary-title-col">
-                  <span class="summary-kicker" id="summary-kicker">2-MINUTE SESSION COMPLETE</span>
-                  <h2 class="summary-medal-title" id="summary-medal-title">GOLD MEDAILLE</h2>
+                  <span class="summary-kicker" id="summary-kicker" data-i18n="summary.kicker">2-MINUTE SESSION COMPLETE</span>
+                  <h2 class="summary-medal-title" id="summary-medal-title">GOLD MEDAL</h2>
                 </div>
               </div>
-              <span class="summary-highscore-badge hidden" id="summary-highscore-badge">★ NEW HIGH SCORE!</span>
+              <span class="summary-highscore-badge hidden" id="summary-highscore-badge" data-i18n="summary.newHighScore">★ NEW HIGH SCORE!</span>
             </div>
 
             <div class="summary-stats-grid">
               <div class="summary-stat-box">
-                <span class="summary-stat-label">FINAL SCORE</span>
+                <span class="summary-stat-label" data-i18n="summary.finalScore">FINAL SCORE</span>
                 <span class="summary-stat-val gold" id="summary-final-score">0</span>
               </div>
               <div class="summary-stat-box">
-                <span class="summary-stat-label">BEST LINE COMBO</span>
+                <span class="summary-stat-label" data-i18n="summary.bestCombo">BEST LINE COMBO</span>
                 <span class="summary-stat-val" id="summary-best-combo">0</span>
               </div>
               <div class="summary-stat-box">
-                <span class="summary-stat-label">BREZELN</span>
+                <span class="summary-stat-label" data-i18n="summary.pretzels">PRETZELS</span>
                 <span class="summary-stat-val" id="summary-pretzels">🥨 0/5</span>
               </div>
             </div>
 
             <div class="summary-nearmiss-box" id="summary-nearmiss-box">
-              🔥 NUR NOCH 1.150 PUNKTE BIS GOLD! Versuch's direkt nochmal!
             </div>
 
             <div class="summary-missions-section">
               <div class="summary-rank-row">
                 <span class="summary-rank-label" id="summary-rank-label">🥉 LVL 1 • GROM</span>
-                <span class="summary-rank-sub">SURF-CHALLENGES</span>
+                <span class="summary-rank-sub" data-i18n="summary.challengesTitle">SURF CHALLENGES</span>
               </div>
               <div id="summary-missions-list" style="display:flex;flex-direction:column;gap:8px;"></div>
             </div>
 
             <div class="summary-lb-section">
               <div class="summary-lb-header">
-                <span class="summary-lb-title" id="summary-lb-title">🏆 GLOBAL HIGHSCORE</span>
+                <span class="summary-lb-title" id="summary-lb-title" data-i18n="summary.lbTitle">🏆 GLOBAL HIGHSCORE</span>
                 <button type="button" class="summary-lb-full-btn" id="summary-lb-open-full">TOP 15 ↗</button>
               </div>
               <div class="summary-lb-form">
@@ -5015,9 +5083,10 @@
                   maxlength="16"
                   autocomplete="nickname"
                   spellcheck="false"
-                  placeholder="Rider Name (min. 2 Zeichen)"
+                  placeholder="Rider Name (min. 2 chars)"
+                  data-i18n-placeholder="summary.riderPlaceholder"
                 />
-                <button type="button" class="summary-lb-save-btn" id="summary-submit-score">🏆 SAVE</button>
+                <button type="button" class="summary-lb-save-btn" id="summary-submit-score" data-i18n="summary.saveBtn">🏆 SAVE</button>
               </div>
               <div class="summary-lb-status" id="summary-lb-status"></div>
               <div class="summary-lb-list" id="summary-lb-list"></div>
@@ -5026,10 +5095,10 @@
 
           <div class="summary-actions">
             <button type="button" class="summary-btn summary-btn-primary" id="summary-btn-retry">
-              <span>↻ NOCHMAL FAHREN (SPACE)</span>
+              <span data-i18n="summary.retryBtn">↻ SKATE AGAIN (SPACE)</span>
             </button>
             <button type="button" class="summary-btn summary-btn-secondary" id="summary-btn-garage">
-              <span>🏠 GARAGE &amp; MODUS WÄHLEN</span>
+              <span data-i18n="summary.garageBtn">🏠 BACK TO GARAGE</span>
             </button>
           </div>
         </div>
@@ -5043,19 +5112,19 @@
           <div class="hud-top-left-stack">
             <div class="score-card">
               <div class="stat-block session-block" id="hud-session-block">
-                <span class="stat-label" id="hud-session-label">Session</span>
+                <span class="stat-label" id="hud-session-label" data-i18n="hud.session">Session</span>
                 <span class="stat-value" id="hud-timer">2:00.0</span>
               </div>
               <div class="stat-block score-block">
-                <span class="stat-label">Score</span>
+                <span class="stat-label" data-i18n="hud.score">Score</span>
                 <span class="stat-value" id="hud-score">0</span>
               </div>
               <div class="stat-block best-block">
-                <span class="stat-label">Best Line</span>
+                <span class="stat-label" data-i18n="hud.bestLine">Best Line</span>
                 <span class="stat-value" id="hud-best-combo">0</span>
               </div>
-              <div class="stat-block pretzel-block" id="hud-pretzel-block" title="Munich Bretzeln (+50 pts each, +500 all)">
-                <span class="stat-label">Bretzeln</span>
+              <div class="stat-block pretzel-block" id="hud-pretzel-block" title="Munich Pretzels (+50 pts each, +500 all)" data-i18n-title="hud.pretzelTitle">
+                <span class="stat-label" data-i18n="hud.pretzels">Pretzels</span>
                 <span class="stat-value pretzel-value" id="hud-pretzel-count">🥨 0/5</span>
               </div>
             </div>
@@ -5069,7 +5138,7 @@
             <div class="hud-missions-mini" id="hud-missions-mini">
               <div class="hud-missions-rank-row">
                 <span id="hud-rank-label">🥉 LVL 1 • GROM</span>
-                <span>CHALLENGES</span>
+                <span data-i18n="hud.challenges">CHALLENGES</span>
               </div>
               <div class="hud-missions-list" id="hud-missions-list"></div>
             </div>
@@ -5086,7 +5155,7 @@
               <span class="rec-dot">🔴</span>
               <span id="btn-flow-recorder-label">REC LINE [L]</span>
             </button>
-            <button class="hud-fullscreen-btn" id="btn-hud-fullscreen" type="button" title="Toggle Fullscreen">
+            <button class="hud-fullscreen-btn" id="btn-hud-fullscreen" type="button" title="Toggle Fullscreen" data-i18n-title="nav.fullscreenTitle">
               <span class="hud-fullscreen-icon">
                 <svg class="fs-icon fs-icon-enter" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
@@ -5096,9 +5165,9 @@
                 </svg>
               </span>
             </button>
-            <button class="garage-toggle" id="btn-hud-garage" title="Back to Garage / Landing Page [ESC]">
+            <button class="garage-toggle" id="btn-hud-garage" title="Back to Garage / Landing Page [ESC]" data-i18n-title="hud.garageTitle">
               <span class="key-cap"><span id="hud-garage-key-label">ESC</span></span>
-              <span class="toggle-label"><span>Garage</span></span>
+              <span class="toggle-label"><span data-i18n="hud.garage">Garage</span></span>
             </button>
           </div>
         </div>
@@ -5136,7 +5205,7 @@
               </div>
               <div class="telemetry-row">
                 <div class="truck-widget">
-                  <span class="lean-label">Lean</span>
+                  <span class="lean-label" data-i18n="hud.lean">Lean</span>
                   <div class="truck-dial" title="Dual-Axis Surf Adapter Front Truck Angle">
                     <div id="hud-truck-front"></div>
                   </div>
@@ -5155,16 +5224,16 @@
           </div>
 
           <div class="dock collapsed" id="hud-dock">
-            <button class="dock-toggle" id="dock-toggle" title="Show / hide tricks &amp; options [H]">
+            <button class="dock-toggle" id="dock-toggle" title="Show / hide tricks &amp; options [H]" data-i18n-title="dock.toggleTitle">
               <span class="key-cap"><span>H</span></span>
-              <span class="toggle-label"><span>Tricks &amp; Options</span></span>
+              <span class="toggle-label"><span data-i18n="dock.toggleLabel">Tricks &amp; Options</span></span>
             </button>
             <div class="dock-body">
               <div>
                 <div class="dock-section-title" id="dock-rank-title">Surf-Challenges • 🥉 LVL 1 GROM</div>
                 <div id="dock-missions-list" style="margin-bottom:8px;"></div>
 
-                <div class="dock-section-title">Tricks</div>
+                <div class="dock-section-title" data-i18n="dock.tricksTitle">Tricks</div>
                 <div id="dock-tricks-list">
                   <div id="dock-tricks-keyboard">
                     <div class="trick-row"><span class="key">Q</span><span class="trick-name">Snap</span><span class="trick-how">top of a wall, right speed</span></div>
@@ -5174,16 +5243,16 @@
                     <div class="trick-row"><span class="key">␣</span> / <span class="key">I</span><span class="trick-name">Indy Grab</span><span class="trick-how">ollie off a wall, hold in air</span></div>
                   </div>
                   <div id="dock-tricks-mobile">
-                    <div class="trick-row"><span class="key">OLLIE</span><span class="trick-name">Ollie (Air)</span><span class="trick-how">abspringen an Lippe / Airs</span></div>
-                    <div class="trick-row"><span class="key">HOLD OLLIE</span><span class="trick-name">Indy Grab (Air)</span><span class="trick-how">in der Luft halten</span></div>
-                    <div class="trick-row"><span class="key">TRICK</span><span class="trick-name">360 Spin / Flip (Air)</span><span class="trick-how">Air Spin &amp; Coping Snap</span></div>
-                    <div class="trick-row"><span class="key">◀ / ▶ + TRICK</span><span class="trick-name">Bert Slide (Wall)</span><span class="trick-how">in der Kurve halten</span></div>
-                    <div class="trick-row"><span class="key">TRICK (COPING)</span><span class="trick-name">Lip Trick / Stall</span><span class="trick-how">an der Bowl-Kante</span></div>
-                    <div class="trick-row"><span class="key">COMPRESS</span><span class="trick-name">Crouch &amp; Speed Pump</span><span class="trick-how">Kniebeuge vor Transition</span></div>
+                    <div class="trick-row"><span class="key">OLLIE</span><span class="trick-name">Ollie (Air)</span><span class="trick-how">pop off the lip / airs</span></div>
+                    <div class="trick-row"><span class="key">HOLD OLLIE</span><span class="trick-name">Indy Grab (Air)</span><span class="trick-how">hold in mid-air</span></div>
+                    <div class="trick-row"><span class="key">TRICK</span><span class="trick-name">360 Spin / Flip (Air)</span><span class="trick-how">air spin &amp; coping snap</span></div>
+                    <div class="trick-row"><span class="key">◀ / ▶ + TRICK</span><span class="trick-name">Bert Slide (Wall)</span><span class="trick-how">hold while carving a turn</span></div>
+                    <div class="trick-row"><span class="key">TRICK (COPING)</span><span class="trick-name">Lip Trick / Stall</span><span class="trick-how">on the bowl coping</span></div>
+                    <div class="trick-row"><span class="key">COMPRESS</span><span class="trick-name">Crouch &amp; Speed Pump</span><span class="trick-how">crouch before transition</span></div>
                   </div>
                 </div>
 
-                <div class="dock-section-title">Riding</div>
+                <div class="dock-section-title" data-i18n="dock.ridingTitle">Riding</div>
                 <div id="dock-riding-list">
                   <div id="dock-riding-keyboard">
                     <div class="ctrl-row"><span class="key">↑</span> one push-off from a standstill</div>
@@ -5195,32 +5264,32 @@
                     <div class="ctrl-row"><span class="key">M</span> mute music / <span class="key">N</span> next song</div>
                   </div>
                   <div id="dock-riding-mobile">
-                    <div class="ctrl-row"><span class="key">◀</span><span class="key">▶</span> carve — in den Bowl-Wänden carven</div>
-                    <div class="ctrl-row"><span class="key">▲</span> pump — Schwung holen &amp; pushen</div>
-                    <div class="ctrl-row"><span class="key">▼</span> brake — abbremsen &amp; kontrollieren</div>
-                    <div class="ctrl-row"><span class="key">OLLIE</span> abspringen an der Lippe / Airs</div>
+                    <div class="ctrl-row"><span class="key">◀</span><span class="key">▶</span> carve — surf the bowl walls</div>
+                    <div class="ctrl-row"><span class="key">▲</span> pump — push off &amp; pump for speed</div>
+                    <div class="ctrl-row"><span class="key">▼</span> brake — brake &amp; control speed</div>
+                    <div class="ctrl-row"><span class="key">OLLIE</span> pop off the lip / airs</div>
                     <div class="ctrl-row"><span class="key">TRICK</span> Snap, Bert, Layback &amp; 360</div>
-                    <div class="ctrl-row"><span class="key">COMPRESS</span> Kniebeuge vor Transition</div>
+                    <div class="ctrl-row"><span class="key">COMPRESS</span> crouch before transition</div>
                   </div>
                 </div>
 
-                <div class="dock-section-title">Options</div>
+                <div class="dock-section-title" data-i18n="dock.optionsTitle">Options</div>
                 <div class="options-grid">
-                  <button class="hud-btn" id="btn-controls">🎮 Steuerung: Pfeiltasten [Tab]</button>
+                  <button class="hud-btn" id="btn-controls">🎮 Controls: Arrow Keys [Tab]</button>
                   <button class="hud-btn" id="btn-aspect">🖥️ 16:9 Desktop [R]</button>
                   <button class="hud-btn" id="btn-atmosphere">🌙 Floodlit Munich Night</button>
                   <button class="hud-btn" id="btn-camera">🎥 Follow Cam [1]</button>
                   <button class="hud-btn" id="btn-truckfeel">🛹 Truck: Balanced [T]</button>
                   <button class="hud-btn" id="btn-music">🎵 Track 1/3 [M] [N]</button>
                   <button class="hud-btn" id="btn-autoflow">🎮 Manual Control [J]</button>
-                  <button class="hud-btn hidden" id="btn-dock-flow-rec">🔴 Rec Flow Line [L]</button>
+                  <button class="hud-btn hidden" id="btn-dock-flow-rec" data-i18n="dock.recFlowLine">🔴 Rec Flow Line [L]</button>
                   <button class="hud-btn" id="btn-quality">⚡ Quality: AUTO [U]</button>
                   <button class="hud-btn" id="btn-fps" title="Live Framerate">📊 60 FPS</button>
-                  <button class="hud-btn" id="btn-reset">↺ Respawn [X]</button>
-                  <button class="hud-btn" id="btn-fullscreen">Fullscreen</button>
+                  <button class="hud-btn" id="btn-reset" data-i18n="dock.respawn">↺ Respawn [X]</button>
+                  <button class="hud-btn" id="btn-fullscreen" data-i18n="dock.fullscreen">Fullscreen</button>
                   <button class="hud-btn" id="btn-touch">📱 Touch Controls: AUTO</button>
-                  <a class="hud-btn" id="btn-viewer" href="/viewer.html" target="_blank" style="text-decoration:none;display:flex;align-items:center;justify-content:center;color:inherit;">🔍 3D Photogrammetry Viewer</a>
-                  <button class="hud-btn" id="btn-garage">🏠 Garage Selector [ESC]</button>
+                  <a class="hud-btn" id="btn-viewer" href="/viewer.html" target="_blank" style="text-decoration:none;display:flex;align-items:center;justify-content:center;color:inherit;" data-i18n="dock.viewer">🔍 3D Photogrammetry Viewer</a>
+                  <button class="hud-btn" id="btn-garage" data-i18n="dock.garage">🏠 Garage Selector [ESC]</button>
                 </div>
               </div>
             </div>

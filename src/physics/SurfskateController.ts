@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ParkSurface, SurfaceSample } from './ParkSurface';
+import { t } from '../i18n/i18n';
 
 export interface InputState {
   steerLeft: boolean;
@@ -398,7 +399,7 @@ export class SurfskateController {
         this.speed = 0;
         this.velocity.set(0, 0, 0);
         this.compression = 0.15;
-        this.coachHint = 'Aligned landings: point your board in travel direction!';
+        this.coachHint = t('ctrl.coachAligned');
         this.coachHintTimer = 2.5;
       }
       return;
@@ -712,13 +713,13 @@ export class SurfskateController {
             this.pumpPulse = Math.max(this.pumpPulse, 0.7);
             this.pumpSyncQuality = 'FLOW PUMP';
             this.pumpQualityTimer = 0.6;
-            this.coachHint = 'Now PUMP: alternate ← → in rhythm to gain speed';
+            this.coachHint = t('ctrl.coachPumpNow');
             this.coachHintTimer = 3.0;
           }
           // Smooth startup acceleration while holding push below cruising speed
           aExtra += PUSH_ACCEL;
         } else if (this.speed >= PUSH_STARTUP_SPEED) {
-          this.coachHint = 'At cruise speed — PUMP: alternate ← → in rhythm (≈ 1 left-right cycle per second)';
+          this.coachHint = t('ctrl.coachPumpCruise');
           this.coachHintTimer = 2.5;
         }
       }
@@ -946,7 +947,7 @@ export class SurfskateController {
 
         if (grabActiveOnImpact) {
           shouldBail = true;
-          bailReason = 'LET GO OF GRAB BEFORE IMPACT!';
+          bailReason = t('ctrl.bailGrab');
         } else if (hadSignificantAir && horizSpeed >= 0.8) {
           const travelHeading = Math.atan2(-tangentVel.x, -tangentVel.z);
           const currentBoardHeading = this.heading + this.boardYawOffset;
@@ -960,9 +961,9 @@ export class SurfskateController {
           if (alignError > MAX_LANDING_ANGLE) {
             shouldBail = true;
             if (alignError > 2.0) {
-              bailReason = 'LANDED BACKWARDS!';
+              bailReason = t('ctrl.bailBackwards');
             } else {
-              bailReason = 'NOT ALIGNED WITH TRAVEL!';
+              bailReason = t('ctrl.bailNotAligned');
             }
           }
         }
@@ -1064,19 +1065,19 @@ export class SurfskateController {
     onManeuver: (ev: ManeuverEvent) => void
   ): void {
     if (this.snapWindow === 'NONE') {
-      this.snapFeedback = 'SNAP: get to the top of a wall!';
+      this.snapFeedback = t('ctrl.snapTopOfWall');
       this.snapFeedbackTimer = 1.1;
       return;
     }
     if (this.snapWindow === 'TOO_SLOW') {
       // Bogged the snap: lose the little speed that was left
-      this.snapFeedback = 'TOO SLOW!';
+      this.snapFeedback = t('ctrl.snapFeedbackSlow');
       this.snapFeedbackTimer = 1.1;
       this.speed *= 0.5;
       return;
     }
     if (this.snapWindow === 'TOO_FAST') {
-      this.snapFeedback = 'TOO FAST!';
+      this.snapFeedback = t('ctrl.snapFeedbackFast');
       this.snapFeedbackTimer = 1.1;
       this.speed *= 0.85;
       return;
@@ -1169,7 +1170,7 @@ export class SurfskateController {
     if (firstSwitch) return;
 
     if (this.speed < STANDSTILL_SPEED) {
-      this.coachHint = 'Too slow to pump — press ↑ once to push off';
+      this.coachHint = t('ctrl.coachTooSlowPush');
       this.coachHintTimer = 2.0;
       return;
     }
@@ -1184,12 +1185,12 @@ export class SurfskateController {
       this.speed = Math.max(0, this.speed - 0.08);
       this.pumpSyncQuality = 'SCRUB';
       this.pumpQualityTimer = 0.6;
-      this.coachHint = 'Too hectic! Slow down your ← → rhythm';
+      this.coachHint = t('ctrl.coachTooHectic');
       this.coachHintTimer = 1.6;
     } else if (interval > PUMP_MAX_INTERVAL) {
       // Too lazy: just a carve, no pump
       if (this.speed < 2.0) {
-        this.coachHint = 'Faster rhythm: switch ← → about twice per second';
+        this.coachHint = t('ctrl.coachFasterRhythm');
         this.coachHintTimer = 1.8;
       }
     } else if (interval >= PUMP_PERFECT_MIN && interval <= PUMP_PERFECT_MAX) {
