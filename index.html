@@ -2585,26 +2585,27 @@
         align-items: stretch;
         border-radius: 8px;
         overflow: hidden;
-        background: rgba(16, 18, 22, 0.72);
-        border: 2px solid rgba(255, 255, 255, 0.28);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+        background: rgba(12, 16, 22, 0.26);
+        border: 1.5px solid rgba(255, 255, 255, 0.42);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
         transform: skewX(var(--skew));
         touch-action: none;
-        transition: border-bottom-color 0.12s ease, box-shadow 0.12s ease;
+        transition: background 0.12s ease, border-bottom-color 0.12s ease, box-shadow 0.12s ease;
       }
       .touch-carve-rocker.crouching {
+        background: rgba(18, 16, 22, 0.36);
         border-bottom-color: var(--coral);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 6px 18px rgba(255, 61, 90, 0.5);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 4px 14px rgba(255, 61, 90, 0.45);
       }
       .touch-carve-rocker.crouching .rocker-divider {
         background: rgba(255, 61, 90, 0.65);
       }
       .rocker-divider {
         width: 2px;
-        background: rgba(255, 255, 255, 0.2);
-        box-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+        background: rgba(255, 255, 255, 0.26);
+        box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
       }
       .touch-carve-paddle {
         flex: 1 1 50%;
@@ -2619,7 +2620,7 @@
         cursor: pointer;
         touch-action: none;
         user-select: none;
-        transition: background 0.1s ease, color 0.1s ease;
+        transition: background 0.1s ease, color 0.1s ease, box-shadow 0.1s ease;
       }
       .touch-carve-paddle > * {
         transform: skewX(calc(var(--skew) * -1));
@@ -2628,6 +2629,7 @@
         font-size: 24px;
         color: var(--yellow);
         line-height: 1;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85), 0 0 8px rgba(0, 0, 0, 0.6);
       }
       .paddle-label {
         font-family: var(--font-hud);
@@ -2635,13 +2637,18 @@
         font-weight: 900;
         letter-spacing: 0.12em;
         line-height: 1;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85), 0 0 8px rgba(0, 0, 0, 0.6);
       }
-      .touch-carve-paddle.active {
-        background: linear-gradient(135deg, rgba(242, 85, 20, 0.85), rgba(250, 164, 26, 0.85));
+      .touch-carve-paddle:active,
+      .touch-carve-paddle.active,
+      .touch-carve-paddle.pressed {
+        background: linear-gradient(135deg, rgba(242, 85, 20, 0.62), rgba(250, 164, 26, 0.62));
         color: #ffffff;
-        box-shadow: inset 0 0 14px rgba(255, 255, 255, 0.4);
+        box-shadow: inset 0 0 14px rgba(255, 255, 255, 0.35), 0 0 14px rgba(250, 164, 26, 0.45);
       }
-      .touch-carve-paddle.active .paddle-arrow {
+      .touch-carve-paddle:active .paddle-arrow,
+      .touch-carve-paddle.active .paddle-arrow,
+      .touch-carve-paddle.pressed .paddle-arrow {
         color: #ffffff;
         transform: skewX(calc(var(--skew) * -1)) scale(1.18);
       }
@@ -2651,43 +2658,51 @@
         width: 140px;
         height: 36px;
         border-radius: 4px;
-        background: rgba(18, 16, 14, 0.76);
-        border: 1px solid rgba(255, 255, 255, 0.26);
+        background: rgba(12, 16, 22, 0.28);
+        border: 1.5px solid rgba(255, 255, 255, 0.42);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
         color: #f5f4f0;
         font-family: var(--font-hud);
         font-size: 13px;
         font-weight: 900;
         letter-spacing: 0.1em;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
         transform: skewX(var(--skew));
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
         transition: all 0.1s ease;
       }
       .touch-aux-pill > span {
         display: inline-block;
         transform: skewX(calc(var(--skew) * -1));
       }
-      .touch-aux-pill.active {
-        background: rgba(242, 85, 20, 0.6);
+      .touch-aux-pill:active,
+      .touch-aux-pill.active,
+      .touch-aux-pill.pressed {
+        background: rgba(242, 85, 20, 0.52);
         border-color: var(--yellow);
         color: var(--yellow);
+        box-shadow: 0 0 14px rgba(250, 164, 26, 0.5);
         transform: skewX(var(--skew)) scale(0.96);
       }
       .touch-push-pill {
-        border-color: rgba(250, 164, 26, 0.55);
+        border-color: rgba(250, 164, 26, 0.65);
       }
       .touch-brake-pill {
-        border-color: rgba(255, 61, 90, 0.45);
-        color: #ffadb8;
+        border-color: rgba(255, 61, 90, 0.6);
+        color: #ffc2cb;
       }
-      .touch-brake-pill.active {
-        background: rgba(255, 61, 90, 0.65);
+      .touch-brake-pill:active,
+      .touch-brake-pill.active,
+      .touch-brake-pill.pressed {
+        background: rgba(255, 61, 90, 0.55);
         border-color: #ff3d5a;
         color: #ffffff;
-        box-shadow: 0 0 16px rgba(255, 61, 90, 0.7);
+        box-shadow: 0 0 16px rgba(255, 61, 90, 0.65);
       }
 
       .touch-zone-label {
@@ -2976,6 +2991,52 @@
         .hud-top-right {
           transform: scale(0.85);
           transform-origin: top right;
+        }
+      }
+
+      /* Mobile & compact landscape combo banner & pump badge (Issue #31) */
+      @media (pointer: coarse), (max-height: 540px), (max-width: 900px) {
+        #hud-combo-box {
+          min-width: 0;
+          width: auto;
+          max-width: min(44vw, 300px);
+          padding: 3px 10px 4px;
+          border-left-width: 3px;
+          pointer-events: none;
+        }
+        #hud-combo-string {
+          font-size: 10.5px;
+          letter-spacing: 0.04em;
+          line-height: 1.15;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          margin-bottom: 1px;
+        }
+        #hud-combo-points {
+          font-size: 16px;
+          line-height: 1.1;
+          margin-bottom: 3px;
+        }
+        .combo-bar-bg {
+          height: 3px;
+        }
+        body.has-touch-controls #hud-combo-box {
+          bottom: calc(44px + env(safe-area-inset-bottom, 0px));
+        }
+        #hud-pump-badge {
+          font-size: 14px;
+          padding: 5px 18px 5px 14px;
+          top: 24%;
+        }
+      }
+      @media (max-width: 900px) and (orientation: portrait) {
+        #hud-combo-box {
+          max-width: min(86vw, 300px);
+        }
+        body.has-touch-controls #hud-combo-box,
+        body.reel-mode.has-touch-controls #hud-combo-box {
+          bottom: calc(246px + env(safe-area-inset-bottom, 0px));
         }
       }
 
@@ -3472,15 +3533,26 @@
         z-index: 2;
         width: 100%;
         max-width: 540px;
+        max-height: 92vh;
         max-height: 92dvh;
-        overflow-y: auto;
+        overflow: hidden;
         background: linear-gradient(155deg, rgba(26, 23, 20, 0.98) 0%, rgba(14, 13, 12, 0.99) 100%);
         border: 1.5px solid rgba(255, 255, 255, 0.22);
         border-top: 4px solid var(--orange);
         border-radius: 10px;
-        padding: 20px 24px;
+        padding: 0;
         box-shadow: 0 24px 70px rgba(0, 0, 0, 0.9), 0 0 36px rgba(242, 116, 31, 0.22);
         color: #f5f5f5;
+        display: flex;
+        flex-direction: column;
+      }
+      .summary-body-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        padding: 20px 24px 14px;
         display: flex;
         flex-direction: column;
         gap: 14px;
@@ -3649,11 +3721,15 @@
         background: #10b981;
       }
 
-      /* Summary Action Buttons */
+      /* Summary Action Buttons (pinned non-shrinking footer) */
       .summary-actions {
+        flex-shrink: 0;
         display: flex;
         gap: 12px;
-        margin-top: 2px;
+        margin-top: 0;
+        padding: 12px 24px calc(14px + env(safe-area-inset-bottom, 0px));
+        background: rgba(14, 13, 12, 0.96);
+        border-top: 1px solid rgba(255, 255, 255, 0.14);
       }
       .summary-btn {
         flex: 1;
@@ -3698,19 +3774,113 @@
         transform: skewX(var(--skew)) translateY(-2px);
       }
       @media (max-width: 560px) {
+        .summary-body-scroll {
+          padding: 14px 16px 10px;
+          gap: 10px;
+        }
         .summary-actions {
           flex-direction: column;
           gap: 8px;
-        }
-        .session-summary-card {
-          padding: 14px 16px;
-          gap: 10px;
+          padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px));
         }
         .summary-medal-title {
           font-size: 22px;
         }
         .summary-stat-val {
           font-size: 20px;
+        }
+      }
+      @media (max-height: 540px) {
+        .session-summary-overlay {
+          padding: 8px 12px;
+        }
+        .session-summary-card {
+          max-width: min(640px, 94vw);
+          max-height: 94vh;
+          max-height: 94dvh;
+          border-top-width: 3px;
+          border-radius: 8px;
+        }
+        .summary-body-scroll {
+          padding: 10px 16px 10px;
+          gap: 8px;
+        }
+        .summary-header {
+          padding-bottom: 8px;
+          gap: 8px;
+        }
+        .summary-medal-icon {
+          font-size: 30px;
+        }
+        .summary-kicker {
+          font-size: 9.5px;
+        }
+        .summary-medal-title {
+          font-size: 20px;
+        }
+        .summary-highscore-badge {
+          font-size: 10px;
+          padding: 3px 8px;
+        }
+        .summary-stats-grid {
+          gap: 6px;
+        }
+        .summary-stat-box {
+          padding: 5px 8px;
+        }
+        .summary-stat-label {
+          font-size: 9.5px;
+        }
+        .summary-stat-val {
+          font-size: 18px;
+        }
+        .summary-nearmiss-box {
+          padding: 6px 10px;
+          font-size: 12.5px;
+        }
+        .summary-missions-section {
+          padding: 7px 10px;
+          gap: 5px;
+        }
+        .summary-rank-row {
+          padding-bottom: 4px;
+        }
+        .summary-rank-label {
+          font-size: 13px;
+        }
+        .summary-rank-sub {
+          font-size: 9.5px;
+        }
+        .summary-mission-top {
+          font-size: 12px;
+        }
+        .summary-lb-section {
+          padding: 7px 10px;
+          gap: 5px;
+        }
+        .summary-lb-title {
+          font-size: 12px;
+        }
+        .summary-lb-input {
+          padding: 4px 8px;
+          font-size: 13px;
+        }
+        .summary-lb-save-btn {
+          padding: 5px 10px;
+          font-size: 12px;
+        }
+        .summary-lb-row {
+          font-size: 11.5px;
+          padding: 2px 6px;
+        }
+        .summary-actions {
+          flex-direction: row;
+          gap: 10px;
+          padding: 8px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+        }
+        .summary-btn {
+          padding: 8px 12px;
+          font-size: 14px;
         }
       }
 
@@ -4793,63 +4963,65 @@
       <div class="session-summary-overlay hidden" id="session-summary-modal" role="dialog" aria-modal="true" aria-labelledby="summary-medal-title">
         <div class="session-summary-backdrop" id="session-summary-backdrop"></div>
         <div class="session-summary-card">
-          <div class="summary-header">
-            <div class="summary-medal-wrap">
-              <span class="summary-medal-icon" id="summary-medal-icon">🥇</span>
-              <div class="summary-title-col">
-                <span class="summary-kicker" id="summary-kicker">2-MINUTE SESSION COMPLETE</span>
-                <h2 class="summary-medal-title" id="summary-medal-title">GOLD MEDAILLE</h2>
+          <div class="summary-body-scroll">
+            <div class="summary-header">
+              <div class="summary-medal-wrap">
+                <span class="summary-medal-icon" id="summary-medal-icon">🥇</span>
+                <div class="summary-title-col">
+                  <span class="summary-kicker" id="summary-kicker">2-MINUTE SESSION COMPLETE</span>
+                  <h2 class="summary-medal-title" id="summary-medal-title">GOLD MEDAILLE</h2>
+                </div>
+              </div>
+              <span class="summary-highscore-badge hidden" id="summary-highscore-badge">★ NEW HIGH SCORE!</span>
+            </div>
+
+            <div class="summary-stats-grid">
+              <div class="summary-stat-box">
+                <span class="summary-stat-label">FINAL SCORE</span>
+                <span class="summary-stat-val gold" id="summary-final-score">0</span>
+              </div>
+              <div class="summary-stat-box">
+                <span class="summary-stat-label">BEST LINE COMBO</span>
+                <span class="summary-stat-val" id="summary-best-combo">0</span>
+              </div>
+              <div class="summary-stat-box">
+                <span class="summary-stat-label">BREZELN</span>
+                <span class="summary-stat-val" id="summary-pretzels">🥨 0/5</span>
               </div>
             </div>
-            <span class="summary-highscore-badge hidden" id="summary-highscore-badge">★ NEW HIGH SCORE!</span>
-          </div>
 
-          <div class="summary-stats-grid">
-            <div class="summary-stat-box">
-              <span class="summary-stat-label">FINAL SCORE</span>
-              <span class="summary-stat-val gold" id="summary-final-score">0</span>
+            <div class="summary-nearmiss-box" id="summary-nearmiss-box">
+              🔥 NUR NOCH 1.150 PUNKTE BIS GOLD! Versuch's direkt nochmal!
             </div>
-            <div class="summary-stat-box">
-              <span class="summary-stat-label">BEST LINE COMBO</span>
-              <span class="summary-stat-val" id="summary-best-combo">0</span>
-            </div>
-            <div class="summary-stat-box">
-              <span class="summary-stat-label">BREZELN</span>
-              <span class="summary-stat-val" id="summary-pretzels">🥨 0/5</span>
-            </div>
-          </div>
 
-          <div class="summary-nearmiss-box" id="summary-nearmiss-box">
-            🔥 NUR NOCH 1.150 PUNKTE BIS GOLD! Versuch's direkt nochmal!
-          </div>
+            <div class="summary-missions-section">
+              <div class="summary-rank-row">
+                <span class="summary-rank-label" id="summary-rank-label">🥉 LVL 1 • GROM</span>
+                <span class="summary-rank-sub">SURF-CHALLENGES</span>
+              </div>
+              <div id="summary-missions-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+            </div>
 
-          <div class="summary-missions-section">
-            <div class="summary-rank-row">
-              <span class="summary-rank-label" id="summary-rank-label">🥉 LVL 1 • GROM</span>
-              <span class="summary-rank-sub">SURF-CHALLENGES</span>
+            <div class="summary-lb-section">
+              <div class="summary-lb-header">
+                <span class="summary-lb-title" id="summary-lb-title">🏆 GLOBAL HIGHSCORE</span>
+                <button type="button" class="summary-lb-full-btn" id="summary-lb-open-full">TOP 15 ↗</button>
+              </div>
+              <div class="summary-lb-form">
+                <input
+                  id="summary-player-name"
+                  type="text"
+                  class="summary-lb-input"
+                  maxlength="16"
+                  autocomplete="nickname"
+                  spellcheck="false"
+                  placeholder="Rider Name (min. 2 Zeichen)"
+                />
+                <button type="button" class="summary-lb-save-btn" id="summary-submit-score">🏆 SAVE</button>
+              </div>
+              <div class="summary-lb-status" id="summary-lb-status"></div>
+              <div class="summary-lb-list" id="summary-lb-list"></div>
             </div>
-            <div id="summary-missions-list" style="display:flex;flex-direction:column;gap:8px;"></div>
-          </div>
-
-          <div class="summary-lb-section">
-            <div class="summary-lb-header">
-              <span class="summary-lb-title" id="summary-lb-title">🏆 GLOBAL HIGHSCORE</span>
-              <button type="button" class="summary-lb-full-btn" id="summary-lb-open-full">TOP 15 ↗</button>
-            </div>
-            <div class="summary-lb-form">
-              <input
-                id="summary-player-name"
-                type="text"
-                class="summary-lb-input"
-                maxlength="16"
-                autocomplete="nickname"
-                spellcheck="false"
-                placeholder="Rider Name (min. 2 Zeichen)"
-              />
-              <button type="button" class="summary-lb-save-btn" id="summary-submit-score">🏆 SAVE</button>
-            </div>
-            <div class="summary-lb-status" id="summary-lb-status"></div>
-            <div class="summary-lb-list" id="summary-lb-list"></div>
           </div>
 
           <div class="summary-actions">

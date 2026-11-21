@@ -584,6 +584,38 @@ export class SurfHUD {
       #hud-snap-hint.ready { color: #f2cc26; border-left: 3px solid #f2cc26; }
       #hud-snap-hint.dim { color: #9e9b95; }
       #hud-snap-hint.fail { color: #ff3d5a; border-left: 3px solid #ff3d5a; }
+      @media (pointer: coarse), (max-height: 540px), (max-width: 900px) {
+        #hud-snap-banner {
+          top: 28%;
+          font-size: clamp(28px, 6.5vw, 52px);
+        }
+        #hud-snap-banner.long {
+          font-size: clamp(22px, 5vw, 40px);
+        }
+        #hud-coach-hint {
+          top: 15%;
+          max-width: min(74vw, 420px);
+          font-size: 12px;
+          padding: 4px 12px;
+        }
+        #hud-snap-hint {
+          bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+          font-size: 12px;
+          padding: 3px 10px;
+          max-width: min(44vw, 280px);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          pointer-events: none;
+        }
+      }
+      @media (max-width: 900px) and (orientation: portrait) {
+        body.has-touch-controls #hud-snap-hint,
+        body.reel-mode.has-touch-controls #hud-snap-hint {
+          bottom: calc(296px + env(safe-area-inset-bottom, 0px));
+          max-width: min(86vw, 300px);
+        }
+      }
     `;
     document.head.appendChild(style);
   }

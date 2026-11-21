@@ -940,10 +940,10 @@ export class LandingPage {
 
     const isPortrait = w < h;
     if (isPortrait) {
-      // In portrait mode, 3D skater is showcased in the top 35-40% of the screen.
-      this.camera.fov = 43;
-      this.camera.position.set(0.14, 0.88, 4.4);
-      this.camera.lookAt(0.14, 0.58, 0.0);
+      // In portrait mode, pull back & frame full skater + surfskate board cleanly in the upper half above the Setup panel.
+      this.camera.fov = 46;
+      this.camera.position.set(0.14, 0.90, 5.95);
+      this.camera.lookAt(0.14, -0.30, 0.0);
     } else if (h < 540) {
       // Mobile landscape (e.g. 852x393):
       // Menu panel is on the LEFT side (~320px).
