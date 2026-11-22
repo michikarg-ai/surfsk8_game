@@ -1144,29 +1144,32 @@
         transform: skewX(calc(var(--skew) * -1));
       }
       .landing-utility-nav {
+        position: relative;
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 8px;
       }
       .landing-aux-pill {
         position: relative;
-        background: rgba(18, 16, 14, 0.76);
-        border: 1px solid rgba(255, 255, 255, 0.28);
+        background: rgba(18, 16, 14, 0.82);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.26);
         color: #f5f4f0;
         font-family: var(--font-hud);
         font-size: 12.5px;
         font-weight: 800;
         letter-spacing: 0.06em;
         text-transform: uppercase;
-        padding: 6px 11px;
-        border-radius: 4px;
+        padding: 6px 12px;
+        border-radius: 5px;
         cursor: pointer;
         transform: skewX(var(--skew));
         box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
         transition: all 0.16s ease;
         display: inline-flex;
         align-items: center;
-        gap: 5px;
+        gap: 6px;
         white-space: nowrap;
       }
       .landing-aux-pill > * {
@@ -1182,6 +1185,180 @@
         color: #9ca3af;
         border-color: rgba(255, 255, 255, 0.15);
       }
+      .aux-icon-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        border: 1.5px solid currentColor;
+        font-size: 11px;
+        font-weight: 900;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+      .landing-gear-icon {
+        display: inline-block;
+        flex-shrink: 0;
+        transition: transform 0.24s ease;
+      }
+      .landing-aux-pill-settings.is-open {
+        border-color: var(--orange);
+        color: var(--yellow);
+        background: rgba(242, 116, 31, 0.22);
+        box-shadow: 0 4px 18px rgba(242, 116, 31, 0.35);
+      }
+      .landing-aux-pill-settings.is-open .landing-gear-icon {
+        transform: rotate(45deg);
+      }
+
+      /* Settings Dropdown Popover */
+      .landing-settings-wrap {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+      }
+      @keyframes settingsPopoverIn {
+        from {
+          opacity: 0;
+          transform: translateY(-6px) scale(0.97);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+      .landing-settings-popover {
+        position: absolute;
+        top: calc(100% + 10px);
+        right: 0;
+        width: 284px;
+        max-height: calc(var(--app-height, 100dvh) - 72px);
+        overflow-y: auto;
+        background: rgba(16, 15, 14, 0.94);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        border: 1.5px solid rgba(255, 255, 255, 0.18);
+        border-radius: 10px;
+        padding: 8px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85), 0 0 24px rgba(242, 116, 31, 0.16);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        z-index: 40;
+        transform-origin: top right;
+        animation: settingsPopoverIn 0.15s ease-out;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(242, 116, 31, 0.5) transparent;
+      }
+      .landing-settings-popover.hidden {
+        display: none !important;
+      }
+      .settings-popover-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 3px 8px 6px;
+        margin-bottom: 2px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .settings-popover-title {
+        font-family: var(--font-hud);
+        font-size: 10.5px;
+        font-weight: 900;
+        letter-spacing: 0.12em;
+        color: rgba(255, 255, 255, 0.55);
+        text-transform: uppercase;
+      }
+      .settings-popover-row {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 7px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        background: rgba(255, 255, 255, 0.04);
+        color: #f5f4f0;
+        font-family: var(--font-hud);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        cursor: pointer;
+        transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease, transform 0.12s ease;
+        text-align: left;
+      }
+      .settings-popover-row:hover {
+        background: rgba(242, 204, 38, 0.12);
+        border-color: rgba(242, 204, 38, 0.35);
+        color: #ffffff;
+      }
+      .settings-popover-row:active {
+        transform: scale(0.99);
+      }
+      .settings-popover-row.muted {
+        color: #cbd5e1;
+      }
+      .settings-row-left {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+      }
+      .settings-row-icon {
+        width: 18px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-size: 14px;
+        line-height: 1;
+      }
+      .settings-row-label {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .settings-row-badge {
+        flex-shrink: 0;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 10.5px;
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        background: rgba(255, 255, 255, 0.09);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        color: #cbd5e1;
+        white-space: nowrap;
+      }
+      .settings-popover-row.is-active .settings-row-badge {
+        background: rgba(0, 214, 195, 0.16);
+        border-color: rgba(0, 214, 195, 0.55);
+        color: #5eead4;
+      }
+      .settings-popover-row.muted .settings-row-badge {
+        background: rgba(239, 68, 68, 0.14);
+        border-color: rgba(239, 68, 68, 0.42);
+        color: #fca5a5;
+      }
+      .settings-popover-divider {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.1);
+        margin: 2px 4px;
+      }
+      .settings-popover-row-subtle {
+        color: #cbd5e1;
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .settings-row-chevron {
+        font-size: 16px;
+        line-height: 1;
+        color: rgba(255, 255, 255, 0.45);
+        font-weight: 800;
+      }
       .landing-fs-icon {
         display: inline-block;
         flex-shrink: 0;
@@ -1192,7 +1369,7 @@
       }
       .landing-aux-pill-lang .aux-lang-sep {
         opacity: 0.45;
-        margin: 0 1px;
+        margin: 0 2px;
       }
       .landing-aux-pill-lang .aux-lang-opt.active {
         color: var(--yellow);
@@ -1762,12 +1939,12 @@
           padding: 2px 5px;
         }
         .landing-utility-nav {
-          gap: 4px;
+          gap: 5px;
         }
         .landing-aux-pill {
           padding: 5px 8px;
           font-size: 10px;
-          min-width: 32px;
+          min-width: 34px;
           height: 32px;
           display: inline-flex;
           align-items: center;
@@ -1776,12 +1953,10 @@
         .landing-aux-pill .aux-text {
           display: none;
         }
-        .landing-aux-pill-lang {
-          padding: 5px 6px;
-          min-width: 28px;
-        }
-        .landing-aux-pill-lang .aux-icon {
-          display: none;
+        .landing-settings-popover {
+          top: calc(100% + 8px);
+          width: min(272px, calc(100vw - 24px));
+          max-height: calc(var(--app-height, 100dvh) - 60px);
         }
         .landing-control-panel {
           position: absolute;
@@ -1896,12 +2071,26 @@
         .landing-aux-pill .aux-text {
           display: none;
         }
-        .landing-aux-pill-lang {
-          padding: 5px 6px;
-          min-width: 28px;
+        .landing-settings-popover {
+          top: calc(100% + 6px);
+          width: 256px;
+          padding: 6px;
+          gap: 2.5px;
+          max-height: calc(var(--app-height, 100dvh) - 44px);
         }
-        .landing-aux-pill-lang .aux-icon {
-          display: none;
+        .settings-popover-header {
+          padding: 2px 6px 4px;
+        }
+        .settings-popover-title {
+          font-size: 9.5px;
+        }
+        .settings-popover-row {
+          padding: 5.5px 8px;
+          font-size: 12px;
+        }
+        .settings-row-badge {
+          font-size: 10px;
+          padding: 1.5px 6px;
         }
         .landing-control-panel {
           position: absolute;
@@ -2042,6 +2231,17 @@
           min-width: 26px;
           height: 26px;
         }
+        .landing-settings-popover {
+          top: calc(100% + 4px);
+          width: 244px;
+          padding: 5px;
+          gap: 2px;
+          max-height: calc(var(--app-height, 100dvh) - 38px);
+        }
+        .settings-popover-row {
+          padding: 4.5px 7px;
+          font-size: 11.5px;
+        }
         .landing-control-panel {
           top: max(32px, calc(env(safe-area-inset-top) + 30px));
           bottom: max(4px, env(safe-area-inset-bottom));
@@ -2115,8 +2315,8 @@
       body.reel-mode .landing-aux-pill .aux-text {
         display: none;
       }
-      body.reel-mode .landing-aux-pill-lang .aux-icon {
-        display: none;
+      body.reel-mode .landing-settings-popover {
+        width: min(272px, calc(100vw - 28px));
       }
       body.reel-mode .landing-control-panel {
         left: 10px;
@@ -4477,29 +4677,81 @@
           </div>
           <nav class="landing-utility-nav" aria-label="Game Utilities">
             <button id="btn-leaderboard" type="button" class="landing-aux-pill landing-aux-pill-gold" title="Global Top Scores / Leaderboard" data-i18n-title="nav.leaderboardTitle">
-              <span class="aux-icon">🏆</span><span class="aux-text" data-i18n="nav.leaderboard">TOP SCORES</span>
+              <span class="aux-icon" aria-hidden="true">🏆</span><span class="aux-text" data-i18n="nav.leaderboard">TOP SCORES</span>
             </button>
-            <button id="landing-sound-btn" type="button" class="landing-aux-pill" title="Toggle Sound / Music [M]" data-i18n-title="nav.soundTitle">
-              <span class="aux-icon">🔊</span><span class="aux-text">SOUND</span>
+            <button id="landing-help-btn" type="button" class="landing-aux-pill landing-aux-pill-help" title="Controls &amp; Help" data-i18n-title="nav.helpTitle">
+              <span class="aux-icon aux-icon-badge" aria-hidden="true">?</span><span class="aux-text" data-i18n="nav.help">CONTROLS</span>
             </button>
-            <button id="landing-quality-btn" type="button" class="landing-aux-pill" title="Toggle Graphics Quality [Q]" data-i18n-title="nav.qualityTitle">
-              <span class="aux-icon">⚡</span><span class="aux-text">QUALITY</span>
-            </button>
-            <button id="landing-fullscreen-btn" type="button" class="landing-aux-pill" title="Toggle Fullscreen" data-i18n-title="nav.fullscreenTitle">
-              <svg class="landing-fs-icon aux-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
-              </svg>
-              <span class="aux-text" data-i18n="nav.fullscreen">FULLSCREEN</span>
-            </button>
-            <button id="landing-help-btn" type="button" class="landing-aux-pill" title="Controls &amp; Help" data-i18n-title="nav.helpTitle">
-              <span class="aux-icon">❓</span><span class="aux-text" data-i18n="nav.help">CONTROLS</span>
-            </button>
-            <button id="landing-terms-btn" type="button" class="landing-aux-pill" title="Impressum &amp; Privacy Policy" data-i18n-title="nav.termsTitle">
-              <span class="aux-icon">📜</span><span class="aux-text" data-i18n="nav.terms">IMPRESSUM / PRIVACY</span>
-            </button>
-            <button id="btn-lang-toggle" type="button" class="landing-aux-pill landing-aux-pill-lang" title="Switch Language: Deutsch / English" data-i18n-title="nav.langTitle">
-              <span class="aux-icon">🌐</span><span class="aux-lang-code"><span class="aux-lang-opt" data-lang-opt="de">DE</span><span class="aux-lang-sep">/</span><span class="aux-lang-opt" data-lang-opt="en">EN</span></span>
-            </button>
+            <div class="landing-settings-wrap">
+              <button
+                id="btn-landing-settings"
+                type="button"
+                class="landing-aux-pill landing-aux-pill-settings"
+                title="Settings &amp; Menu"
+                data-i18n-title="nav.settingsTitle"
+                aria-haspopup="true"
+                aria-expanded="false"
+                aria-controls="landing-settings-popover"
+              >
+                <svg class="aux-icon landing-gear-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+                <span class="aux-text" data-i18n="nav.settings">SETTINGS</span>
+              </button>
+
+              <div id="landing-settings-popover" class="landing-settings-popover hidden" role="menu" aria-labelledby="btn-landing-settings">
+                <div class="settings-popover-header">
+                  <span class="settings-popover-title" data-i18n="nav.settingsMenuTitle">SETTINGS &amp; PREFERENCES</span>
+                </div>
+
+                <button id="landing-sound-btn" type="button" class="settings-popover-row is-active" role="menuitem" title="Toggle Sound / Music [M]" data-i18n-title="nav.soundTitle">
+                  <span class="settings-row-left">
+                    <span class="settings-row-icon aux-icon" aria-hidden="true">🔊</span>
+                    <span class="settings-row-label" data-i18n="nav.soundMenuLabel">Sound &amp; Music</span>
+                  </span>
+                  <span class="settings-row-badge" data-i18n="nav.stateOn">ON</span>
+                </button>
+
+                <button id="landing-quality-btn" type="button" class="settings-popover-row is-active" role="menuitem" title="Toggle Graphics Quality [Q]" data-i18n-title="nav.qualityTitle">
+                  <span class="settings-row-left">
+                    <span class="settings-row-icon aux-icon" aria-hidden="true">⚡</span>
+                    <span class="settings-row-label" data-i18n="nav.qualityMenuLabel">Graphics</span>
+                  </span>
+                  <span class="settings-row-badge">AUTO</span>
+                </button>
+
+                <button id="landing-fullscreen-btn" type="button" class="settings-popover-row" role="menuitem" title="Toggle Fullscreen" data-i18n-title="nav.fullscreenTitle">
+                  <span class="settings-row-left">
+                    <svg class="settings-row-icon landing-fs-icon aux-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                    </svg>
+                    <span class="settings-row-label" data-i18n="nav.fullscreenMenuLabel">Fullscreen</span>
+                  </span>
+                  <span class="settings-row-badge" data-i18n="nav.stateOff">OFF</span>
+                </button>
+
+                <button id="btn-lang-toggle" type="button" class="settings-popover-row landing-aux-pill-lang" role="menuitem" title="Switch Language: Deutsch / English" data-i18n-title="nav.langTitle">
+                  <span class="settings-row-left">
+                    <span class="settings-row-icon aux-icon" aria-hidden="true">🌐</span>
+                    <span class="settings-row-label" data-i18n="nav.langMenuLabel">Language</span>
+                  </span>
+                  <span class="settings-row-badge aux-lang-code">
+                    <span class="aux-lang-opt" data-lang-opt="de">DE</span><span class="aux-lang-sep">/</span><span class="aux-lang-opt" data-lang-opt="en">EN</span>
+                  </span>
+                </button>
+
+                <div class="settings-popover-divider" role="separator"></div>
+
+                <button id="landing-terms-btn" type="button" class="settings-popover-row settings-popover-row-subtle" role="menuitem" title="Impressum &amp; Privacy Policy" data-i18n-title="nav.termsTitle">
+                  <span class="settings-row-left">
+                    <span class="settings-row-icon aux-icon" aria-hidden="true">📜</span>
+                    <span class="settings-row-label" data-i18n="nav.termsMenuLabel">Legal &amp; Privacy</span>
+                  </span>
+                  <span class="settings-row-chevron" aria-hidden="true">›</span>
+                </button>
+              </div>
+            </div>
           </nav>
         </header>
 

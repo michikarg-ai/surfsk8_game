@@ -648,6 +648,7 @@ class SurfskateMunichGame {
   }
 
   public openHelpModal(forceTab?: 'mobile' | 'keyboard'): void {
+    this.landingPage?.closeSettingsPopover();
     const modal = document.getElementById('help-modal');
     if (!modal) return;
     const isTouch = forceTab ? forceTab === 'mobile' : this.touchControls.isTouchActive();

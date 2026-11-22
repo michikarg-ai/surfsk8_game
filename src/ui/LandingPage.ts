@@ -146,6 +146,8 @@ export class LandingPage {
   private activeLbPark: LeaderboardPark = 'all';
   private lbFetchToken = 0;
   private langToggleBtnEl: HTMLElement | null = null;
+  private settingsBtnEl: HTMLElement | null = null;
+  private settingsPopoverEl: HTMLElement | null = null;
   private lastIsFs = false;
   private lastSoundActive = true;
   private lastQualityPreset = 'auto';
@@ -263,6 +265,9 @@ export class LandingPage {
     this.bindUIEvents();
     this.updateLangToggleDisplay();
     applyDomTranslations(document);
+    this.updateFullscreenLabel(this.lastIsFs);
+    this.updateSoundLabel(this.lastSoundActive);
+    this.updateQualityLabel(this.lastQualityPreset, this.lastQualityEffective);
     onLangChange(() => {
       this.refreshLocalizedUI();
     });
@@ -552,6 +557,29 @@ export class LandingPage {
     });
     this.syncModePills();
 
+    this.settingsBtnEl = document.getElementById('btn-landing-settings');
+    this.settingsPopoverEl = document.getElementById('landing-settings-popover');
+    if (this.settingsBtnEl && this.settingsPopoverEl) {
+      this.settingsBtnEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleSettingsPopover();
+      });
+      this.settingsPopoverEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+      document.addEventListener('click', (e) => {
+        if (!this.isSettingsPopoverOpen()) return;
+        const target = e.target as Node | null;
+        if (
+          target &&
+          (this.settingsPopoverEl?.contains(target) || this.settingsBtnEl?.contains(target))
+        ) {
+          return;
+        }
+        this.closeSettingsPopover();
+      });
+    }
+
     this.qualityBtnEl = document.getElementById('landing-quality-btn');
     if (this.qualityBtnEl) {
       this.qualityBtnEl.addEventListener('click', (e) => {
@@ -577,6 +605,7 @@ export class LandingPage {
 
     const openTerms = (e: Event) => {
       e.stopPropagation();
+      this.closeSettingsPopover();
       termsModal?.classList.remove('hidden');
     };
     const closeTerms = (e?: Event) => {
@@ -659,11 +688,38 @@ export class LandingPage {
     }
   }
 
+  public isSettingsPopoverOpen(): boolean {
+    return Boolean(this.settingsPopoverEl && !this.settingsPopoverEl.classList.contains('hidden'));
+  }
+
+  public openSettingsPopover(): void {
+    if (!this.settingsPopoverEl || !this.settingsBtnEl) return;
+    this.settingsPopoverEl.classList.remove('hidden');
+    this.settingsBtnEl.classList.add('is-open');
+    this.settingsBtnEl.setAttribute('aria-expanded', 'true');
+  }
+
+  public closeSettingsPopover(): void {
+    if (!this.settingsPopoverEl || !this.settingsBtnEl) return;
+    this.settingsPopoverEl.classList.add('hidden');
+    this.settingsBtnEl.classList.remove('is-open');
+    this.settingsBtnEl.setAttribute('aria-expanded', 'false');
+  }
+
+  public toggleSettingsPopover(): void {
+    if (this.isSettingsPopoverOpen()) {
+      this.closeSettingsPopover();
+    } else {
+      this.openSettingsPopover();
+    }
+  }
+
   public isLeaderboardModalOpen(): boolean {
     return Boolean(this.leaderboardModalEl && !this.leaderboardModalEl.classList.contains('hidden'));
   }
 
   public openLeaderboardModal(park: LeaderboardPark = 'all'): void {
+    this.closeSettingsPopover();
     if (!this.leaderboardModalEl) return;
     this.leaderboardModalEl.classList.remove('hidden');
     void this.loadLeaderboardTab(park);
@@ -751,6 +807,10 @@ export class LandingPage {
     }
 
     if (code === 'Escape') {
+      if (this.isSettingsPopoverOpen()) {
+        this.closeSettingsPopover();
+        return;
+      }
       if (this.isLeaderboardModalOpen()) {
         this.closeLeaderboardModal();
         return;
@@ -945,35 +1005,36 @@ export class LandingPage {
 
   public updateFullscreenLabel(isFs: boolean): void {
     this.lastIsFs = isFs;
-    if (this.fullscreenBtnEl) {
-      const iconPath = isFs
-        ? 'M4 14h6m0 0v6m0-6L3 21m17-7h-6m0 0v6m0-6l7 7M10 4v6m0 0H4m6 0L3 3m10 7h6m-6 0V4m0 6l7-7'
-        : 'M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3';
-      const label = isFs ? t('nav.exitFullscreen') : t('nav.fullscreen');
-      this.fullscreenBtnEl.innerHTML = `
-        <svg class="landing-fs-icon aux-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="${iconPath}"/>
-        </svg>
-        <span class="aux-text">${label}</span>
-      `.trim();
+    if (!this.fullscreenBtnEl) return;
+    const iconPath = isFs
+      ? 'M4 14h6m0 0v6m0-6L3 21m17-7h-6m0 0v6m0-6l7 7M10 4v6m0 0H4m6 0L3 3m10 7h6m-6 0V4m0 6l7-7'
+      : 'M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3';
+    const pathEl = this.fullscreenBtnEl.querySelector<SVGPathElement>('.landing-fs-icon path');
+    if (pathEl) {
+      pathEl.setAttribute('d', iconPath);
     }
+    const labelEl = this.fullscreenBtnEl.querySelector('.settings-row-label');
+    if (labelEl) {
+      labelEl.textContent = t('nav.fullscreenMenuLabel');
+    }
+    const badgeEl = this.fullscreenBtnEl.querySelector('.settings-row-badge');
+    if (badgeEl) {
+      badgeEl.textContent = isFs ? t('nav.stateOn') : t('nav.stateOff');
+    }
+    this.fullscreenBtnEl.classList.toggle('is-active', isFs);
   }
 
   public updateSoundLabel(isActive: boolean): void {
     this.lastSoundActive = isActive;
-    if (this.soundBtnEl) {
-      const icon = isActive ? '🔊' : '🔇';
-      const text = isActive ? t('nav.soundOn') : t('nav.soundOff');
-      const iconEl = this.soundBtnEl.querySelector('.aux-icon');
-      const textEl = this.soundBtnEl.querySelector('.aux-text');
-      if (iconEl && textEl) {
-        iconEl.textContent = icon;
-        textEl.textContent = text;
-      } else {
-        this.soundBtnEl.innerHTML = `<span class="aux-icon">${icon}</span> <span class="aux-text">${text}</span>`;
-      }
-      this.soundBtnEl.classList.toggle('muted', !isActive);
-    }
+    if (!this.soundBtnEl) return;
+    const iconEl = this.soundBtnEl.querySelector('.settings-row-icon');
+    const labelEl = this.soundBtnEl.querySelector('.settings-row-label');
+    const badgeEl = this.soundBtnEl.querySelector('.settings-row-badge');
+    if (iconEl) iconEl.textContent = isActive ? '🔊' : '🔇';
+    if (labelEl) labelEl.textContent = t('nav.soundMenuLabel');
+    if (badgeEl) badgeEl.textContent = isActive ? t('nav.stateOn') : t('nav.stateOff');
+    this.soundBtnEl.classList.toggle('muted', !isActive);
+    this.soundBtnEl.classList.toggle('is-active', isActive);
   }
 
   public startGame(): void {
@@ -981,6 +1042,7 @@ export class LandingPage {
     if (this.riderNameInputEl) {
       this.riderNameInputEl.value = setPlayerName(this.riderNameInputEl.value);
     }
+    this.closeSettingsPopover();
     this.closeLeaderboardModal();
     const termsModal = document.getElementById('terms-modal');
     termsModal?.classList.add('hidden');
@@ -999,6 +1061,7 @@ export class LandingPage {
 
   public show(): void {
     this.isVisible = true;
+    this.closeSettingsPopover();
     this.overlayEl.classList.remove('hidden');
     this.updateSkaterDisplay();
     this.syncRiderNameInput();
@@ -1050,8 +1113,12 @@ export class LandingPage {
     this.lastQualityPreset = preset;
     this.lastQualityEffective = effective;
     if (!this.qualityBtnEl) return;
-    const label = preset === 'auto' ? `AUTO (${effective.toUpperCase()})` : preset.toUpperCase();
-    this.qualityBtnEl.innerHTML = `<span class="aux-icon">⚡</span> <span class="aux-text">${t('nav.qualityLabel', { label })}</span>`;
+    const badge = preset === 'auto' ? `AUTO (${effective.toUpperCase()})` : preset.toUpperCase();
+    const labelEl = this.qualityBtnEl.querySelector('.settings-row-label');
+    const badgeEl = this.qualityBtnEl.querySelector('.settings-row-badge');
+    if (labelEl) labelEl.textContent = t('nav.qualityMenuLabel');
+    if (badgeEl) badgeEl.textContent = badge;
+    this.qualityBtnEl.classList.toggle('is-active', effective === 'high');
   }
 
   public update(timeSec: number, dt: number): void {

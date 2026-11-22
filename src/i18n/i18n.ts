@@ -28,6 +28,16 @@ const EN_TRANSLATIONS = {
   'nav.terms': 'IMPRESSUM / PRIVACY',
   'nav.termsTitle': 'Impressum & Privacy Policy',
   'nav.langTitle': 'Switch Language: Deutsch / English',
+  'nav.settings': 'SETTINGS',
+  'nav.settingsTitle': 'Settings & Menu',
+  'nav.settingsMenuTitle': 'SETTINGS & PREFERENCES',
+  'nav.soundMenuLabel': 'Sound & Music',
+  'nav.qualityMenuLabel': 'Graphics',
+  'nav.fullscreenMenuLabel': 'Fullscreen',
+  'nav.langMenuLabel': 'Language',
+  'nav.termsMenuLabel': 'Legal & Privacy',
+  'nav.stateOn': 'ON',
+  'nav.stateOff': 'OFF',
 
   // Landing Setup & Mode
   'landing.setup': 'SETUP',
@@ -379,6 +389,16 @@ const DE_TRANSLATIONS: Record<TranslationKey, string> = {
   'nav.terms': 'IMPRESSUM / DATENSCHUTZ',
   'nav.termsTitle': 'Impressum & Datenschutzerklärung',
   'nav.langTitle': 'Sprache wechseln: Deutsch / English',
+  'nav.settings': 'OPTIONEN',
+  'nav.settingsTitle': 'Einstellungen & Menü',
+  'nav.settingsMenuTitle': 'EINSTELLUNGEN & MENÜ',
+  'nav.soundMenuLabel': 'Sound & Musik',
+  'nav.qualityMenuLabel': 'Grafikqualität',
+  'nav.fullscreenMenuLabel': 'Vollbild',
+  'nav.langMenuLabel': 'Sprache',
+  'nav.termsMenuLabel': 'Impressum & Datenschutz',
+  'nav.stateOn': 'AN',
+  'nav.stateOff': 'AUS',
 
   // Landing Setup & Mode
   'landing.setup': 'SETUP',
