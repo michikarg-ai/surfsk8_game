@@ -227,6 +227,10 @@ export class SurfHUD {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || activeEl?.isContentEditable) {
         return;
       }
+      const tutModal = document.getElementById('tutorial-modal');
+      if (tutModal && !tutModal.classList.contains('hidden')) {
+        return;
+      }
       if (e.code === 'KeyH') this.toggleDock();
     });
     this.flowFillEl = document.getElementById('hud-flow-fill')!;

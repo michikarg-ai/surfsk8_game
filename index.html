@@ -10,42 +10,42 @@
          ===================================================================== */
       @font-face {
         font-family: 'Barlow Condensed';
-        src: url('/fonts/BarlowCondensed-600n.woff2') format('woff2');
+        src: url('./fonts/BarlowCondensed-600n.woff2') format('woff2');
         font-weight: 600;
         font-style: normal;
         font-display: swap;
       }
       @font-face {
         font-family: 'Barlow Condensed';
-        src: url('/fonts/BarlowCondensed-700n.woff2') format('woff2');
+        src: url('./fonts/BarlowCondensed-700n.woff2') format('woff2');
         font-weight: 700;
         font-style: normal;
         font-display: swap;
       }
       @font-face {
         font-family: 'Barlow Condensed';
-        src: url('/fonts/BarlowCondensed-800n.woff2') format('woff2');
+        src: url('./fonts/BarlowCondensed-800n.woff2') format('woff2');
         font-weight: 800;
         font-style: normal;
         font-display: swap;
       }
       @font-face {
         font-family: 'Barlow Condensed';
-        src: url('/fonts/BarlowCondensed-900n.woff2') format('woff2');
+        src: url('./fonts/BarlowCondensed-900n.woff2') format('woff2');
         font-weight: 900;
         font-style: normal;
         font-display: swap;
       }
       @font-face {
         font-family: 'Barlow Condensed';
-        src: url('/fonts/BarlowCondensed-800i.woff2') format('woff2');
+        src: url('./fonts/BarlowCondensed-800i.woff2') format('woff2');
         font-weight: 800;
         font-style: italic;
         font-display: swap;
       }
       @font-face {
         font-family: 'Barlow Condensed';
-        src: url('/fonts/BarlowCondensed-900i.woff2') format('woff2');
+        src: url('./fonts/BarlowCondensed-900i.woff2') format('woff2');
         font-weight: 900;
         font-style: italic;
         font-display: swap;
@@ -1027,7 +1027,7 @@
         height: var(--app-height, 100dvh);
         padding-bottom: env(safe-area-inset-bottom);
         z-index: 40;
-        background: #0d0f14 url('/textures/landing_page_background.jpeg') center center / cover no-repeat;
+        background: #0d0f14 url('./textures/landing_page_background.jpeg') center center / cover no-repeat;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
@@ -3492,7 +3492,30 @@
         padding: 12px 24px 16px 24px;
         border-top: 1px solid rgba(255, 255, 255, 0.12);
         display: flex;
-        justify-content: flex-end;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        flex-shrink: 0;
+      }
+      .help-tutorial-btn {
+        background: rgba(255, 255, 255, 0.08);
+        color: #f3f2ee;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        padding: 8px 16px;
+        font-family: var(--font-hud);
+        font-size: 13.5px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        border-radius: 5px;
+        transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      }
+      .help-tutorial-btn:hover {
+        background: rgba(242, 204, 38, 0.16);
+        border-color: var(--yellow);
+        color: var(--yellow);
       }
       .help-ok-btn {
         background: var(--orange);
@@ -3512,6 +3535,480 @@
       .help-ok-btn:hover {
         background: var(--yellow);
         transform: skewX(var(--skew)) translateY(-1px);
+      }
+
+      /* First-Run Interactive Tutorial Modal (#tutorial-modal) */
+      .tutorial-modal-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 10050;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 14px;
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+      }
+      .tutorial-modal-overlay.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .tutorial-modal-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(8, 7, 6, 0.84);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+      }
+      .tutorial-modal-card {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        max-width: 700px;
+        max-height: 92vh;
+        max-height: 92dvh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        background: linear-gradient(145deg, rgba(26, 23, 20, 0.98), rgba(14, 12, 10, 0.98));
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-top: 3px solid var(--orange);
+        border-radius: 10px;
+        box-shadow: 0 20px 56px rgba(0, 0, 0, 0.88), 0 0 0 1px rgba(0, 0, 0, 0.65);
+        color: #f3f2ee;
+      }
+      .tutorial-header {
+        flex-shrink: 0;
+        padding: 14px 20px 10px 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .tutorial-header-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding-right: 30px;
+        flex-wrap: wrap;
+      }
+      .tutorial-badge {
+        font-family: var(--font-hud);
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.12em;
+        color: var(--yellow);
+        text-transform: uppercase;
+      }
+      .tutorial-header-pills {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .tut-mode-pill {
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        color: rgba(243, 242, 238, 0.8);
+        font-family: var(--font-hud);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        padding: 3px 9px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: all 0.14s ease;
+      }
+      .tut-mode-pill:hover {
+        border-color: rgba(255, 255, 255, 0.4);
+        color: #fff;
+      }
+      .tut-mode-pill.active {
+        background: var(--orange);
+        border-color: var(--yellow);
+        color: #111;
+      }
+      .tut-mode-pill.tut-ctrl-pill {
+        background: rgba(0, 214, 195, 0.12);
+        border-color: rgba(0, 214, 195, 0.45);
+        color: #6df3e5;
+      }
+      .tut-mode-pill.tut-ctrl-pill:hover {
+        background: rgba(0, 214, 195, 0.22);
+      }
+      .tut-mode-pill.hidden {
+        display: none;
+      }
+      .tutorial-close-x {
+        position: absolute;
+        top: 10px;
+        right: 12px;
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 26px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 4px 8px;
+        z-index: 5;
+        transition: color 0.14s ease;
+      }
+      .tutorial-close-x:hover {
+        color: var(--yellow);
+      }
+      .tutorial-title {
+        font-family: var(--font-hud);
+        font-size: 22px;
+        font-weight: 900;
+        letter-spacing: 0.04em;
+        line-height: 1.15;
+        margin: 0;
+        color: #ffffff;
+        text-transform: uppercase;
+      }
+      .tutorial-subtitle {
+        margin: 0;
+        font-family: var(--font-hud);
+        font-size: 13px;
+        line-height: 1.35;
+        color: rgba(243, 242, 238, 0.78);
+      }
+      .tutorial-progress-track {
+        height: 4px;
+        width: 100%;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        overflow: hidden;
+        margin-top: 2px;
+      }
+      .tutorial-progress-fill {
+        height: 100%;
+        width: 25%;
+        background: linear-gradient(90deg, var(--orange), var(--yellow));
+        border-radius: 999px;
+        transition: width 0.22s ease;
+      }
+      .tutorial-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 14px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .tut-cards-grid {
+        display: grid;
+        gap: 10px;
+      }
+      .tut-cards-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .tut-cards-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .tut-card {
+        background: rgba(255, 255, 255, 0.045);
+        border: 1px solid rgba(255, 255, 255, 0.11);
+        border-radius: 8px;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .tut-card-goals {
+        border-color: rgba(242, 204, 38, 0.35);
+        background: rgba(242, 204, 38, 0.06);
+      }
+      .tut-card-head {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .tut-card-icon {
+        font-size: 16px;
+        line-height: 1;
+      }
+      .tut-card-title {
+        font-family: var(--font-hud);
+        font-size: 14px;
+        font-weight: 900;
+        letter-spacing: 0.03em;
+        color: #ffffff;
+      }
+      .tut-control-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 5px;
+      }
+      .tut-trick-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .tut-trick-key {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+      }
+      .tut-kbd {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 24px;
+        padding: 2px 7px;
+        background: #1d1a17;
+        border: 1px solid rgba(242, 204, 38, 0.65);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        color: var(--yellow);
+        font-family: var(--font-hud);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.04em;
+        line-height: 1.25;
+      }
+      .tut-touch-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2px 9px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        border-radius: 999px;
+        color: #ffffff;
+        font-family: var(--font-hud);
+        font-size: 11.5px;
+        font-weight: 900;
+        letter-spacing: 0.06em;
+      }
+      .tut-touch-pill.is-accent {
+        background: rgba(242, 116, 31, 0.24);
+        border-color: var(--orange);
+        color: var(--yellow);
+      }
+      .tut-or {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.5);
+        font-weight: 700;
+      }
+      .tut-card-desc {
+        margin: 0;
+        font-family: var(--font-hud);
+        font-size: 12.5px;
+        line-height: 1.38;
+        color: rgba(243, 242, 238, 0.86);
+      }
+      .tut-card-desc strong {
+        color: var(--yellow);
+      }
+      .tut-when-row {
+        margin-top: auto;
+        padding-top: 5px;
+        border-top: 1px dashed rgba(255, 255, 255, 0.1);
+        font-family: var(--font-hud);
+        font-size: 11.5px;
+        line-height: 1.35;
+        color: #8bece2;
+      }
+      .tut-when-label {
+        font-weight: 900;
+        color: #00d6c3;
+        letter-spacing: 0.05em;
+      }
+      .tut-callout {
+        background: rgba(242, 116, 31, 0.14);
+        border-left: 3px solid var(--orange);
+        border-radius: 4px;
+        padding: 9px 12px;
+        font-family: var(--font-hud);
+        font-size: 12.5px;
+        line-height: 1.38;
+        color: #f7f6f2;
+      }
+      .tut-callout strong {
+        color: var(--yellow);
+      }
+      .tut-callout-flow {
+        background: linear-gradient(135deg, rgba(242, 116, 31, 0.18), rgba(242, 204, 38, 0.1));
+        border-left-color: var(--yellow);
+      }
+      .tut-callout-title {
+        font-weight: 900;
+        font-size: 13.5px;
+        color: var(--yellow);
+        margin-bottom: 3px;
+      }
+      .tut-callout-compact {
+        padding: 7px 11px;
+        font-size: 12px;
+      }
+      .tutorial-footer {
+        flex-shrink: 0;
+        padding: 10px 20px 13px 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(14, 12, 10, 0.92);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .tut-footer-center {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .tut-step-count {
+        font-family: var(--font-hud);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        color: rgba(243, 242, 238, 0.72);
+        font-variant-numeric: tabular-nums;
+      }
+      .tut-dots {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .tut-dot {
+        width: 9px;
+        height: 9px;
+        padding: 0;
+        border-radius: 999px;
+        border: none;
+        background: rgba(255, 255, 255, 0.24);
+        cursor: pointer;
+        transition: all 0.16s ease;
+      }
+      .tut-dot.done {
+        background: rgba(242, 116, 31, 0.65);
+      }
+      .tut-dot.active {
+        width: 22px;
+        background: var(--yellow);
+      }
+      .tut-footer-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tut-btn-ghost {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: rgba(243, 242, 238, 0.82);
+        font-family: var(--font-hud);
+        font-size: 12.5px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        padding: 7px 12px;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: all 0.14s ease;
+      }
+      .tut-btn-ghost:hover:not(:disabled) {
+        border-color: rgba(255, 255, 255, 0.45);
+        color: #ffffff;
+      }
+      .tut-btn-ghost:disabled {
+        opacity: 0.32;
+        cursor: not-allowed;
+      }
+      .tut-btn-primary {
+        background: var(--orange);
+        border: none;
+        color: #100e0c;
+        font-family: var(--font-hud);
+        font-size: 13.5px;
+        font-weight: 900;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        padding: 8px 18px;
+        transform: skewX(var(--skew));
+        box-shadow: 0 4px 14px rgba(242, 116, 31, 0.4);
+        cursor: pointer;
+        transition: transform 0.14s ease, background 0.14s ease;
+      }
+      .tut-btn-primary:hover {
+        background: var(--yellow);
+        transform: skewX(var(--skew)) translateY(-1px);
+      }
+      .tut-btn-primary.is-finish {
+        background: linear-gradient(135deg, var(--yellow), var(--orange));
+      }
+
+      @media (max-width: 640px) {
+        .tutorial-modal-overlay {
+          padding: 8px;
+        }
+        .tutorial-header {
+          padding: 11px 14px 8px 14px;
+        }
+        .tutorial-title {
+          font-size: 18px;
+        }
+        .tutorial-body {
+          padding: 10px 14px;
+          gap: 9px;
+        }
+        .tut-cards-3,
+        .tut-cards-2 {
+          grid-template-columns: 1fr;
+        }
+        .tutorial-footer {
+          padding: 8px 14px 10px 14px;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+        .tut-btn-ghost {
+          padding: 6px 9px;
+          font-size: 11.5px;
+        }
+        .tut-btn-primary {
+          padding: 7px 13px;
+          font-size: 12.5px;
+        }
+      }
+      @media (max-height: 500px) {
+        .tutorial-modal-overlay {
+          padding: 6px 10px;
+        }
+        .tutorial-header {
+          padding: 8px 14px 6px 14px;
+          gap: 3px;
+        }
+        .tutorial-title {
+          font-size: 16.5px;
+        }
+        .tutorial-subtitle {
+          font-size: 11.5px;
+        }
+        .tutorial-body {
+          padding: 8px 14px;
+          gap: 8px;
+        }
+        .tut-cards-3 {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .tut-cards-2 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .tut-card {
+          padding: 7px 9px;
+          gap: 4px;
+        }
+        .tutorial-footer {
+          padding: 7px 14px;
+        }
       }
       .hud-help-btn {
         pointer-events: auto;
@@ -4743,6 +5240,14 @@
 
                 <div class="settings-popover-divider" role="separator"></div>
 
+                <button id="landing-tutorial-btn" type="button" class="settings-popover-row" role="menuitem" title="Start Interactive Tutorial" data-i18n-title="nav.tutorialTitle">
+                  <span class="settings-row-left">
+                    <span class="settings-row-icon aux-icon" aria-hidden="true">🎓</span>
+                    <span class="settings-row-label" data-i18n="nav.tutorialMenuLabel">Tutorial</span>
+                  </span>
+                  <span class="settings-row-chevron" aria-hidden="true">›</span>
+                </button>
+
                 <button id="landing-terms-btn" type="button" class="settings-popover-row settings-popover-row-subtle" role="menuitem" title="Impressum &amp; Privacy Policy" data-i18n-title="nav.termsTitle">
                   <span class="settings-row-left">
                     <span class="settings-row-icon aux-icon" aria-hidden="true">📜</span>
@@ -4794,7 +5299,7 @@
                     <div class="sel-subtitle" id="landing-park-subtitle">IM WIESENGRUND</div>
                     <div class="slot-display-wrap park-slot-wrap" id="park-slot-wrap">
                       <div class="slot-view slot-thumb-view active" id="park-thumb-view">
-                        <img id="landing-park-thumb" src="/textures/im_gefilde_thumb.png" alt="Im Wiesengrund" class="park-thumb" />
+                        <img id="landing-park-thumb" src="./textures/im_gefilde_thumb.png" alt="Im Wiesengrund" class="park-thumb" />
                       </div>
                       <div class="slot-view slot-notice-view" id="park-notice-view">
                         <div class="notice-badge">
@@ -5106,119 +5611,163 @@
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- Help & Controls Modal (#help-modal) -->
-        <div id="help-modal" class="help-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="help-modal-title">
-          <div class="help-modal-backdrop" id="help-modal-backdrop"></div>
-          <div class="help-modal-card">
-            <button id="help-modal-close" class="help-close-btn" aria-label="Close Help">&times;</button>
-            
-            <div class="help-header">
-              <div class="help-header-top">
-                <span class="help-badge" data-i18n="help.badge">HOW TO PLAY</span>
-              </div>
-              <h2 id="help-modal-title" class="help-title" data-i18n="help.title">CONTROLS &amp; BOWL GUIDE</h2>
-              <div class="help-tabs">
-                <button id="help-tab-mobile" class="help-tab-btn" type="button"><span data-i18n="help.tabMobile">📱 Touch Controls</span></button>
-                <button id="help-tab-keyboard" class="help-tab-btn" type="button"><span data-i18n="help.tabKeyboard">⌨️ PC Keyboard</span></button>
-              </div>
+      <!-- Help & Controls Modal (#help-modal) -->
+      <div id="help-modal" class="help-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="help-modal-title">
+        <div class="help-modal-backdrop" id="help-modal-backdrop"></div>
+        <div class="help-modal-card">
+          <button id="help-modal-close" class="help-close-btn" aria-label="Close Help">&times;</button>
+
+          <div class="help-header">
+            <div class="help-header-top">
+              <span class="help-badge" data-i18n="help.badge">HOW TO PLAY</span>
             </div>
+            <h2 id="help-modal-title" class="help-title" data-i18n="help.title">CONTROLS &amp; BOWL GUIDE</h2>
+            <div class="help-tabs">
+              <button id="help-tab-mobile" class="help-tab-btn" type="button"><span data-i18n="help.tabMobile">📱 Touch Controls</span></button>
+              <button id="help-tab-keyboard" class="help-tab-btn" type="button"><span data-i18n="help.tabKeyboard">⌨️ PC Keyboard</span></button>
+            </div>
+          </div>
 
-            <div class="help-content">
-              <!-- Mobile Touch Controls Section (#help-controls-mobile) -->
-              <div id="help-controls-mobile" class="help-controls-section">
-                <div class="help-section-title" data-i18n="help.mobileSectionTitle">📱 SMARTPHONE / TOUCH CONTROLS</div>
-                <div class="help-grid">
-                  <div class="help-item">
-                    <span class="help-btn-tag">◀ / ▶ CARVE</span>
-                    <div class="help-item-desc" data-i18n-html="help.mobCarve">
-                      <strong>Carve &amp; Bowl Walls:</strong> Carve the bowl walls &amp; build momentum
-                    </div>
+          <div class="help-content">
+            <!-- Mobile Touch Controls Section (#help-controls-mobile) -->
+            <div id="help-controls-mobile" class="help-controls-section">
+              <div class="help-section-title" data-i18n="help.mobileSectionTitle">📱 SMARTPHONE / TOUCH CONTROLS</div>
+              <div class="help-grid">
+                <div class="help-item">
+                  <span class="help-btn-tag">◀ / ▶ CARVE</span>
+                  <div class="help-item-desc" data-i18n-html="help.mobCarve">
+                    <strong>Carve &amp; Bowl Walls:</strong> Carve the bowl walls &amp; build momentum
                   </div>
-                  <div class="help-item">
-                    <span class="help-btn-tag">▲ PUMP</span>
-                    <div class="help-item-desc" data-i18n-html="help.mobPump">
-                      <strong>Gain Speed:</strong> Push off from standstill &amp; pump in transitions
-                    </div>
+                </div>
+                <div class="help-item">
+                  <span class="help-btn-tag">▲ PUMP</span>
+                  <div class="help-item-desc" data-i18n-html="help.mobPump">
+                    <strong>Gain Speed:</strong> Push off from standstill &amp; pump in transitions
                   </div>
-                  <div class="help-item">
-                    <span class="help-btn-tag">▼ BRAKE</span>
-                    <div class="help-item-desc" data-i18n-html="help.mobBrake">
-                      <strong>Slow Down:</strong> Control your line &amp; scrub speed
-                    </div>
+                </div>
+                <div class="help-item">
+                  <span class="help-btn-tag">▼ BRAKE</span>
+                  <div class="help-item-desc" data-i18n-html="help.mobBrake">
+                    <strong>Slow Down:</strong> Control your line &amp; scrub speed
                   </div>
-                  <div class="help-item">
-                    <span class="help-btn-tag">OLLIE</span>
-                    <div class="help-item-desc" data-i18n-html="help.mobOllie">
-                      <strong>Pop Airs:</strong> Pop off the lip for airs (hold in mid-air for Indy Grab)
-                    </div>
+                </div>
+                <div class="help-item">
+                  <span class="help-btn-tag">OLLIE</span>
+                  <div class="help-item-desc" data-i18n-html="help.mobOllie">
+                    <strong>Pop Airs:</strong> Pop off the lip for airs (hold in mid-air for Indy Grab)
                   </div>
-                  <div class="help-item">
-                    <span class="help-btn-tag">TRICK</span>
-                    <div class="help-item-desc" data-i18n-html="help.mobTrick">
-                      <strong>Surf Moves:</strong> Spins, Grabs &amp; Lip Stalls in air or on coping
-                    </div>
+                </div>
+                <div class="help-item">
+                  <span class="help-btn-tag">TRICK</span>
+                  <div class="help-item-desc" data-i18n-html="help.mobTrick">
+                    <strong>Surf Moves:</strong> Spins, Grabs &amp; Lip Stalls in air or on coping
                   </div>
-                  <div class="help-item">
-                    <span class="help-btn-tag">COMPRESS</span>
-                    <div class="help-item-desc" data-i18n-html="help.mobCompress">
-                      <strong>Compression:</strong> Crouch low before transitions for speed, release for airs
-                    </div>
+                </div>
+                <div class="help-item">
+                  <span class="help-btn-tag">COMPRESS</span>
+                  <div class="help-item-desc" data-i18n-html="help.mobCompress">
+                    <strong>Compression:</strong> Crouch low before transitions for speed, release for airs
                   </div>
                 </div>
               </div>
+            </div>
 
-              <!-- PC Keyboard Controls Section (#help-controls-keyboard) -->
-              <div id="help-controls-keyboard" class="help-controls-section">
-                <div class="help-section-title" data-i18n="help.kbSectionTitle">⌨️ PC KEYBOARD CONTROLS</div>
-                <div class="help-grid">
-                  <div class="help-item">
-                    <span class="help-key-tag" data-i18n="help.kbCarveKey">← / → or A / D</span>
-                    <div class="help-item-desc" data-i18n-html="help.kbCarve">
-                      <strong>Carve &amp; Pump:</strong> Carve turns &amp; pump rhythmically for speed
-                    </div>
+            <!-- PC Keyboard Controls Section (#help-controls-keyboard) -->
+            <div id="help-controls-keyboard" class="help-controls-section">
+              <div class="help-section-title" data-i18n="help.kbSectionTitle">⌨️ PC KEYBOARD CONTROLS</div>
+              <div class="help-grid">
+                <div class="help-item">
+                  <span class="help-key-tag" data-i18n="help.kbCarveKey">← / → or A / D</span>
+                  <div class="help-item-desc" data-i18n-html="help.kbCarve">
+                    <strong>Carve &amp; Pump:</strong> Carve turns &amp; pump rhythmically for speed
                   </div>
-                  <div class="help-item">
-                    <span class="help-key-tag" data-i18n="help.kbPushKey">↑ or W</span>
-                    <div class="help-item-desc" data-i18n-html="help.kbPush">
-                      <strong>Push-Off:</strong> Push off from a standstill &amp; build initial speed
-                    </div>
+                </div>
+                <div class="help-item">
+                  <span class="help-key-tag" data-i18n="help.kbPushKey">↑ or W</span>
+                  <div class="help-item-desc" data-i18n-html="help.kbPush">
+                    <strong>Push-Off:</strong> Push off from a standstill &amp; build initial speed
                   </div>
-                  <div class="help-item">
-                    <span class="help-key-tag" data-i18n="help.kbBrakeKey">↓ or S / Shift</span>
-                    <div class="help-item-desc" data-i18n-html="help.kbBrake">
-                      <strong>Compress &amp; Brake:</strong> Crouch into transitions for speed / brake
-                    </div>
+                </div>
+                <div class="help-item">
+                  <span class="help-key-tag" data-i18n="help.kbBrakeKey">↓ or S / Shift</span>
+                  <div class="help-item-desc" data-i18n-html="help.kbBrake">
+                    <strong>Compress &amp; Brake:</strong> Crouch into transitions for speed / brake
                   </div>
-                  <div class="help-item">
-                    <span class="help-key-tag">Space</span>
-                    <div class="help-item-desc" data-i18n-html="help.kbOllie">
-                      <strong>Ollie &amp; Grab:</strong> Pop off the coping lip / hold in air for Indy Grab
-                    </div>
+                </div>
+                <div class="help-item">
+                  <span class="help-key-tag">Space</span>
+                  <div class="help-item-desc" data-i18n-html="help.kbOllie">
+                    <strong>Ollie &amp; Grab:</strong> Pop off the coping lip / hold in air for Indy Grab
                   </div>
-                  <div class="help-item">
-                    <span class="help-key-tag">Q / W / A / S</span>
-                    <div class="help-item-desc" data-i18n-html="help.kbTricks">
-                      <strong>Surf Tricks:</strong> Q = Snap, W = Layback, A = Bertslide, S = FS Reverse 360
-                    </div>
+                </div>
+                <div class="help-item">
+                  <span class="help-key-tag">Q / W / A / S</span>
+                  <div class="help-item-desc" data-i18n-html="help.kbTricks">
+                    <strong>Surf Tricks:</strong> Q = Snap, W = Layback, A = Bertslide, S = FS Reverse 360
                   </div>
-                  <div class="help-item">
-                    <span class="help-key-tag">1 / 2 / 3 / 4 / O</span>
-                    <div class="help-item-desc" data-i18n-html="help.kbCam">
-                      <strong>Camera:</strong> Follow Cam, Filmer Cam, or 3D Orbit Inspect
-                    </div>
+                </div>
+                <div class="help-item">
+                  <span class="help-key-tag">1 / 2 / 3 / 4 / O</span>
+                  <div class="help-item-desc" data-i18n-html="help.kbCam">
+                    <strong>Camera:</strong> Follow Cam, Filmer Cam, or 3D Orbit Inspect
                   </div>
                 </div>
               </div>
-
-              <!-- General Pro-Tip Footer -->
-              <div class="help-pro-tip" data-i18n-html="help.proTip">
-                💡 <strong>PRO TIP:</strong> Pump through the turns and combine COMPRESS + OLLIE at the bowl walls for massive airtime &amp; high scores!
-              </div>
             </div>
 
-            <div class="help-footer">
-              <button id="help-modal-ok-btn" type="button" class="help-ok-btn" data-i18n="help.okBtn">GOT IT — LET'S RIDE</button>
+            <!-- General Pro-Tip Footer -->
+            <div class="help-pro-tip" data-i18n-html="help.proTip">
+              💡 <strong>PRO TIP:</strong> Pump through the turns and combine COMPRESS + OLLIE at the bowl walls for massive airtime &amp; high scores!
+            </div>
+          </div>
+
+          <div class="help-footer">
+            <button id="help-replay-tutorial-btn" type="button" class="help-tutorial-btn" data-i18n="help.tutorialBtn">🎓 Tutorial</button>
+            <button id="help-modal-ok-btn" type="button" class="help-ok-btn" data-i18n="help.okBtn">GOT IT — LET'S RIDE</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- First-Run Interactive Tutorial Modal (#tutorial-modal — Issue #33) -->
+      <div id="tutorial-modal" class="tutorial-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="tutorial-step-title">
+        <div class="tutorial-modal-backdrop" id="tutorial-modal-backdrop"></div>
+        <div class="tutorial-modal-card">
+          <button id="tutorial-close-x" class="tutorial-close-x" type="button" aria-label="Close Tutorial">&times;</button>
+
+          <div class="tutorial-header">
+            <div class="tutorial-header-top">
+              <span class="tutorial-badge" data-i18n="tutorial.badge">SURFSKATE CRASH COURSE</span>
+              <div class="tutorial-header-pills">
+                <button id="tutorial-mode-desktop" type="button" class="tut-mode-pill" data-i18n="tutorial.modeDesktop">⌨️ Desktop</button>
+                <button id="tutorial-mode-touch" type="button" class="tut-mode-pill" data-i18n="tutorial.modeTouch">📱 Touch</button>
+                <button id="tutorial-ctrl-toggle" type="button" class="tut-mode-pill tut-ctrl-pill" title="Switch Arrows / WASD">ARROWS ⇄</button>
+              </div>
+            </div>
+            <h2 id="tutorial-step-title" class="tutorial-title">1. PUSH &amp; CARVE</h2>
+            <p id="tutorial-step-subtitle" class="tutorial-subtitle"></p>
+            <div class="tutorial-progress-track" aria-hidden="true">
+              <div class="tutorial-progress-fill" id="tutorial-progress-fill"></div>
+            </div>
+          </div>
+
+          <div class="tutorial-body" id="tutorial-body"></div>
+
+          <div class="tutorial-footer">
+            <button id="tutorial-skip-btn" type="button" class="tut-btn-ghost" data-i18n="tutorial.skip">Skip</button>
+            <div class="tut-footer-center">
+              <span id="tutorial-step-count" class="tut-step-count">1/4</span>
+              <div class="tut-dots" id="tutorial-dots" aria-label="Tutorial steps">
+                <button type="button" class="tut-dot active" aria-label="Step 1"></button>
+                <button type="button" class="tut-dot" aria-label="Step 2"></button>
+                <button type="button" class="tut-dot" aria-label="Step 3"></button>
+                <button type="button" class="tut-dot" aria-label="Step 4"></button>
+              </div>
+            </div>
+            <div class="tut-footer-actions">
+              <button id="tutorial-prev-btn" type="button" class="tut-btn-ghost" data-i18n="tutorial.back">Back</button>
+              <button id="tutorial-next-btn" type="button" class="tut-btn-primary" data-i18n="tutorial.next">Next →</button>
             </div>
           </div>
         </div>
@@ -5540,7 +6089,7 @@
                   <button class="hud-btn" id="btn-reset" data-i18n="dock.respawn">↺ Respawn [X]</button>
                   <button class="hud-btn" id="btn-fullscreen" data-i18n="dock.fullscreen">Fullscreen</button>
                   <button class="hud-btn" id="btn-touch">📱 Touch Controls: AUTO</button>
-                  <a class="hud-btn" id="btn-viewer" href="/viewer.html" target="_blank" style="text-decoration:none;display:flex;align-items:center;justify-content:center;color:inherit;" data-i18n="dock.viewer">🔍 3D Photogrammetry Viewer</a>
+                  <a class="hud-btn" id="btn-viewer" href="./viewer.html" target="_blank" style="text-decoration:none;display:flex;align-items:center;justify-content:center;color:inherit;" data-i18n="dock.viewer">🔍 3D Photogrammetry Viewer</a>
                   <button class="hud-btn" id="btn-garage" data-i18n="dock.garage">🏠 Garage Selector [ESC]</button>
                 </div>
               </div>

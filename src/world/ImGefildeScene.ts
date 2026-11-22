@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { resolveAssetUrl } from '../utils/assetUrl';
 
 export type AtmosphereMode = 'night' | 'golden_hour';
 
@@ -52,9 +53,9 @@ export class ImGefildeScene {
     this.fillLight.position.set(-20, 15, 16);
     this.scene.add(this.fillLight);
 
-    // 2. Night Sky Dome mapped with the alpine night photo (`/textures/night_sky_alps.jpg`)
+    // 2. Night Sky Dome mapped with the alpine night photo (`textures/night_sky_alps.jpg`)
     const texLoader = new THREE.TextureLoader();
-    const nightSkyTex = texLoader.load('/textures/night_sky_alps.jpg?v=2');
+    const nightSkyTex = texLoader.load(resolveAssetUrl('textures/night_sky_alps.jpg?v=2'));
     nightSkyTex.colorSpace = THREE.SRGBColorSpace;
     nightSkyTex.wrapS = THREE.MirroredRepeatWrapping;
     nightSkyTex.wrapT = THREE.MirroredRepeatWrapping;
@@ -63,7 +64,7 @@ export class ImGefildeScene {
     nightSkyTex.minFilter = THREE.LinearFilter;
     nightSkyTex.magFilter = THREE.LinearFilter;
 
-    const goldenSkyTex = texLoader.load('/textures/airport_golden_hour_bg.jpg?v=1');
+    const goldenSkyTex = texLoader.load(resolveAssetUrl('textures/airport_golden_hour_bg.jpg?v=1'));
     goldenSkyTex.colorSpace = THREE.SRGBColorSpace;
     goldenSkyTex.wrapS = THREE.RepeatWrapping;
     goldenSkyTex.wrapT = THREE.ClampToEdgeWrapping;
@@ -236,7 +237,7 @@ export class ImGefildeScene {
     }
 
     if (parkId === 'aschheim') {
-      const aschheimGltf = await loader.loadAsync('/models/pumptrack_aschheim.glb?v=1');
+      const aschheimGltf = await loader.loadAsync(resolveAssetUrl('models/pumptrack_aschheim.glb?v=1'));
       aschheimGltf.scene.traverse((child) => {
         if ((child as THREE.Mesh).isMesh) {
           const mesh = child as THREE.Mesh;
@@ -247,8 +248,8 @@ export class ImGefildeScene {
       this.parkRoot.add(aschheimGltf.scene);
     } else if (parkId === 'airport_skatepark') {
       const [airportGltf, airportColorTex] = await Promise.all([
-        loader.loadAsync('/models/airport_skatepark_game.glb?v=2'),
-        texLoader.loadAsync('/textures/airport_skatepark_tex0.jpg?v=3'),
+        loader.loadAsync(resolveAssetUrl('models/airport_skatepark_game.glb?v=2')),
+        texLoader.loadAsync(resolveAssetUrl('textures/airport_skatepark_tex0.jpg?v=3')),
       ]);
 
       airportColorTex.flipY = false;
@@ -273,12 +274,12 @@ export class ImGefildeScene {
       });
       this.parkRoot.add(airportGltf.scene);
     } else {
-      // Load the floor-flattened, wall-preserving Multi-Video 3D Gaussian Splatting model (`/models/skatepark_multi.glb`)
-      // AND explicitly load the extracted 4K color texture (`/textures/skatepark_multi_tex0.jpg`) so it is
+      // Load the floor-flattened, wall-preserving Multi-Video 3D Gaussian Splatting model (`models/skatepark_multi.glb`)
+      // AND explicitly load the extracted 4K color texture (`textures/skatepark_multi_tex0.jpg`) so it is
       // 100% guaranteed to bind even after rapid hot-reloads!
       const [multiGltf, parkColorTex] = await Promise.all([
-        loader.loadAsync('/models/skatepark_multi.glb?v=4'),
-        texLoader.loadAsync('/textures/skatepark_multi_tex0.jpg?v=2'),
+        loader.loadAsync(resolveAssetUrl('models/skatepark_multi.glb?v=4')),
+        texLoader.loadAsync(resolveAssetUrl('textures/skatepark_multi_tex0.jpg?v=2')),
       ]);
 
       parkColorTex.flipY = false; // glTF UV convention

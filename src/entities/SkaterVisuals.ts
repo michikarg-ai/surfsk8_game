@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SurfskateController } from '../physics/SurfskateController';
+import { resolveAssetUrl } from '../utils/assetUrl';
 
 type Side = 'Left' | 'Right';
 
@@ -249,9 +250,9 @@ export class SkaterVisuals {
     scene.add(this.trailMesh);
   }
 
-  public async load(modelUrl = '/models/skater.glb'): Promise<void> {
+  public async load(modelUrl = 'models/skater.glb'): Promise<void> {
     const loader = new GLTFLoader();
-    const gltf = await loader.loadAsync(modelUrl);
+    const gltf = await loader.loadAsync(resolveAssetUrl(modelUrl));
 
     if (this.modelRoot) {
       this.root.remove(this.modelRoot);

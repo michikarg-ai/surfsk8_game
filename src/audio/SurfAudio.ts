@@ -1,4 +1,5 @@
 import { SurfskateController } from '../physics/SurfskateController';
+import { resolveAssetUrl } from '../utils/assetUrl';
 
 /**
  * Procedural Web Audio synthesizer for urethane wheel roll on smooth concrete,
@@ -33,11 +34,7 @@ export class SurfAudio {
   public onTrackChange?: (trackIndex: number) => void;
 
   private resolveUrl(relPath: string): string {
-    const meta = import.meta as unknown as { env?: { BASE_URL?: string } };
-    const base = meta.env?.BASE_URL || '/';
-    const prefix = base.endsWith('/') ? base : base + '/';
-    const cleanPath = relPath.startsWith('/') ? relPath.slice(1) : relPath;
-    return `${prefix}${cleanPath}`;
+    return resolveAssetUrl(relPath);
   }
 
   private getTrackUrl(index: number): string {

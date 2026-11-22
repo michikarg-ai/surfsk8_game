@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ParkSurface } from '../physics/ParkSurface';
 import { SurfHUD } from '../ui/SurfHUD';
 import { SurfAudio } from '../audio/SurfAudio';
+import { resolveAssetUrl } from '../utils/assetUrl';
 
 export type StuntMoveType =
   | 'DOUBLE_TAILWHIP'
@@ -645,10 +646,10 @@ export class ScooterRiderNPC {
    * strips the skateboard parts, customizes clothing materials for the Scooter Kid,
    * scales to teenage rider size, and initializes bone lengths and rest poses for Two-Bone IK.
    */
-  private async loadMakeHumanRider(modelUrl = '/models/skater.glb'): Promise<void> {
+  private async loadMakeHumanRider(modelUrl = 'models/skater.glb'): Promise<void> {
     try {
       const loader = new GLTFLoader();
-      const gltf = await loader.loadAsync(modelUrl);
+      const gltf = await loader.loadAsync(resolveAssetUrl(modelUrl));
 
       this.makeHumanRoot = gltf.scene;
       this.bones = {};

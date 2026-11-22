@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  base: process.env.ITCH_BUILD === '1' ? './' : '/',
   css: {
     postcss: {},
   },

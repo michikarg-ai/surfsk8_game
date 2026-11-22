@@ -47,13 +47,13 @@ export const SKATER_CHARACTERS: SkaterCharacter[] = [
   {
     id: 'male',
     name: 'LUKAS',
-    modelUrl: '/models/skater.glb',
+    modelUrl: 'models/skater.glb',
     stats: { flow: 92, pump: 88, agility: 85 },
   },
   {
     id: 'female',
     name: 'SOPHIE',
-    modelUrl: '/models/skater_female.glb',
+    modelUrl: 'models/skater_female.glb',
     stats: { flow: 91, pump: 82, agility: 93 },
   },
 ];
@@ -63,19 +63,19 @@ export const SKATEPARK_LOCATIONS: SkateparkLocation[] = [
     id: 'im_gefilde',
     name: 'IM WIESENGRUND',
     subtitle: 'IM WIESENGRUND',
-    thumbUrl: '/textures/im_gefilde_thumb.png',
-    modelUrl: '/models/skatepark_multi.glb',
-    lidarUrl: '/models/im_gefilde_lidar.json',
-    viewerUrl: '/viewer.html?model=/models/skatepark_multi.glb',
+    thumbUrl: 'textures/im_gefilde_thumb.png',
+    modelUrl: 'models/skatepark_multi.glb',
+    lidarUrl: 'models/im_gefilde_lidar.json',
+    viewerUrl: 'viewer.html?model=models/skatepark_multi.glb',
   },
   {
     id: 'airport_skatepark',
     name: 'AIRPORT SKATEPARK',
     subtitle: 'AIRPORT SKATEPARK',
-    thumbUrl: '/textures/airport_thumb.png?v=2',
-    modelUrl: '/models/airport_skatepark_game.glb',
-    lidarUrl: '/models/airport_skatepark_lidar.json',
-    viewerUrl: '/viewer.html?model=/models/airport_skatepark_game.glb',
+    thumbUrl: 'textures/airport_thumb.png?v=2',
+    modelUrl: 'models/airport_skatepark_game.glb',
+    lidarUrl: 'models/airport_skatepark_lidar.json',
+    viewerUrl: 'viewer.html?model=models/airport_skatepark_game.glb',
   },
 ];
 
@@ -126,6 +126,7 @@ export class LandingPage {
   public onToggleFullscreen?: () => void;
   public onToggleSound?: () => void;
   public onSelectGameMode?: (mode: GameModeId) => void;
+  public onOpenTutorial?: () => void;
   private fullscreenBtnEl: HTMLElement | null = null;
   private soundBtnEl: HTMLElement | null = null;
   private modeDescEl: HTMLElement | null = null;
@@ -513,7 +514,7 @@ export class LandingPage {
         if (this.onInspectPark) {
           this.onInspectPark(park);
         } else {
-          window.open(park.viewerUrl || '/viewer.html', '_blank');
+          window.open(park.viewerUrl || 'viewer.html', '_blank');
         }
       });
     }
@@ -595,6 +596,14 @@ export class LandingPage {
         this.onToggleFullscreen?.();
       });
     }
+
+    // Tutorial replay row inside settings popover
+    const tutorialBtn = document.getElementById('landing-tutorial-btn');
+    tutorialBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.closeSettingsPopover();
+      this.onOpenTutorial?.();
+    });
 
     // Terms & Privacy Modal
     const termsBtn = document.getElementById('landing-terms-btn');

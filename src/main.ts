@@ -7,6 +7,7 @@ import { CameraStyle, SurfCamera } from './camera/SurfCamera';
 import { DriveControlMode, SurfHUD } from './ui/SurfHUD';
 import { LandingPage, SkateparkLocation } from './ui/LandingPage';
 import { TouchControls } from './ui/TouchControls';
+import { FirstRunTutorial } from './ui/FirstRunTutorial';
 import { SurfAudio } from './audio/SurfAudio';
 import { PretzelCollectibles } from './world/PretzelCollectibles';
 import { FlowLineChallenge } from './world/FlowLineChallenge';
@@ -35,6 +36,8 @@ class SurfskateMunichGame {
   public hud: SurfHUD;
   public landingPage: LandingPage;
   public touchControls: TouchControls;
+  public tutorial: FirstRunTutorial;
+  private isTutorialPaused = false;
   public audio = new SurfAudio();
   public pretzels: PretzelCollectibles;
   public flowLine: FlowLineChallenge;
@@ -194,6 +197,9 @@ class SurfskateMunichGame {
         this.lastTime = performance.now();
         this.touchControls.setVisible(true);
         this.syncHUDButtons();
+        if (this.tutorial.shouldAutoOpenOnStart()) {
+          this.tutorial.open();
+        }
         try {
           track('game_start', {
             skater: this.landingPage.getSelectedSkaterName(),
@@ -214,10 +220,29 @@ class SurfskateMunichGame {
         this.inspectPark(park);
       }
     );
+    this.tutorial = new FirstRunTutorial({
+      getControlMode: () => this.controlMode,
+      onToggleControlMode: () => this.toggleControlMode(),
+      isTouchDevice: () => this.touchControls.isTouchActive(),
+      onOpen: () => {
+        this.isTutorialPaused = !this.landingPage.isVisible;
+        this.keys.clear();
+        this.touchControls.setVisible(false);
+      },
+      onClose: () => {
+        this.isTutorialPaused = false;
+        this.lastTime = performance.now();
+        this.keys.clear();
+        if (!this.landingPage.isVisible) {
+          this.touchControls.setVisible(true);
+        }
+      },
+    });
     this.controller.setSkaterStats(this.landingPage.getSelectedSkater().stats);
     this.landingPage.onCycleQuality = () => this.cycleGraphicsQuality();
     this.landingPage.onToggleFullscreen = () => this.toggleFullscreen();
     this.landingPage.onToggleSound = () => this.toggleMusic();
+    this.landingPage.onOpenTutorial = () => this.tutorial.open();
     this.landingPage.onSelectGameMode = (mode) => {
       this.gameMode = mode;
     };
@@ -238,6 +263,7 @@ class SurfskateMunichGame {
       this.syncProgressionUI();
       this.syncHUDButtons();
       this.syncFullscreenUI();
+      this.tutorial.refresh();
     });
     this.initAssets();
   }
@@ -248,7 +274,7 @@ class SurfskateMunichGame {
       const initialModel = this.landingPage.getSelectedSkaterModel();
       const initialPark = this.landingPage.getSelectedPark();
       await Promise.all([
-        this.parkSurface.loadLidarGrid(initialPark.lidarUrl || '/models/im_gefilde_lidar.json', initialPark.id),
+        this.parkSurface.loadLidarGrid(initialPark.lidarUrl || 'models/im_gefilde_lidar.json', initialPark.id),
         this.worldScene.load(initialPark.id),
         this.skaterVisuals.load(initialModel),
         this.landingPage.load(),
@@ -341,6 +367,7 @@ class SurfskateMunichGame {
     const helpCloseBtn = document.getElementById('help-modal-close');
     const helpBackdrop = document.getElementById('help-modal-backdrop');
     const helpOkBtn = document.getElementById('help-modal-ok-btn');
+    const helpTutorialBtn = document.getElementById('help-replay-tutorial-btn');
     const tabMobile = document.getElementById('help-tab-mobile');
     const tabKeyboard = document.getElementById('help-tab-keyboard');
 
@@ -349,6 +376,12 @@ class SurfskateMunichGame {
     if (helpCloseBtn) helpCloseBtn.addEventListener('click', () => this.closeHelpModal());
     if (helpBackdrop) helpBackdrop.addEventListener('click', () => this.closeHelpModal());
     if (helpOkBtn) helpOkBtn.addEventListener('click', () => this.closeHelpModal());
+    if (helpTutorialBtn) {
+      helpTutorialBtn.addEventListener('click', () => {
+        this.closeHelpModal();
+        this.tutorial.open();
+      });
+    }
     if (tabMobile) tabMobile.addEventListener('click', () => this.switchHelpTab('mobile'));
     if (tabKeyboard) tabKeyboard.addEventListener('click', () => this.switchHelpTab('keyboard'));
 
@@ -366,6 +399,13 @@ class SurfskateMunichGame {
 
       this.audio.initOnFirstGesture();
       const code = e.code;
+
+      if (this.tutorial.isOpen()) {
+        if (this.tutorial.handleKeyDown(e)) {
+          e.preventDefault();
+        }
+        return;
+      }
 
       if (e.key === '?' || (e.shiftKey && code === 'Slash')) {
         e.preventDefault();
@@ -585,7 +625,7 @@ class SurfskateMunichGame {
     try {
       await Promise.all([
         this.worldScene.load(park.id),
-        this.parkSurface.loadLidarGrid(park.lidarUrl || '/models/im_gefilde_lidar.json', park.id),
+        this.parkSurface.loadLidarGrid(park.lidarUrl || 'models/im_gefilde_lidar.json', park.id),
       ]);
       (this.flowLine as unknown as { refreshSurfaceHeights: (parkId?: string) => void }).refreshSurfaceHeights(
         park.id
@@ -620,6 +660,7 @@ class SurfskateMunichGame {
     localStorage.setItem('surfsk8.controlMode', mode);
     this.hud.setControlMode(mode);
     this.syncHUDButtons();
+    this.tutorial?.refresh();
   }
 
   public cycleTruckFeel(): void {
@@ -680,6 +721,10 @@ class SurfskateMunichGame {
 
   public pauseGameAndOpenLanding(): void {
     if (this.landingPage.isVisible) return;
+    if (this.tutorial.isOpen()) {
+      this.tutorial.close(false);
+    }
+    this.isTutorialPaused = false;
     this.hud.closeSessionSummary();
     this.keys.clear();
     this.touchControls.setVisible(false);
@@ -1009,6 +1054,14 @@ class SurfskateMunichGame {
 
     if (this.landingPage.isVisible) {
       this.landingPage.update(timeSec, realDt);
+      requestAnimationFrame((t) => this.animate(t));
+      return;
+    }
+
+    if (this.isTutorialPaused) {
+      this.skaterVisuals.update(0, this.controller);
+      this.surfCamera.update(0, this.controller);
+      this.renderer.render(this.scene, this.surfCamera.camera);
       requestAnimationFrame((t) => this.animate(t));
       return;
     }

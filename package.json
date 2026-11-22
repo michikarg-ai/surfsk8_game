@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:itch": "ITCH_BUILD=1 npm run build && node scripts/build_itch_zip.mjs",
     "preview": "vite preview",
     "build:park": "/Applications/Blender.app/Contents/MacOS/Blender -b -P scripts/build_park.py",
     "build:skater": "/Applications/Blender.app/Contents/MacOS/Blender -b -P scripts/build_skater.py",

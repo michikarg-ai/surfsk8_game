@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { resolveAssetUrl } from '../utils/assetUrl';
 
 type Side = 'Left' | 'Right';
 
@@ -314,10 +315,10 @@ export class FlowGhostSkater {
     addPart(new THREE.CapsuleGeometry(0.055, 0.38, 4, 8), bodyMat, this.fallbackSurferGroup, [0.04, 0.42, 0.17], [0.25, 0, 0]);
   }
 
-  private async loadMakeHumanModel(modelUrl = '/models/skater.glb'): Promise<void> {
+  private async loadMakeHumanModel(modelUrl = 'models/skater.glb'): Promise<void> {
     try {
       const loader = new GLTFLoader();
-      const gltf = await loader.loadAsync(modelUrl);
+      const gltf = await loader.loadAsync(resolveAssetUrl(modelUrl));
 
       if (this.disposed) {
         this.disposeObjectResources(gltf.scene);

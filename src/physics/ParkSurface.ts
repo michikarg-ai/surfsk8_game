@@ -11,6 +11,8 @@ export interface SurfaceSample {
   copingHeight: number;
 }
 
+import { resolveAssetUrl } from '../utils/assetUrl';
+
 export interface CopingSegment {
   name: string;
   points: THREE.Vector3[];
@@ -51,12 +53,12 @@ export class ParkSurface {
   }
 
   public async loadLidarGrid(
-    url: string = '/models/im_gefilde_lidar.json',
+    url: string = 'models/im_gefilde_lidar.json',
     parkId?: string
   ): Promise<void> {
     this.parkId = parkId || (url.includes('airport') ? 'airport_skatepark' : 'im_gefilde');
     try {
-      const resp = await fetch(url);
+      const resp = await fetch(resolveAssetUrl(url));
       if (resp.ok) {
         this.lidarData = (await resp.json()) as LidarGridPayload;
       }

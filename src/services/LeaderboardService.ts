@@ -26,6 +26,40 @@ export interface SubmitScoreResult {
 
 const PLAYER_NAME_KEY = 'surfsk8.playerName';
 const LOCAL_LB_KEY = 'surfsk8.localLeaderboard.v1';
+const DEFAULT_REMOTE_API_BASE = 'https://surfsk8-game.vercel.app';
+
+/**
+ * Returns the leaderboard API endpoint.
+ * - Uses `VITE_API_BASE` when configured at build time.
+ * - Automatically targets the CORS-enabled Vercel API when running inside an
+ *   itch.io iframe (`*.hwcdn.net`, `*.itch.zone`, `*.itch.io`), where relative
+ *   `/api/leaderboard` routes do not exist.
+ * - Defaults to `/api/leaderboard` on Vercel and local dev servers.
+ */
+function getLeaderboardEndpoint(): string {
+  const meta = import.meta as unknown as { env?: { VITE_API_BASE?: string } };
+  const envBase = meta.env?.VITE_API_BASE?.trim();
+  if (envBase) {
+    const normalized = envBase.replace(/\/+$/, '');
+    return normalized.endsWith('/api/leaderboard')
+      ? normalized
+      : `${normalized}/api/leaderboard`;
+  }
+
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    const host = window.location.hostname.toLowerCase();
+    const isItchHost =
+      host === 'itch.io' ||
+      host.endsWith('.itch.io') ||
+      host.endsWith('.itch.zone') ||
+      host.endsWith('.hwcdn.net');
+    if (isItchHost) {
+      return `${DEFAULT_REMOTE_API_BASE}/api/leaderboard`;
+    }
+  }
+
+  return '/api/leaderboard';
+}
 
 interface LocalLeaderboardStore {
   global: Record<string, number>;
@@ -119,8 +153,9 @@ export async function fetchLeaderboard(
   const clampedLimit = Math.max(1, Math.min(50, Math.round(limit)));
 
   try {
+    const endpoint = getLeaderboardEndpoint();
     const res = await fetch(
-      `/api/leaderboard?park=${encodeURIComponent(park)}&limit=${clampedLimit}`,
+      `${endpoint}?park=${encodeURIComponent(park)}&limit=${clampedLimit}`,
       {
         method: 'GET',
         headers: { Accept: 'application/json' },
@@ -201,7 +236,8 @@ export async function submitScore(
   const localBest = store.global[cleanName];
 
   try {
-    const res = await fetch('/api/leaderboard', {
+    const endpoint = getLeaderboardEndpoint();
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
