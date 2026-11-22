@@ -40,8 +40,8 @@ const PARK_WANTED_CONFIGS: Record<WantedParkId, ParkWantedConfig> = {
   im_gefilde: {
     signs: [
       { id: 1, label: 'East Sunset Deck', x: 21.0, z: 12.5, yaw: -2.12 },
-      { id: 2, label: 'West Basin Perimeter', x: -11.5, z: 2.5, yaw: 1.64 },
-      { id: 3, label: 'North Rim Perimeter', x: 4.5, z: -9.0, yaw: -0.14 },
+      { id: 2, label: 'West Rim Entrance', x: -19.5, z: 5.5, yaw: 1.75 },
+      { id: 3, label: 'North Rim Perimeter', x: -1.5, z: -12.5, yaw: 0.31 },
     ],
     // Flat upper deck tucked directly behind the East Sunset Palm Mural Wall
     payNSpray: { x: 23.8, z: 9.8 },
@@ -64,9 +64,9 @@ const PARK_WANTED_CONFIGS: Record<WantedParkId, ParkWantedConfig> = {
   },
   airport_skatepark: {
     signs: [
-      { id: 1, label: 'SW Plaza Perimeter', x: -8.0, z: 12.0, yaw: 2.62 },
-      { id: 2, label: 'East Outer Side', x: 13.5, z: 1.5, yaw: -1.82 },
-      { id: 3, label: 'NW Graffiti Deck', x: -9.5, z: -10.5, yaw: 0.84 },
+      { id: 1, label: 'South Concrete Perimeter', x: 5.5, z: 25.5, yaw: -2.93 },
+      { id: 2, label: 'East Outer Walkway', x: 16.0, z: 5.0, yaw: -1.87 },
+      { id: 3, label: 'NW Graffiti Deck', x: -10.0, z: -11.0, yaw: 0.74 },
     ],
     // Flat upper deck right behind the North Graffiti Wall & Bowl apex
     payNSpray: { x: 2.2, z: -17.2 },
