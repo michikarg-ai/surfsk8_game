@@ -78,6 +78,23 @@ export class SurfHUD {
   private dockMissionsListEl: HTMLElement | null = null;
   private missionToastEl: HTMLElement | null = null;
   private missionToastTimeout: number | null = null;
+
+  // Crew Encounters (Issue #37) & After Hours Wanted (Issue #38) HUD elements
+  private crewInteractBtnEl: HTMLButtonElement | null = null;
+  private crewInteractTextEl: HTMLElement | null = null;
+  private crewDialogueEl: HTMLElement | null = null;
+  private crewDialogueSpeakerEl: HTMLElement | null = null;
+  private crewDialogueTextEl: HTMLElement | null = null;
+  private crewDialogueTimeout: number | null = null;
+  private crewQuestPillEl: HTMLElement | null = null;
+  private crewQuestPillTextEl: HTMLElement | null = null;
+  private wantedBarEl: HTMLElement | null = null;
+  private wantedStarsEl: HTMLElement | null = null;
+  private wantedOutlawEl: HTMLElement | null = null;
+  private wantedBustedWrapEl: HTMLElement | null = null;
+  private wantedBustedFillEl: HTMLElement | null = null;
+  private lastCrewInteract?: { canInteract: boolean; npcId: 'sepp' | 'michi'; isTouch: boolean };
+  private lastWantedOutlawVisible = false;
   private summaryModalEl: HTMLElement | null = null;
   private summaryRetryCallback: (() => void) | null = null;
   private summaryGarageCallback: (() => void) | null = null;
@@ -163,6 +180,18 @@ export class SurfHUD {
     this.dockRankTitleEl = document.getElementById('dock-rank-title');
     this.dockMissionsListEl = document.getElementById('dock-missions-list');
     this.missionToastEl = document.getElementById('hud-mission-toast');
+    this.crewInteractBtnEl = document.getElementById('hud-crew-interact') as HTMLButtonElement | null;
+    this.crewInteractTextEl = document.getElementById('hud-crew-interact-text');
+    this.crewDialogueEl = document.getElementById('hud-crew-dialogue');
+    this.crewDialogueSpeakerEl = document.getElementById('hud-crew-dialogue-speaker');
+    this.crewDialogueTextEl = document.getElementById('hud-crew-dialogue-text');
+    this.crewQuestPillEl = document.getElementById('hud-crew-quest-pill');
+    this.crewQuestPillTextEl = document.getElementById('hud-crew-quest-pill-text');
+    this.wantedBarEl = document.getElementById('hud-wanted-bar');
+    this.wantedStarsEl = document.getElementById('hud-wanted-stars');
+    this.wantedOutlawEl = document.getElementById('hud-wanted-outlaw');
+    this.wantedBustedWrapEl = document.getElementById('hud-wanted-busted-wrap');
+    this.wantedBustedFillEl = document.getElementById('hud-wanted-busted-fill');
     this.summaryModalEl = document.getElementById('session-summary-modal');
     this.summaryPlayerInputEl = document.getElementById('summary-player-name') as HTMLInputElement | null;
     this.summarySubmitBtnEl = document.getElementById('summary-submit-score') as HTMLButtonElement | null;
@@ -318,6 +347,17 @@ export class SurfHUD {
     }
     if (this.lastMissionsState) {
       this.updateMissionsWidget(this.lastMissionsState.rank, this.lastMissionsState.missions);
+    }
+    if (this.lastCrewInteract) {
+      this.updateCrewInteract(
+        this.lastCrewInteract.canInteract,
+        this.lastCrewInteract.npcId,
+        this.lastCrewInteract.isTouch
+      );
+    }
+    if (this.wantedOutlawEl && this.lastWantedOutlawVisible) {
+      const span = this.wantedOutlawEl.querySelector('span');
+      if (span) span.textContent = t('wanted.outlawBadge');
     }
   }
 
@@ -756,7 +796,108 @@ export class SurfHUD {
     this.comboContainerEl.classList.remove('active');
     this.updatePretzelCount(0, 5);
     this.updateHotSpotStatus(null, 0, false);
+    this.updateCrewInteract(false, 'sepp', false);
+    this.hideCrewDialogue();
+    this.updateCrewQuestPill('idle', 'sepp', 0, 4);
+    this.updateWantedStatus({ active: false, stars: 0, inOutlawSpotlight: false, bustedProgress: 0 });
     this.closeSessionSummary();
+  }
+
+  public updateCrewInteract(
+    canInteract: boolean,
+    npcId: 'sepp' | 'michi',
+    isTouch: boolean
+  ): void {
+    this.lastCrewInteract = { canInteract, npcId, isTouch };
+    if (!this.crewInteractBtnEl || !this.crewInteractTextEl) return;
+    this.crewInteractBtnEl.classList.toggle('hidden', !canInteract);
+    this.crewInteractBtnEl.classList.toggle('michi', npcId === 'michi');
+    if (canInteract) {
+      const key =
+        npcId === 'sepp'
+          ? isTouch
+            ? 'crew.sepp.interactTouch'
+            : 'crew.sepp.interactDesktop'
+          : isTouch
+            ? 'crew.michi.interactTouch'
+            : 'crew.michi.interactDesktop';
+      this.crewInteractTextEl.textContent = t(key);
+    }
+  }
+
+  public showCrewDialogue(icon: string, speaker: string, quote: string): void {
+    if (!this.crewDialogueEl || !this.crewDialogueSpeakerEl || !this.crewDialogueTextEl) return;
+    this.crewDialogueSpeakerEl.textContent = `${icon} ${speaker}`;
+    this.crewDialogueTextEl.textContent = quote;
+    this.crewDialogueEl.classList.toggle('michi', icon === '📸');
+    this.crewDialogueEl.classList.add('visible');
+    if (this.crewDialogueTimeout !== null) {
+      window.clearTimeout(this.crewDialogueTimeout);
+    }
+    this.crewDialogueTimeout = window.setTimeout(() => {
+      this.crewDialogueEl?.classList.remove('visible');
+    }, 5000);
+  }
+
+  public hideCrewDialogue(): void {
+    if (this.crewDialogueTimeout !== null) {
+      window.clearTimeout(this.crewDialogueTimeout);
+      this.crewDialogueTimeout = null;
+    }
+    this.crewDialogueEl?.classList.remove('visible');
+  }
+
+  public updateCrewQuestPill(
+    questState: 'idle' | 'active' | 'completed',
+    npcId: 'sepp' | 'michi',
+    collected: number,
+    total: number
+  ): void {
+    if (!this.crewQuestPillEl || !this.crewQuestPillTextEl) return;
+    const isActive = questState === 'active';
+    this.crewQuestPillEl.classList.toggle('hidden', !isActive);
+    this.crewQuestPillEl.classList.toggle('michi', npcId === 'michi');
+    if (isActive) {
+      const icon = npcId === 'sepp' ? '🦴' : '💾';
+      this.crewQuestPillTextEl.textContent = `${icon} ${collected}/${total}`;
+    }
+  }
+
+  public updateWantedStatus(state: {
+    active: boolean;
+    stars: number;
+    inOutlawSpotlight: boolean;
+    bustedProgress: number;
+  }): void {
+    if (!this.wantedBarEl || !this.wantedStarsEl) return;
+    const show = state.active && state.stars > 0;
+    this.wantedBarEl.classList.toggle('hidden', !show);
+    if (!show) {
+      this.lastWantedOutlawVisible = false;
+      this.wantedOutlawEl?.classList.add('hidden');
+      this.wantedBustedWrapEl?.classList.add('hidden');
+      return;
+    }
+
+    const clampedStars = Math.max(0, Math.min(5, Math.round(state.stars)));
+    this.wantedStarsEl.textContent = '★'.repeat(clampedStars) + '☆'.repeat(5 - clampedStars);
+
+    this.lastWantedOutlawVisible = state.inOutlawSpotlight;
+    if (this.wantedOutlawEl) {
+      this.wantedOutlawEl.classList.toggle('hidden', !state.inOutlawSpotlight);
+      if (state.inOutlawSpotlight) {
+        const span = this.wantedOutlawEl.querySelector('span');
+        if (span) span.textContent = t('wanted.outlawBadge');
+      }
+    }
+
+    if (this.wantedBustedWrapEl && this.wantedBustedFillEl) {
+      const showBusted = state.bustedProgress > 0.05;
+      this.wantedBustedWrapEl.classList.toggle('hidden', !showBusted);
+      if (showBusted) {
+        this.wantedBustedFillEl.style.width = `${Math.min(100, Math.round(state.bustedProgress * 100))}%`;
+      }
+    }
   }
 
   public getCurrentOrBestComboScore(): number {
@@ -1150,7 +1291,8 @@ export class SurfHUD {
     this.btnAspectEl.classList.toggle('active-reel', aspect === '9:16');
 
     if (this.btnAtmosphereEl) {
-      this.btnAtmosphereEl.textContent = t('dock.atmosphereNight');
+      this.btnAtmosphereEl.textContent =
+        atmosphere === 'golden_hour' ? t('dock.atmosphereGolden') : t('dock.atmosphereNight');
     }
 
     const camLabels: Record<CameraStyle, string> = {

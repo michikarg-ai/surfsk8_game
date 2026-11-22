@@ -46,6 +46,7 @@ interface PersistedProgressionState {
   version: 1;
   rankLevel: number;
   completedMissionIds: string[];
+  totalCompletedMissions: number;
   parkHighScores: Record<string, number>;
   parkBestMedals: Record<string, MedalInfo['id']>;
 }
@@ -166,6 +167,7 @@ export class SurfProgression {
   private sessionFlowLinesCompleted = 0;
   private sessionSurfZoneSeconds = 0;
   private sessionUniqueTricks = new Set<string>();
+  private crewMissionsCompletedThisSession = new Set<'sepp' | 'michi'>();
 
   public onMissionCompleted?: (mission: SurfMission) => void;
   public onRankUp?: (newRank: SkaterRankInfo) => void;
@@ -192,10 +194,16 @@ export class SurfProgression {
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<PersistedProgressionState>;
         if (parsed && typeof parsed.rankLevel === 'number' && parsed.rankLevel >= 1) {
+          const completedIds = Array.isArray(parsed.completedMissionIds) ? parsed.completedMissionIds : [];
+          const totalDone =
+            typeof parsed.totalCompletedMissions === 'number' && parsed.totalCompletedMissions >= 0
+              ? parsed.totalCompletedMissions
+              : (parsed.rankLevel - 1) * 3 + completedIds.length;
           return {
             version: 1,
             rankLevel: parsed.rankLevel,
-            completedMissionIds: Array.isArray(parsed.completedMissionIds) ? parsed.completedMissionIds : [],
+            completedMissionIds: completedIds,
+            totalCompletedMissions: totalDone,
             parkHighScores: parsed.parkHighScores && typeof parsed.parkHighScores === 'object' ? parsed.parkHighScores : {},
             parkBestMedals: parsed.parkBestMedals && typeof parsed.parkBestMedals === 'object' ? parsed.parkBestMedals : {},
           };
@@ -208,6 +216,7 @@ export class SurfProgression {
       version: 1,
       rankLevel: 1,
       completedMissionIds: [],
+      totalCompletedMissions: 0,
       parkHighScores: {},
       parkBestMedals: {},
     };
@@ -263,6 +272,10 @@ export class SurfProgression {
     });
   }
 
+  public startSession(): void {
+    this.resetSessionCounters();
+  }
+
   public resetSessionCounters(): void {
     this.sessionCarvesOrSnaps = 0;
     this.sessionBertOrLaybacks = 0;
@@ -272,6 +285,7 @@ export class SurfProgression {
     this.sessionFlowLinesCompleted = 0;
     this.sessionSurfZoneSeconds = 0;
     this.sessionUniqueTricks.clear();
+    this.crewMissionsCompletedThisSession.clear();
 
     for (const m of this.missions) {
       if (!m.completed) {
@@ -280,6 +294,29 @@ export class SurfProgression {
         m.progress = m.target;
       }
     }
+  }
+
+  public recordCrewMissionCompleted(npcId: 'sepp' | 'michi'): {
+    newRank: SkaterRankInfo | null;
+    missionTitle: string;
+  } {
+    const missionTitle =
+      npcId === 'sepp' ? t('crew.sepp.missionTitle') : t('crew.michi.missionTitle');
+    this.crewMissionsCompletedThisSession.add(npcId);
+    this.state.totalCompletedMissions += 1;
+
+    if (this.state.totalCompletedMissions >= this.state.rankLevel * 3) {
+      this.state.rankLevel += 1;
+      this.state.completedMissionIds = [];
+      this.saveState();
+      const newRank = this.getRankInfo(this.state.rankLevel);
+      this.rebuildActiveMissions();
+      this.onRankUp?.(newRank);
+      return { newRank, missionTitle };
+    }
+
+    this.saveState();
+    return { newRank: null, missionTitle };
   }
 
   public onManeuver(ev: ManeuverEvent, inHotSpot = false): void {
@@ -431,6 +468,7 @@ export class SurfProgression {
         m.completed = true;
         if (!this.state.completedMissionIds.includes(m.id)) {
           this.state.completedMissionIds.push(m.id);
+          this.state.totalCompletedMissions += 1;
         }
         newlyCompletedAny = true;
         this.saveState();
@@ -438,7 +476,11 @@ export class SurfProgression {
       }
     }
 
-    if (newlyCompletedAny && this.missions.every((m) => m.completed)) {
+    if (
+      newlyCompletedAny &&
+      (this.missions.every((m) => m.completed) ||
+        this.state.totalCompletedMissions >= this.state.rankLevel * 3)
+    ) {
       this.state.rankLevel += 1;
       this.state.completedMissionIds = [];
       this.saveState();
@@ -499,6 +541,17 @@ export class SurfProgression {
 
     const nearMissHint = this.buildNearMissHint(cleanScore, nextMedal, pointsToNextMedal);
 
+    const crewMissions: SurfMission[] = Array.from(this.crewMissionsCompletedThisSession).map(
+      (npcId) => ({
+        id: `crew_${npcId}`,
+        title: npcId === 'sepp' ? t('crew.sepp.missionTitle') : t('crew.michi.missionTitle'),
+        shortTitle: npcId === 'sepp' ? t('crew.sepp.missionShort') : t('crew.michi.missionShort'),
+        target: 4,
+        progress: 4,
+        completed: true,
+      })
+    );
+
     return {
       parkId,
       score: cleanScore,
@@ -511,7 +564,7 @@ export class SurfProgression {
       pointsToNextMedal,
       nearMissHint,
       rank: this.getRankInfo(),
-      missions: this.missions.map((m) => ({ ...m })),
+      missions: [...this.missions.map((m) => ({ ...m })), ...crewMissions],
     };
   }
 

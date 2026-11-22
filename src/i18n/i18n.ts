@@ -303,6 +303,7 @@ const EN_TRANSLATIONS = {
   'dock.aspectReel': '📱 9:16 IG Reel Mode [R]',
   'dock.aspectDesktop': '🖥️ 16:9 Desktop [R]',
   'dock.atmosphereNight': '🌙 Floodlit Munich Night',
+  'dock.atmosphereGolden': '☀️ Golden Hour Sunset',
   'dock.camFollow': '🎥 Follow Cam [1]',
   'dock.camFilmer': '📹 Filmer Cam [2]',
   'dock.camMural': '🌴 Palm Mural Cam [3]',
@@ -420,6 +421,54 @@ const EN_TRANSLATIONS = {
   'mission.l7_surfzone_22s.short': '22s in Surf-Zone',
   'mission.l7_snaps_5.title': 'Land 5 Snaps or Bert Slides on the lip',
   'mission.l7_snaps_5.short': '5 Snaps / Bert Slides',
+
+  // MUC Park Crew Encounters (Issue #37)
+  'crew.sepp.name': 'Opa Sepp & Wasti',
+  'crew.michi.name': 'Planespotter Michi',
+  'crew.sepp.interactDesktop': '💬 [E] Talk to Opa Sepp',
+  'crew.sepp.interactTouch': '💬 Talk to Opa Sepp',
+  'crew.michi.interactDesktop': '💬 [E] Talk to Michi',
+  'crew.michi.interactTouch': '💬 Talk to Michi',
+  'crew.sepp.dialogueStarted':
+    "Servus! Wasti dropped his 4 golden treats around the bowls. Shred the park and grab 'em for me, young surfer!",
+  'crew.sepp.dialogueReminder':
+    'Keep carving! {collected}/{total} treats found so far — check the deep bowls and cradle!',
+  'crew.sepp.dialogueJustCompleted':
+    "Sauber! All 4 treats saved! Wasti is stoked — here's +2,500 PTS for your line!",
+  'crew.sepp.dialogueCompletedChat':
+    'Top flow today! Wasti is still munching his golden treats — keep shredding!',
+  'crew.michi.dialogueStarted':
+    'Yo! A heavy landing shook my 4 SD cards onto the plaza & bowls. Grab all 4 before security sweeps!',
+  'crew.michi.dialogueReminder':
+    'Nice shots! {collected}/{total} SD cards recovered — hit the spine and corner bowls!',
+  'crew.michi.dialogueJustCompleted':
+    'Legend! All 4 SD cards back — those runway clips are fire! Take +2,500 PTS!',
+  'crew.michi.dialogueCompletedChat':
+    'Editing the runway surfskate reel right now — go send a clean Air off the hip!',
+  'crew.sepp.collectToast': '🦴 {collected}/{total} GOLDEN TREATS',
+  'crew.michi.collectToast': '💾 {collected}/{total} SD CARDS',
+  'crew.sepp.missionTitle': "Crew: Help Opa Sepp & Wasti find 4 Golden Treats",
+  'crew.sepp.missionShort': "Sepp & Wasti's 4 Treats",
+  'crew.michi.missionTitle': "Crew: Recover Michi's 4 Lost SD Cards",
+  'crew.michi.missionShort': "Michi's 4 SD Cards",
+  'crew.completedToast': '✅ {mission} • +{pts} PTS & +1 MISSION!',
+  'crew.completedBanner': 'CREW QUEST COMPLETE! +{pts} PTS',
+
+  // AFTER HOURS: 5-Star Park-Verbot (Issue #38)
+  'wanted.outlawBadge': '🚨 OUTLAW 2.5×',
+  'wanted.bustedLabel': 'BUSTED',
+  'wanted.bustedBanner': '🚨 BUSTED!',
+  'wanted.bustedToast': '🚨 BUSTED! Security cleared your combo — push off & ride on!',
+  'wanted.signKnockedToast': '🚫 SIGN SMASHED ({count}/{total})! PARK-VERBOT HEAT!',
+  'wanted.star1Toast': '★☆☆☆☆ 1★ ORDNUNGSAMT PATROL — DODGE THE FLASHLIGHT!',
+  'wanted.star2Toast': '★★☆☆☆ 2★ SEGWAY-SECURITY IN PURSUIT!',
+  'wanted.star3Toast': '★★★☆☆ 3★ POLICE DRONE — 2.5× OUTLAW SPOTLIGHT ACTIVE!',
+  'wanted.star4Toast': '★★★★☆ 4★ MUC HELI-SPOTLIGHT LOCKED ON!',
+  'wanted.star5Toast': "★★★★★ 5★ MAX HEAT! HIT BAYERN PAY'N'SPRAY TO ESCAPE!",
+  'wanted.sprayEscapeBanner': '🎨 SPRAYED! +{pts} PTS',
+  'wanted.sprayEscapeToast': '🎨 SPRAYED & LOST THE HEAT! +{pts} PTS',
+  'wanted.daylightEscapeBanner': '☀️ DAYLIGHT ESCAPE! +1,000 PTS',
+  'wanted.daylightEscapeToast': '☀️ DAYLIGHT ESCAPE! +1,000 PTS — Heat cleared by sunrise!',
 } as const;
 
 export type TranslationKey = keyof typeof EN_TRANSLATIONS;
@@ -725,6 +774,7 @@ const DE_TRANSLATIONS: Record<TranslationKey, string> = {
   'dock.aspectReel': '📱 9:16 IG Reel-Modus [R]',
   'dock.aspectDesktop': '🖥️ 16:9 Desktop [R]',
   'dock.atmosphereNight': '🌙 Flutlicht München Nacht',
+  'dock.atmosphereGolden': '☀️ Golden Hour Sonnenuntergang',
   'dock.camFollow': '🎥 Follow-Cam [1]',
   'dock.camFilmer': '📹 Filmer-Cam [2]',
   'dock.camMural': '🌴 Palmen-Mural-Cam [3]',
@@ -842,6 +892,54 @@ const DE_TRANSLATIONS: Record<TranslationKey, string> = {
   'mission.l7_surfzone_22s.short': '22s in der Surf-Zone',
   'mission.l7_snaps_5.title': 'Lande 5 Snaps oder Bert Slides an der Lip',
   'mission.l7_snaps_5.short': '5 Snaps / Bert Slides',
+
+  // MUC Park Crew Encounters (Issue #37)
+  'crew.sepp.name': 'Opa Sepp & Wasti',
+  'crew.michi.name': 'Planespotter Michi',
+  'crew.sepp.interactDesktop': '💬 [E] Mit Opa Sepp sprechen',
+  'crew.sepp.interactTouch': '💬 Mit Opa Sepp sprechen',
+  'crew.michi.interactDesktop': '💬 [E] Mit Michi sprechen',
+  'crew.michi.interactTouch': '💬 Mit Michi sprechen',
+  'crew.sepp.dialogueStarted':
+    "Servus! Dem Wasti san seine 4 goldenen Leckerli in die Bowls g'rollt. Schnapp sie dir beim Carven, junger Surfer!",
+  'crew.sepp.dialogueReminder':
+    "Weiter carven! Schon {collected}/{total} Leckerli g'funden — schau mal in die tiefen Bowls und ins Cradle!",
+  'crew.sepp.dialogueJustCompleted':
+    "Sauber g'macht! Alle 4 Leckerli g'rettet! Der Wasti freut si narrisch — hier san +2.500 PTS für dei Line!",
+  'crew.sepp.dialogueCompletedChat':
+    'A Wahnsinns-Flow heut! Der Wasti knabbert noch seine goldenen Leckerli — gib weiter Gas!',
+  'crew.michi.dialogueStarted':
+    "Servus! Bei 'ner harten Landung san mir 4 SD-Karten auf d'Plaza und in d'Bowls g'flogen. Hol sie dir!",
+  'crew.michi.dialogueReminder':
+    "Stark! {collected}/{total} SD-Karten g'sichert — check noch die Spine und die Corner-Bowls!",
+  'crew.michi.dialogueJustCompleted':
+    'Legende! Alle 4 SD-Karten wieder da — die Runway-Clips san der Hammer! Nimm +2.500 PTS!',
+  'crew.michi.dialogueCompletedChat':
+    "Ich schneid grad des Runway-Surfskate-Reel — hau noch an fetten Air über d'Hip!",
+  'crew.sepp.collectToast': '🦴 {collected}/{total} GOLD-LECKERLI',
+  'crew.michi.collectToast': '💾 {collected}/{total} SD-KARTEN',
+  'crew.sepp.missionTitle': 'Crew: Hilf Opa Sepp & Wasti (4 Gold-Leckerli)',
+  'crew.sepp.missionShort': 'Sepp & Wastis 4 Leckerli',
+  'crew.michi.missionTitle': 'Crew: Finde Michis 4 verlorene SD-Karten',
+  'crew.michi.missionShort': 'Michis 4 SD-Karten',
+  'crew.completedToast': '✅ {mission} • +{pts} PTS & +1 MISSION!',
+  'crew.completedBanner': 'CREW-QUEST GESCHAFFT! +{pts} PTS',
+
+  // AFTER HOURS: 5-Star Park-Verbot (Issue #38)
+  'wanted.outlawBadge': '🚨 OUTLAW 2.5×',
+  'wanted.bustedLabel': 'BUSTED',
+  'wanted.bustedBanner': '🚨 BUSTED!',
+  'wanted.bustedToast': '🚨 BUSTED! Security hat deine Combo gecleart — pushe & fahr weiter!',
+  'wanted.signKnockedToast': '🚫 SCHILD UMGEMÄHT ({count}/{total})! PARK-VERBOT!',
+  'wanted.star1Toast': '★☆☆☆☆ 1★ ORDNUNGSAMT-STREIFE — WEICH DER TASCHENLAMPE AUS!',
+  'wanted.star2Toast': '★★☆☆☆ 2★ SEGWAY-SECURITY VERFOLGT DICH!',
+  'wanted.star3Toast': '★★★☆☆ 3★ POLIZEI-DROHNE — 2.5× OUTLAW-SPOTLIGHT AKTIV!',
+  'wanted.star4Toast': '★★★★☆ 4★ MUC HELI-SUCHSCHEINWERFER!',
+  'wanted.star5Toast': "★★★★★ 5★ MAX HEAT! AB INS BAYERN PAY'N'SPRAY!",
+  'wanted.sprayEscapeBanner': '🎨 SPRAYED! +{pts} PTS',
+  'wanted.sprayEscapeToast': '🎨 SPRAYED & VERFOLGER ABGEHÄNGT! +{pts} PTS',
+  'wanted.daylightEscapeBanner': '☀️ DAYLIGHT ESCAPE! +1.000 PTS',
+  'wanted.daylightEscapeToast': '☀️ DAYLIGHT ESCAPE! +1.000 PTS — Sonnenaufgang rettet dich!',
 };
 
 const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { ParkSurface } from './physics/ParkSurface';
 import { InputState, SurfskateController } from './physics/SurfskateController';
 import { SkaterVisuals } from './entities/SkaterVisuals';
-import { ImGefildeScene } from './world/ImGefildeScene';
+import { ImGefildeScene, AtmosphereMode } from './world/ImGefildeScene';
 import { CameraStyle, SurfCamera } from './camera/SurfCamera';
 import { DriveControlMode, SurfHUD } from './ui/SurfHUD';
 import { LandingPage, SkateparkLocation } from './ui/LandingPage';
@@ -14,9 +14,11 @@ import { FlowLineChallenge } from './world/FlowLineChallenge';
 import { AirportFlyover } from './world/AirportFlyover';
 import { ScooterRiderNPC } from './world/ScooterRiderNPC';
 import { HotSpotZone } from './world/HotSpotZone';
+import { CrewParkId, ParkCrewEncounters } from './world/ParkCrewEncounters';
+import { AfterHoursWanted, WantedParkId } from './world/AfterHoursWanted';
 import { GameModeId, SurfProgression } from './progression/SurfProgression';
 import { inject, track } from '@vercel/analytics';
-import { applyDomTranslations, onLangChange, t } from './i18n/i18n';
+import { applyDomTranslations, formatNum, onLangChange, t, TranslationKey } from './i18n/i18n';
 
 // Initialize Vercel Web Analytics
 inject();
@@ -44,6 +46,9 @@ class SurfskateMunichGame {
   public airportFlyover: AirportFlyover;
   public scooterRider: ScooterRiderNPC;
   public hotSpotZone: HotSpotZone;
+  public parkCrew: ParkCrewEncounters;
+  public afterHoursWanted: AfterHoursWanted;
+  private inOutlawSpotlight = false;
   public progression: SurfProgression;
   public gameMode: GameModeId = 'jam';
   private summaryShownForSession = false;
@@ -247,6 +252,10 @@ class SurfskateMunichGame {
       this.gameMode = mode;
     };
     this.gameMode = this.landingPage.getSelectedGameMode();
+    const initialSpecialParkId = this.normalizeSpecialParkId(this.landingPage.getSelectedPark().id);
+    this.parkCrew = new ParkCrewEncounters(this.scene, this.parkSurface, initialSpecialParkId);
+    this.afterHoursWanted = new AfterHoursWanted(this.scene, this.parkSurface, initialSpecialParkId);
+    this.afterHoursWanted.setNightMode(this.worldScene.mode === 'night');
     this.syncProgressionUI();
 
     this.audio.onTrackChange = () => {
@@ -288,6 +297,10 @@ class SurfskateMunichGame {
         initialPark.id
       );
       this.hotSpotZone.setPark(initialPark.id);
+      const normParkId = this.normalizeSpecialParkId(initialPark.id);
+      this.parkCrew.setPark(normParkId, this.parkSurface);
+      this.afterHoursWanted.setPark(normParkId, this.parkSurface);
+      this.afterHoursWanted.setNightMode(this.worldScene.mode === 'night');
     } catch (err) {
       console.error('Error loading GLB/LiDAR assets:', err);
     }
@@ -358,6 +371,14 @@ class SurfskateMunichGame {
     if (dockFlowRec) {
       dockFlowRec.addEventListener('click', () => {
         this.toggleFlowLineRecording();
+      });
+    }
+
+    const crewInteractBtn = document.getElementById('hud-crew-interact');
+    if (crewInteractBtn) {
+      crewInteractBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.triggerCrewInteract();
       });
     }
 
@@ -546,6 +567,14 @@ class SurfskateMunichGame {
         this.cycleGraphicsQuality();
       } else if (code === 'KeyF' && this.controlMode === 'arrows') {
         this.toggleFullscreen();
+      } else if (code === 'KeyE') {
+        const helpModal = document.getElementById('help-modal');
+        const helpOpen = Boolean(helpModal && !helpModal.classList.contains('hidden'));
+        if (!helpOpen && !this.flowLine.isExportModalOpen()) {
+          if (this.triggerCrewInteract()) {
+            e.preventDefault();
+          }
+        }
       } else if (code === 'Backspace' || code === 'KeyX') {
         this.resetSession();
       }
@@ -566,8 +595,75 @@ class SurfskateMunichGame {
     this.syncHUDButtons();
   }
 
+  private normalizeSpecialParkId(parkId: string): CrewParkId & WantedParkId {
+    return parkId === 'airport_skatepark' ? 'airport_skatepark' : 'im_gefilde';
+  }
+
+  public triggerCrewInteract(): boolean {
+    const helpModal = document.getElementById('help-modal');
+    const helpOpen = Boolean(helpModal && !helpModal.classList.contains('hidden'));
+    if (
+      this.landingPage.isVisible ||
+      this.isTutorialPaused ||
+      this.tutorial.isOpen() ||
+      this.hud.isSummaryModalOpen() ||
+      helpOpen ||
+      this.flowLine.isExportModalOpen()
+    ) {
+      return false;
+    }
+
+    const res = this.parkCrew.interact();
+    if (!res) return false;
+
+    this.audio.playManeuverChime();
+    const npcName = t(`crew.${res.npcId}.name` as TranslationKey);
+    const npcIcon = res.npcId === 'sepp' ? '👴' : '📸';
+    const quoteKey =
+      res.action === 'started'
+        ? `crew.${res.npcId}.dialogueStarted`
+        : res.action === 'reminder'
+          ? `crew.${res.npcId}.dialogueReminder`
+          : `crew.${res.npcId}.dialogueCompletedChat`;
+
+    this.hud.showCrewDialogue(
+      npcIcon,
+      npcName,
+      t(quoteKey as TranslationKey, { collected: res.collected, total: res.total })
+    );
+    if (res.action === 'started') {
+      this.hud.updateCrewQuestPill('active', res.npcId, res.collected, res.total);
+    }
+    return true;
+  }
+
+  private announceWantedStar(star: number): void {
+    const clamped = Math.max(1, Math.min(5, Math.round(star)));
+    this.hud.showMissionToast(t(`wanted.star${clamped}Toast` as TranslationKey));
+  }
+
   public toggleAtmosphereMode(): void {
     this.worldScene.toggleAtmosphere();
+    this.setAtmosphereMode(this.worldScene.mode);
+  }
+
+  public setAtmosphereMode(mode: AtmosphereMode): void {
+    if (this.worldScene.mode !== mode) {
+      this.worldScene.setAtmosphereMode(mode);
+    }
+    const { escapedViaDaylight } = this.afterHoursWanted.setNightMode(mode === 'night');
+    if (escapedViaDaylight) {
+      this.inOutlawSpotlight = false;
+      this.hud.awardBonusPoints(1000, t('wanted.daylightEscapeBanner'));
+      this.hud.showMissionToast(t('wanted.daylightEscapeToast'));
+      this.audio.playPretzelPickup(true);
+    }
+    this.hud.updateWantedStatus({
+      active: mode === 'night',
+      stars: 0,
+      inOutlawSpotlight: false,
+      bustedProgress: 0,
+    });
     this.syncHUDButtons();
   }
 
@@ -631,6 +727,20 @@ class SurfskateMunichGame {
         park.id
       );
       this.hotSpotZone.setPark(park.id);
+      const normParkId = this.normalizeSpecialParkId(park.id);
+      this.parkCrew.setPark(normParkId, this.parkSurface);
+      this.afterHoursWanted.setPark(normParkId, this.parkSurface);
+      this.afterHoursWanted.setNightMode(this.worldScene.mode === 'night');
+      this.inOutlawSpotlight = false;
+      this.hud.updateCrewInteract(false, normParkId === 'airport_skatepark' ? 'michi' : 'sepp', false);
+      this.hud.hideCrewDialogue();
+      this.hud.updateCrewQuestPill('idle', normParkId === 'airport_skatepark' ? 'michi' : 'sepp', 0, 4);
+      this.hud.updateWantedStatus({
+        active: this.worldScene.mode === 'night',
+        stars: 0,
+        inOutlawSpotlight: false,
+        bustedProgress: 0,
+      });
       if (park.id === 'airport_skatepark') {
         this.controller.setSpawn(2.94, 11.32, -0.175);
       } else {
@@ -728,6 +838,8 @@ class SurfskateMunichGame {
     this.hud.closeSessionSummary();
     this.keys.clear();
     this.touchControls.setVisible(false);
+    this.hud.updateCrewInteract(false, 'sepp', false);
+    this.hud.hideCrewDialogue();
     this.audio.pause();
     this.audio.playGarageMusic();
     this.slowMoTimer = 0;
@@ -786,6 +898,10 @@ class SurfskateMunichGame {
     this.hud.resetSession();
     this.pretzels.reset();
     this.flowLine.reset();
+    this.parkCrew.resetSession();
+    this.afterHoursWanted.resetSession();
+    this.afterHoursWanted.setNightMode(this.worldScene.mode === 'night');
+    this.inOutlawSpotlight = false;
     this.syncProgressionUI();
     this.syncFlowRecorderUI();
   }
@@ -1089,9 +1205,19 @@ class SurfskateMunichGame {
 
     const input = this.buildInputState(timeSec);
     this.controller.update(dt, input, (ev) => {
-      this.hud.onManeuver(ev);
-      this.progression.onManeuver(ev, inHotSpot);
+      const effectiveEv =
+        this.inOutlawSpotlight && ev.points > 0
+          ? { ...ev, points: Math.round(ev.points * 2.5) }
+          : ev;
+      this.hud.onManeuver(effectiveEv);
+      this.progression.onManeuver(effectiveEv, inHotSpot);
       this.syncProgressionUI();
+      if (this.inOutlawSpotlight && effectiveEv.points > 0) {
+        const esc = this.afterHoursWanted.notifyTrickLanded(effectiveEv.points);
+        if (esc.escalatedToStar !== null) {
+          this.announceWantedStar(esc.escalatedToStar);
+        }
+      }
       if (ev.trick) {
         // Every scoring trick: big swoosh, slow motion, zoom-in and its name on screen
         const perfect = ev.quality === 'PERFECT';
@@ -1103,7 +1229,7 @@ class SurfskateMunichGame {
         }
         this.hud.showTrickBanner(ev.name, perfect);
         try {
-          track('trick', { trick: ev.trick, quality: ev.quality, points: ev.points });
+          track('trick', { trick: ev.trick, quality: ev.quality, points: effectiveEv.points });
         } catch {}
       }
     });
@@ -1111,6 +1237,110 @@ class SurfskateMunichGame {
     this.skaterVisuals.update(dt, this.controller);
     this.pretzels.update(dt, this.controller.position);
     this.flowLine.update(dt, timeSec, this.controller);
+
+    const helpModal = document.getElementById('help-modal');
+    const isGameplayActive =
+      !this.hud.isSummaryModalOpen() &&
+      !(helpModal && !helpModal.classList.contains('hidden')) &&
+      !this.flowLine.isExportModalOpen();
+
+    if (isGameplayActive) {
+      const crewState = this.parkCrew.update(dt, this.controller.position, this.controller.speed);
+      this.hud.updateCrewInteract(
+        crewState.canInteract,
+        crewState.npcId,
+        this.touchControls.isTouchActive()
+      );
+      this.hud.updateCrewQuestPill(
+        crewState.questState,
+        crewState.npcId,
+        crewState.collected,
+        crewState.total
+      );
+
+      if (crewState.newlyCollected && !crewState.justCompleted) {
+        this.audio.playPretzelPickup(false);
+        const collectKey =
+          crewState.npcId === 'sepp' ? 'crew.sepp.collectToast' : 'crew.michi.collectToast';
+        this.hud.showMissionToast(
+          t(collectKey, { collected: crewState.collected, total: crewState.total })
+        );
+      }
+
+      if (crewState.justCompleted) {
+        this.hud.addBonusScore(crewState.bonusPoints);
+        const { newRank, missionTitle } = this.progression.recordCrewMissionCompleted(
+          crewState.npcId
+        );
+        this.syncProgressionUI();
+        this.audio.playPretzelPickup(true);
+
+        const npcName = t(`crew.${crewState.npcId}.name` as TranslationKey);
+        const npcIcon = crewState.npcId === 'sepp' ? '👴' : '📸';
+        const doneQuoteKey =
+          crewState.npcId === 'sepp'
+            ? 'crew.sepp.dialogueJustCompleted'
+            : 'crew.michi.dialogueJustCompleted';
+        this.hud.showCrewDialogue(npcIcon, npcName, t(doneQuoteKey));
+
+        if (!newRank) {
+          this.hud.showMissionToast(
+            t('crew.completedToast', {
+              mission: missionTitle,
+              pts: formatNum(crewState.bonusPoints),
+            })
+          );
+          this.hud.showTrickBanner(
+            t('crew.completedBanner', { pts: formatNum(crewState.bonusPoints) }),
+            true
+          );
+        }
+      }
+
+      const wantedState = this.afterHoursWanted.update(
+        dt,
+        this.controller.position,
+        this.controller.speed
+      );
+      this.inOutlawSpotlight = wantedState.inOutlawSpotlight;
+      this.hud.updateWantedStatus(wantedState);
+
+      if (wantedState.newlyKnockedSign) {
+        this.audio.playManeuverChime();
+        if (wantedState.escalatedToStar === null) {
+          this.hud.showMissionToast(
+            t('wanted.signKnockedToast', {
+              count: wantedState.signsKnocked,
+              total: wantedState.totalSigns,
+            })
+          );
+        }
+      }
+
+      if (wantedState.escalatedToStar !== null) {
+        this.announceWantedStar(wantedState.escalatedToStar);
+      }
+
+      if (wantedState.justBusted) {
+        this.hud.showBailBanner(t('wanted.bustedBanner'));
+        this.hud.showMissionToast(t('wanted.bustedToast'));
+        this.controller.comboCount = 0;
+        this.controller.comboScore = 0;
+        this.controller.speed = Math.min(this.controller.speed, 1.0) * 0.2;
+        this.audio.playBailSound();
+        this.surfCamera.triggerBailShake(0.32, 0.22);
+      }
+
+      if (wantedState.justEscapedSpray) {
+        const ptsStr = formatNum(wantedState.escapeBonus);
+        this.hud.awardBonusPoints(
+          wantedState.escapeBonus,
+          t('wanted.sprayEscapeBanner', { pts: ptsStr })
+        );
+        this.hud.showMissionToast(t('wanted.sprayEscapeToast', { pts: ptsStr }));
+        this.audio.playPretzelPickup(true);
+      }
+    }
 
     this.airportFlyover.update(dt, activeParkId);
     this.scooterRider.update(dt, timeSec, activeParkId);
