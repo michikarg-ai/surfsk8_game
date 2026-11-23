@@ -1,4 +1,5 @@
 import { t } from '../i18n/i18n';
+import { InputState, ManeuverEvent, SurfskateController } from '../physics/SurfskateController';
 
 export const TUTORIAL_SEEN_STORAGE_KEY = 'surfsk8.tutorialSeen.v1';
 
@@ -6,82 +7,79 @@ export type TutorialControlMode = 'arrows' | 'wasd';
 
 export interface FirstRunTutorialOptions {
   getControlMode?: () => TutorialControlMode;
-  onToggleControlMode?: () => void;
   isTouchDevice?: () => boolean;
-  onOpen?: () => void;
-  onClose?: (completed: boolean) => void;
+  onStart?: () => void;
+  onComplete?: (skipped: boolean) => void;
+  onStepComplete?: (stepIndex: number) => void;
+  onAllStepsComplete?: () => void;
 }
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
+const STEP_FLASH_DURATION = 0.55;
+const CELEBRATE_DURATION = 1.8;
 
 /**
- * Interactive 4-step First-Run Tutorial modal controller (#tutorial-modal).
- * Automatically adapts copy to Desktop (Arrows / WASD) vs Touch controls and
- * persists completion under `surfsk8.tutorialSeen.v1`.
+ * Live, non-blocking 5-step Learn-by-Doing HUD Tutorial (#tutorial-hud).
+ * Runs while the player skates live in the 3D park with the session timer paused,
+ * auto-advances on physics/input triggers, and supports instant Skip.
  */
 export class FirstRunTutorial {
-  private modalEl: HTMLElement | null;
-  private closeXBtn: HTMLButtonElement | null;
-  private modeDesktopBtn: HTMLButtonElement | null;
-  private modeTouchBtn: HTMLButtonElement | null;
-  private ctrlToggleBtn: HTMLButtonElement | null;
-  private stepTitleEl: HTMLElement | null;
-  private stepSubtitleEl: HTMLElement | null;
-  private progressFillEl: HTMLElement | null;
-  private bodyEl: HTMLElement | null;
-  private skipBtn: HTMLButtonElement | null;
-  private prevBtn: HTMLButtonElement | null;
-  private nextBtn: HTMLButtonElement | null;
+  private hudEl: HTMLElement | null;
+  private cardEl: HTMLElement | null;
   private stepCountEl: HTMLElement | null;
-  private dotBtns: HTMLButtonElement[] = [];
+  private dotEls: HTMLElement[] = [];
+  private doneBadgeEl: HTMLElement | null;
+  private skipBtn: HTMLButtonElement | null;
+  private promptEl: HTMLElement | null;
+  private hintEl: HTMLElement | null;
+  private barFillEl: HTMLElement | null;
 
+  private active = false;
   private stepIndex = 0;
-  private isTouchView = false;
+  private stepElapsed = 0;
+  private stepDonePending = false;
+  private stepFlashTimer = 0;
+  private isCelebrating = false;
+  private celebrateTimer = 0;
+
+  // Per-step live detection state
+  private carveLeftDone = false;
+  private carveRightDone = false;
+  private stepStartPumpCount = 0;
+  private stepStartFlow = 0;
+  private compressHeldWhileCarving = 0;
+  private compressedDuringStep = false;
+  private compressReleasedAfterHold = false;
+  private sawGroundedInStep = false;
+
+  // Cached UI values to avoid redundant DOM writes at 60fps
+  private lastHintSignature = '';
+  private lastBarPct = -1;
+  private needsStepStartSnapshot = false;
 
   constructor(private options: FirstRunTutorialOptions = {}) {
-    this.modalEl = document.getElementById('tutorial-modal');
-    this.closeXBtn = document.getElementById('tutorial-close-x') as HTMLButtonElement | null;
-    this.modeDesktopBtn = document.getElementById('tutorial-mode-desktop') as HTMLButtonElement | null;
-    this.modeTouchBtn = document.getElementById('tutorial-mode-touch') as HTMLButtonElement | null;
-    this.ctrlToggleBtn = document.getElementById('tutorial-ctrl-toggle') as HTMLButtonElement | null;
-    this.stepTitleEl = document.getElementById('tutorial-step-title');
-    this.stepSubtitleEl = document.getElementById('tutorial-step-subtitle');
-    this.progressFillEl = document.getElementById('tutorial-progress-fill');
-    this.bodyEl = document.getElementById('tutorial-body');
-    this.skipBtn = document.getElementById('tutorial-skip-btn') as HTMLButtonElement | null;
-    this.prevBtn = document.getElementById('tutorial-prev-btn') as HTMLButtonElement | null;
-    this.nextBtn = document.getElementById('tutorial-next-btn') as HTMLButtonElement | null;
+    this.hudEl = document.getElementById('tutorial-hud');
+    this.cardEl = document.getElementById('tut-hud-card');
     this.stepCountEl = document.getElementById('tutorial-step-count');
+    this.doneBadgeEl = document.getElementById('tutorial-done-badge');
+    this.skipBtn = document.getElementById('tutorial-skip-btn') as HTMLButtonElement | null;
+    this.promptEl = document.getElementById('tutorial-prompt');
+    this.hintEl = document.getElementById('tutorial-hint');
+    this.barFillEl = document.getElementById('tutorial-bar-fill');
 
     const dotsContainer = document.getElementById('tutorial-dots');
     if (dotsContainer) {
-      this.dotBtns = Array.from(dotsContainer.querySelectorAll<HTMLButtonElement>('.tut-dot'));
+      this.dotEls = Array.from(dotsContainer.querySelectorAll<HTMLElement>('.tut-hud-dot'));
     }
 
     this.bindEvents();
   }
 
   private bindEvents(): void {
-    this.closeXBtn?.addEventListener('click', () => this.close(false));
-    this.skipBtn?.addEventListener('click', () => this.close(false));
-    this.prevBtn?.addEventListener('click', () => this.prevStep());
-    this.nextBtn?.addEventListener('click', () => this.nextStep());
-
-    this.modeDesktopBtn?.addEventListener('click', () => {
-      this.isTouchView = false;
-      this.renderStep();
-    });
-    this.modeTouchBtn?.addEventListener('click', () => {
-      this.isTouchView = true;
-      this.renderStep();
-    });
-    this.ctrlToggleBtn?.addEventListener('click', () => {
-      this.options.onToggleControlMode?.();
-      this.renderStep();
-    });
-
-    this.dotBtns.forEach((btn, idx) => {
-      btn.addEventListener('click', () => this.goToStep(idx));
+    this.skipBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.skip();
     });
   }
 
@@ -106,332 +104,434 @@ export class FirstRunTutorial {
   }
 
   public isOpen(): boolean {
-    return Boolean(this.modalEl && !this.modalEl.classList.contains('hidden'));
+    return this.active;
   }
 
-  private detectTouchMode(): boolean {
-    const coarse =
+  public isActive(): boolean {
+    return this.active;
+  }
+
+  private isTouchView(): boolean {
+    if (this.options.isTouchDevice) {
+      return this.options.isTouchDevice();
+    }
+    return (
       typeof window !== 'undefined' &&
       typeof window.matchMedia === 'function' &&
-      window.matchMedia('(pointer: coarse)').matches;
-    return coarse || Boolean(this.options.isTouchDevice?.());
+      window.matchMedia('(pointer: coarse)').matches
+    );
+  }
+
+  private resetStepTracking(): void {
+    this.stepElapsed = 0;
+    this.stepDonePending = false;
+    this.stepFlashTimer = 0;
+    this.carveLeftDone = false;
+    this.carveRightDone = false;
+    this.stepStartPumpCount = 0;
+    this.stepStartFlow = 0;
+    this.compressHeldWhileCarving = 0;
+    this.compressedDuringStep = false;
+    this.compressReleasedAfterHold = false;
+    this.sawGroundedInStep = false;
+    this.needsStepStartSnapshot = true;
+    this.lastHintSignature = '';
+    this.lastBarPct = -1;
   }
 
   public open(): void {
-    if (!this.modalEl) return;
-    this.isTouchView = this.detectTouchMode();
+    if (!this.hudEl) return;
+    this.active = true;
+    this.isCelebrating = false;
+    this.celebrateTimer = 0;
     this.stepIndex = 0;
-    this.renderStep();
-    this.modalEl.classList.remove('hidden');
-    this.options.onOpen?.();
-    window.setTimeout(() => {
-      this.nextBtn?.focus({ preventScroll: true });
-    }, 20);
+    this.resetStepTracking();
+    this.render();
+    this.hudEl.classList.remove('hidden');
+    this.options.onStart?.();
+  }
+
+  public skip(): void {
+    if (!this.active) return;
+    this.markSeen();
+    this.hideInternal();
+    this.options.onComplete?.(true);
+  }
+
+  public abort(): void {
+    if (!this.active) return;
+    this.hideInternal();
+    this.options.onComplete?.(true);
   }
 
   public close(completed: boolean): void {
-    if (!this.modalEl || !this.isOpen()) return;
-    this.markSeen();
-    this.modalEl.classList.add('hidden');
-    this.options.onClose?.(completed);
-  }
-
-  public goToStep(index: number): void {
-    const clamped = Math.max(0, Math.min(TOTAL_STEPS - 1, index));
-    if (clamped === this.stepIndex) return;
-    this.stepIndex = clamped;
-    this.renderStep();
-  }
-
-  public prevStep(): void {
-    if (this.stepIndex > 0) {
-      this.stepIndex -= 1;
-      this.renderStep();
-    }
-  }
-
-  public nextStep(): void {
-    if (this.stepIndex < TOTAL_STEPS - 1) {
-      this.stepIndex += 1;
-      this.renderStep();
+    if (completed) {
+      if (!this.active) return;
+      this.markSeen();
+      this.hideInternal();
+      this.options.onComplete?.(false);
     } else {
-      this.close(true);
+      this.skip();
     }
+  }
+
+  private hideInternal(): void {
+    this.active = false;
+    this.isCelebrating = false;
+    this.stepDonePending = false;
+    this.celebrateTimer = 0;
+    this.stepFlashTimer = 0;
+    this.hudEl?.classList.add('hidden');
+    this.cardEl?.classList.remove('is-step-done', 'is-celebrating');
+    this.doneBadgeEl?.classList.add('hidden');
   }
 
   public refresh(): void {
-    if (this.isOpen()) {
-      this.renderStep();
-    }
+    if (!this.active) return;
+    this.lastHintSignature = '';
+    this.render();
   }
 
   public handleKeyDown(e: KeyboardEvent): boolean {
-    if (!this.isOpen()) return false;
-    const code = e.code;
-    if (code === 'Escape') {
-      this.close(false);
-      return true;
-    }
-    if (code === 'ArrowRight' || code === 'Enter' || code === 'NumpadEnter') {
-      this.nextStep();
-      return true;
-    }
-    if (code === 'ArrowLeft') {
-      this.prevStep();
+    if (!this.active) return false;
+    if (e.code === 'Escape') {
+      this.skip();
       return true;
     }
     return false;
+  }
+
+  public notifyManeuver(ev: ManeuverEvent): void {
+    if (!this.active || this.isCelebrating || this.stepDonePending) return;
+    if (this.stepIndex !== 3) return;
+
+    const isTrickOrLip =
+      Boolean(ev.trick) ||
+      ev.name.includes('Lip') ||
+      ev.name.includes('Grind');
+
+    if (isTrickOrLip) {
+      this.completeCurrentStep();
+    }
+  }
+
+  public update(dt: number, controller: SurfskateController, input: InputState): void {
+    if (!this.active || !this.hudEl) return;
+
+    if (this.isCelebrating) {
+      this.celebrateTimer -= dt;
+      if (this.celebrateTimer <= 0) {
+        this.hideInternal();
+        this.options.onComplete?.(false);
+      }
+      return;
+    }
+
+    if (this.stepDonePending) {
+      this.stepFlashTimer -= dt;
+      if (this.stepFlashTimer <= 0) {
+        this.stepDonePending = false;
+        this.stepIndex += 1;
+        this.resetStepTracking();
+        this.render();
+      }
+      return;
+    }
+
+    if (this.needsStepStartSnapshot) {
+      this.needsStepStartSnapshot = false;
+      this.stepStartPumpCount = controller.pumpCount;
+      this.stepStartFlow = controller.flowMeter;
+      this.sawGroundedInStep = controller.isGrounded;
+    }
+
+    this.stepElapsed += dt;
+
+    if (this.stepIndex === 0) {
+      // Step 1: Push & Roll -> speed >= 2.2 m/s
+      const pct = Math.min(98, Math.round((controller.speed / 2.2) * 100));
+      this.setProgressBar(pct);
+      if (this.stepElapsed >= 0.18 && controller.speed >= 2.2) {
+        this.completeCurrentStep();
+      }
+      return;
+    }
+
+    if (this.stepIndex === 1) {
+      // Step 2: Carve Left & Right
+      const analog = input.analogSteer ?? 0;
+      if (
+        controller.leanAngle <= -0.15 ||
+        ((input.steerLeft || analog < -0.25) && controller.speed >= 0.4)
+      ) {
+        this.carveLeftDone = true;
+      }
+      if (
+        controller.leanAngle >= 0.15 ||
+        ((input.steerRight || analog > 0.25) && controller.speed >= 0.4)
+      ) {
+        this.carveRightDone = true;
+      }
+
+      const pct = (this.carveLeftDone ? 50 : 0) + (this.carveRightDone ? 50 : 0);
+      this.setProgressBar(pct);
+      this.updateStep2Hint();
+
+      if (this.stepElapsed >= 0.2 && this.carveLeftDone && this.carveRightDone) {
+        this.completeCurrentStep();
+      }
+      return;
+    }
+
+    if (this.stepIndex === 2) {
+      // Step 3: Pump for Speed (Compress while carving OR rhythmic carve pump / flow gain)
+      const analog = input.analogSteer ?? 0;
+      const isCarvingOrWall =
+        Math.abs(controller.leanAngle) >= 0.08 ||
+        input.steerLeft ||
+        input.steerRight ||
+        Math.abs(analog) > 0.15 ||
+        controller.currentSurface.height >= 0.15;
+
+      if (input.compressCrouch && controller.speed >= 0.9 && isCarvingOrWall) {
+        this.compressHeldWhileCarving += dt;
+        if (this.compressHeldWhileCarving >= 0.08) {
+          this.compressedDuringStep = true;
+        }
+      } else if (!input.compressCrouch && this.compressedDuringStep) {
+        this.compressReleasedAfterHold = true;
+      }
+
+      const pumpsInStep = controller.pumpCount - this.stepStartPumpCount;
+      const flowSatisfied =
+        (this.stepStartFlow < 30 && controller.flowMeter >= 30) ||
+        (controller.flowMeter >= 30 && controller.flowMeter >= this.stepStartFlow + 5) ||
+        controller.flowMeter >= 65;
+      const compressSatisfied =
+        this.compressReleasedAfterHold || this.compressHeldWhileCarving >= 0.55;
+
+      const compressPct = Math.max(
+        this.compressedDuringStep ? 65 : 0,
+        (this.compressHeldWhileCarving / 0.55) * 100
+      );
+      const flowPct =
+        this.stepStartFlow < 30
+          ? (controller.flowMeter / 30) * 100
+          : ((controller.flowMeter - this.stepStartFlow) / 5) * 100;
+      this.setProgressBar(Math.min(96, Math.max(0, Math.round(Math.max(compressPct, flowPct)))));
+
+      if (this.stepElapsed >= 0.2 && (pumpsInStep >= 1 || flowSatisfied || compressSatisfied)) {
+        this.completeCurrentStep();
+      }
+      return;
+    }
+
+    if (this.stepIndex === 3) {
+      // Step 4: Land a Surf Trick (completed in notifyManeuver)
+      const slidingOrSpinning =
+        controller.bertSlideActive || controller.laybackActive || controller.reverseActive;
+      if (slidingOrSpinning) {
+        this.setStep4Hint('hold');
+        this.setProgressBar(72);
+      } else if (controller.speed < 3.4 && (this.stepElapsed > 3.0 || Boolean(controller.snapFeedback))) {
+        this.setStep4Hint('faster');
+        this.setProgressBar(Math.min(55, Math.round((controller.speed / 3.6) * 55)));
+      } else {
+        this.setStep4Hint('default');
+        this.setProgressBar(Math.min(45, Math.round((controller.speed / 3.6) * 45)));
+      }
+      return;
+    }
+
+    if (this.stepIndex === 4) {
+      // Step 5: Pop an Ollie
+      if (controller.isGrounded) {
+        this.sawGroundedInStep = true;
+      }
+      this.setProgressBar(input.jumpOllie ? 70 : 15);
+      if (
+        this.stepElapsed >= 0.15 &&
+        ((this.sawGroundedInStep && !controller.isGrounded) ||
+          (input.jumpOllie && !controller.isGrounded))
+      ) {
+        this.completeCurrentStep();
+      }
+    }
+  }
+
+  private completeCurrentStep(): void {
+    if (this.stepDonePending || this.isCelebrating) return;
+
+    this.setProgressBar(100);
+
+    if (this.stepIndex >= TOTAL_STEPS - 1) {
+      // Step 5 done -> Celebratory banner (~1.8s), mark seen, then finish
+      this.markSeen();
+      this.isCelebrating = true;
+      this.celebrateTimer = CELEBRATE_DURATION;
+      this.renderCelebration();
+      this.options.onAllStepsComplete?.();
+      return;
+    }
+
+    this.stepDonePending = true;
+    this.stepFlashTimer = STEP_FLASH_DURATION;
+    this.cardEl?.classList.add('is-step-done');
+    if (this.doneBadgeEl) {
+      this.doneBadgeEl.textContent = t('tutorial.doneBadge');
+      this.doneBadgeEl.classList.remove('hidden');
+    }
+    this.options.onStepComplete?.(this.stepIndex);
   }
 
   private kbd(label: string): string {
     return `<kbd class="tut-kbd">${label}</kbd>`;
   }
 
-  private touchPill(label: string, accent = false): string {
-    return `<span class="tut-touch-pill${accent ? ' is-accent' : ''}">${label}</span>`;
+  private pill(label: string): string {
+    return `<span class="tut-pill">${label}</span>`;
   }
 
-  private getDesktopKeys(): {
-    push: string;
-    carve: string;
-    brake: string;
-    compress: string;
-    ollie: string;
-    indy: string;
-    snap: string;
-    bert: string;
-    layback: string;
-    reverse: string;
-    modeLabel: string;
-  } {
-    const mode = this.options.getControlMode?.() ?? 'arrows';
-    if (mode === 'wasd') {
-      return {
-        push: this.kbd('W'),
-        carve: `${this.kbd('A')} ${this.kbd('D')}`,
-        brake: this.kbd('S'),
-        compress: `${this.kbd('Shift')} / ${this.kbd('S')}`,
-        ollie: this.kbd('Space'),
-        indy: `${this.kbd('Space')} <span class="tut-or">/</span> ${this.kbd('I')}`,
-        snap: `${this.kbd('O')} <span class="tut-or">/</span> ${this.kbd('F')}`,
-        bert: `${this.kbd('K')} <span class="tut-or">/</span> ${this.kbd('V')}`,
-        layback: `${this.kbd('P')} <span class="tut-or">/</span> ${this.kbd('G')}`,
-        reverse: `${this.kbd('L')} <span class="tut-or">/</span> ${this.kbd('B')}`,
-        modeLabel: 'WASD',
-      };
+  private setProgressBar(pct: number): void {
+    const clamped = Math.max(0, Math.min(100, Math.round(pct)));
+    if (clamped === this.lastBarPct) return;
+    this.lastBarPct = clamped;
+    if (this.barFillEl) {
+      this.barFillEl.style.width = `${clamped}%`;
     }
-    return {
-      push: this.kbd('↑'),
-      carve: `${this.kbd('←')} ${this.kbd('→')}`,
-      brake: this.kbd('↓'),
-      compress: `${this.kbd('Shift')} / ${this.kbd('↓')}`,
-      ollie: this.kbd('Space'),
-      indy: `${this.kbd('Space')} <span class="tut-or">/</span> ${this.kbd('I')}`,
-      snap: `${this.kbd('Q')} <span class="tut-or">/</span> ${this.kbd('F')}`,
-      bert: `${this.kbd('A')} <span class="tut-or">/</span> ${this.kbd('V')}`,
-      layback: `${this.kbd('W')} <span class="tut-or">/</span> ${this.kbd('G')}`,
-      reverse: `${this.kbd('S')} <span class="tut-or">/</span> ${this.kbd('B')}`,
-      modeLabel: 'ARROWS',
-    };
   }
 
-  private renderStep(): void {
-    const step = this.stepIndex;
-    const keys = this.getDesktopKeys();
+  private updateStep2Hint(): void {
+    if (!this.hintEl) return;
+    const sig = `s2:${this.carveLeftDone ? 1 : 0}:${this.carveRightDone ? 1 : 0}`;
+    if (sig === this.lastHintSignature) return;
+    this.lastHintSignature = sig;
+    const leftChip = `<span class="tut-dir-chip${this.carveLeftDone ? ' done' : ''}">◀${this.carveLeftDone ? ' ✓' : ''}</span>`;
+    const rightChip = `<span class="tut-dir-chip${this.carveRightDone ? ' done' : ''}">▶${this.carveRightDone ? ' ✓' : ''}</span>`;
+    this.hintEl.innerHTML = t('tutorial.s2.hint', { left: leftChip, right: rightChip });
+  }
 
-    // Device & control mode pills
-    this.modeDesktopBtn?.classList.toggle('active', !this.isTouchView);
-    this.modeTouchBtn?.classList.toggle('active', this.isTouchView);
-    if (this.ctrlToggleBtn) {
-      this.ctrlToggleBtn.classList.toggle('hidden', this.isTouchView);
-      this.ctrlToggleBtn.textContent = `${keys.modeLabel} ⇄`;
-    }
+  private setStep4Hint(mode: 'default' | 'hold' | 'faster'): void {
+    if (!this.hintEl) return;
+    const sig = `s4:${mode}`;
+    if (sig === this.lastHintSignature) return;
+    this.lastHintSignature = sig;
+    const key =
+      mode === 'hold'
+        ? 'tutorial.s4.hintHold'
+        : mode === 'faster'
+          ? 'tutorial.s4.hintFaster'
+          : 'tutorial.s4.hint';
+    this.hintEl.textContent = t(key);
+  }
 
-    // Progress bar & footer controls
-    if (this.progressFillEl) {
-      this.progressFillEl.style.width = `${((step + 1) / TOTAL_STEPS) * 100}%`;
+  private renderCelebration(): void {
+    this.cardEl?.classList.remove('is-step-done');
+    this.cardEl?.classList.add('is-celebrating');
+    if (this.doneBadgeEl) {
+      this.doneBadgeEl.textContent = '✓ 5/5';
+      this.doneBadgeEl.classList.remove('hidden');
     }
     if (this.stepCountEl) {
-      this.stepCountEl.textContent = t('tutorial.stepCounter', { step: step + 1, total: TOTAL_STEPS });
+      this.stepCountEl.textContent = t('tutorial.stepCounter', {
+        step: TOTAL_STEPS,
+        total: TOTAL_STEPS,
+      });
     }
-    this.dotBtns.forEach((dot, idx) => {
-      dot.classList.toggle('active', idx === step);
-      dot.classList.toggle('done', idx < step);
-      dot.setAttribute('aria-current', idx === step ? 'step' : 'false');
+    this.dotEls.forEach((dot) => {
+      dot.classList.remove('active');
+      dot.classList.add('done');
     });
-
-    if (this.prevBtn) {
-      this.prevBtn.disabled = step === 0;
-      this.prevBtn.textContent = `← ${t('tutorial.back')}`;
-    }
     if (this.skipBtn) {
       this.skipBtn.textContent = t('tutorial.skip');
     }
-    if (this.nextBtn) {
-      const isLast = step === TOTAL_STEPS - 1;
-      this.nextBtn.textContent = isLast ? `⚡ ${t('tutorial.finish')}` : `${t('tutorial.next')} →`;
-      this.nextBtn.classList.toggle('is-finish', isLast);
+    if (this.promptEl) {
+      this.promptEl.textContent = t('tutorial.completeTitle');
+    }
+    if (this.hintEl) {
+      this.hintEl.textContent = t('tutorial.completeHint');
+    }
+    this.setProgressBar(100);
+  }
+
+  private render(): void {
+    if (this.isCelebrating) {
+      this.renderCelebration();
+      return;
     }
 
-    if (!this.bodyEl || !this.stepTitleEl || !this.stepSubtitleEl) return;
+    const step = this.stepIndex;
+    const isTouch = this.isTouchView();
+    const ctrlMode = this.options.getControlMode?.() ?? 'arrows';
+
+    this.cardEl?.classList.remove('is-step-done', 'is-celebrating');
+    this.doneBadgeEl?.classList.add('hidden');
+
+    if (this.stepCountEl) {
+      this.stepCountEl.textContent = t('tutorial.stepCounter', {
+        step: step + 1,
+        total: TOTAL_STEPS,
+      });
+    }
+    this.dotEls.forEach((dot, idx) => {
+      dot.classList.toggle('active', idx === step);
+      dot.classList.toggle('done', idx < step);
+    });
+    if (this.skipBtn) {
+      this.skipBtn.textContent = t('tutorial.skip');
+    }
+
+    if (!this.promptEl || !this.hintEl) return;
 
     if (step === 0) {
-      this.stepTitleEl.textContent = t('tutorial.s1.title');
-      this.stepSubtitleEl.textContent = t('tutorial.s1.subtitle');
-      const pushControl = this.isTouchView ? this.touchPill('▲ PUMP', true) : keys.push;
-      const carveControl = this.isTouchView ? this.touchPill('◀ / ▶ CARVE') : keys.carve;
-      const brakeControl = this.isTouchView ? this.touchPill('▼ BRAKE') : keys.brake;
-
-      this.bodyEl.innerHTML = `
-        <div class="tut-cards-grid tut-cards-3">
-          <div class="tut-card">
-            <div class="tut-card-head">
-              <span class="tut-card-icon">🦶</span>
-              <span class="tut-card-title">${t('tutorial.s1.pushTitle')}</span>
-            </div>
-            <div class="tut-control-row">${pushControl}</div>
-            <p class="tut-card-desc">${t('tutorial.s1.pushDesc')}</p>
-          </div>
-          <div class="tut-card">
-            <div class="tut-card-head">
-              <span class="tut-card-icon">🌊</span>
-              <span class="tut-card-title">${t('tutorial.s1.carveTitle')}</span>
-            </div>
-            <div class="tut-control-row">${carveControl}</div>
-            <p class="tut-card-desc">${t('tutorial.s1.carveDesc')}</p>
-          </div>
-          <div class="tut-card">
-            <div class="tut-card-head">
-              <span class="tut-card-icon">🛑</span>
-              <span class="tut-card-title">${t('tutorial.s1.brakeTitle')}</span>
-            </div>
-            <div class="tut-control-row">${brakeControl}</div>
-            <p class="tut-card-desc">${t('tutorial.s1.brakeDesc')}</p>
-          </div>
-        </div>
-        <div class="tut-callout">${t('tutorial.s1.tip')}</div>
-      `;
+      const pushKey = ctrlMode === 'wasd' ? this.kbd('W') : this.kbd('↑');
+      this.promptEl.innerHTML = isTouch
+        ? t('tutorial.s1.promptTouch', { pill: this.pill('▲ PUMP') })
+        : t('tutorial.s1.promptDesktop', { key: pushKey });
+      this.hintEl.textContent = t('tutorial.s1.hint');
+      this.setProgressBar(0);
     } else if (step === 1) {
-      this.stepTitleEl.textContent = t('tutorial.s2.title');
-      this.stepSubtitleEl.textContent = t('tutorial.s2.subtitle');
-      const flatControl = this.isTouchView ? this.touchPill('◀ ↔ ▶ CARVE') : keys.carve;
-      const wallControl = this.isTouchView ? this.touchPill('COMPRESS', true) : keys.compress;
-
-      this.bodyEl.innerHTML = `
-        <div class="tut-cards-grid tut-cards-2">
-          <div class="tut-card">
-            <div class="tut-card-head">
-              <span class="tut-card-icon">〰️</span>
-              <span class="tut-card-title">${t('tutorial.s2.flatTitle')}</span>
-            </div>
-            <div class="tut-control-row">${flatControl}</div>
-            <p class="tut-card-desc">${t('tutorial.s2.flatDesc')}</p>
-          </div>
-          <div class="tut-card">
-            <div class="tut-card-head">
-              <span class="tut-card-icon">🥣</span>
-              <span class="tut-card-title">${t('tutorial.s2.wallTitle')}</span>
-            </div>
-            <div class="tut-control-row">${wallControl}</div>
-            <p class="tut-card-desc">${t('tutorial.s2.wallDesc')}</p>
-          </div>
-        </div>
-        <div class="tut-callout tut-callout-flow">
-          <div class="tut-callout-title">${t('tutorial.s2.flowTitle')}</div>
-          <p class="tut-card-desc">${t('tutorial.s2.flowDesc')}</p>
-        </div>
-      `;
+      const carveKeys =
+        ctrlMode === 'wasd'
+          ? `${this.kbd('A')} ${this.kbd('D')}`
+          : `${this.kbd('←')} ${this.kbd('→')}`;
+      this.promptEl.innerHTML = isTouch
+        ? t('tutorial.s2.promptTouch', { keys: `${this.pill('◀')} ${this.pill('▶ CARVE')}` })
+        : t('tutorial.s2.promptDesktop', { keys: carveKeys });
+      this.lastHintSignature = '';
+      this.updateStep2Hint();
+      this.setProgressBar(0);
     } else if (step === 2) {
-      this.stepTitleEl.textContent = t('tutorial.s3.title');
-      this.stepSubtitleEl.textContent = t('tutorial.s3.subtitle');
-
-      const trickBtn = this.touchPill('TRICK', true);
-      const snapControl = this.isTouchView ? trickBtn : keys.snap;
-      const bertControl = this.isTouchView ? `${this.touchPill('◀ / ▶')} + ${trickBtn}` : keys.bert;
-      const laybackControl = this.isTouchView ? `${this.touchPill('◀ CARVE')} + ${trickBtn}` : keys.layback;
-      const revControl = this.isTouchView ? `${this.touchPill('◀ / ▶')} + ${trickBtn}` : keys.reverse;
-
-      const mobileNoteHtml = this.isTouchView
-        ? `<div class="tut-callout tut-callout-compact">${t('tutorial.s3.mobileNote')}</div>`
-        : '';
-
-      this.bodyEl.innerHTML = `
-        ${mobileNoteHtml}
-        <div class="tut-cards-grid tut-cards-2">
-          <div class="tut-card tut-trick-card">
-            <div class="tut-trick-top">
-              <span class="tut-card-title">💦 ${t('tutorial.s3.snapName')}</span>
-              <span class="tut-trick-key">${snapControl}</span>
-            </div>
-            <p class="tut-card-desc">${t('tutorial.s3.snapWhat')}</p>
-            <div class="tut-when-row"><span class="tut-when-label">${t('tutorial.s3.whenLabel')}</span> ${t('tutorial.s3.snapWhen')}</div>
-          </div>
-          <div class="tut-card tut-trick-card">
-            <div class="tut-trick-top">
-              <span class="tut-card-title">🖐️ ${t('tutorial.s3.bertName')}</span>
-              <span class="tut-trick-key">${bertControl}</span>
-            </div>
-            <p class="tut-card-desc">${t('tutorial.s3.bertWhat')}</p>
-            <div class="tut-when-row"><span class="tut-when-label">${t('tutorial.s3.whenLabel')}</span> ${t('tutorial.s3.bertWhen')}</div>
-          </div>
-          <div class="tut-card tut-trick-card">
-            <div class="tut-trick-top">
-              <span class="tut-card-title">🤙 ${t('tutorial.s3.laybackName')}</span>
-              <span class="tut-trick-key">${laybackControl}</span>
-            </div>
-            <p class="tut-card-desc">${t('tutorial.s3.laybackWhat')}</p>
-            <div class="tut-when-row"><span class="tut-when-label">${t('tutorial.s3.whenLabel')}</span> ${t('tutorial.s3.laybackWhen')}</div>
-          </div>
-          <div class="tut-card tut-trick-card">
-            <div class="tut-trick-top">
-              <span class="tut-card-title">🌀 ${t('tutorial.s3.revName')}</span>
-              <span class="tut-trick-key">${revControl}</span>
-            </div>
-            <p class="tut-card-desc">${t('tutorial.s3.revWhat')}</p>
-            <div class="tut-when-row"><span class="tut-when-label">${t('tutorial.s3.whenLabel')}</span> ${t('tutorial.s3.revWhen')}</div>
-          </div>
-        </div>
-      `;
+      const carveKeys =
+        ctrlMode === 'wasd' ? `${this.kbd('A')} ${this.kbd('D')}` : `${this.kbd('←')} ${this.kbd('→')}`;
+      const pumpKeys = `${this.kbd('Shift')} / ${carveKeys}`;
+      this.promptEl.innerHTML = isTouch
+        ? t('tutorial.s3.promptTouch', {
+            compress: this.pill('COMPRESS'),
+            carve: this.pill('◀ ↔ ▶'),
+          })
+        : t('tutorial.s3.promptDesktop', { keys: pumpKeys });
+      this.hintEl.textContent = isTouch
+        ? t('tutorial.s3.hintTouch')
+        : t('tutorial.s3.hintDesktop');
+      this.setProgressBar(0);
+    } else if (step === 3) {
+      const trickKeys =
+        ctrlMode === 'wasd'
+          ? `${this.kbd('F')} ${this.kbd('V')} ${this.kbd('G')} ${this.kbd('B')}`
+          : `${this.kbd('Q')} ${this.kbd('A')} ${this.kbd('W')} ${this.kbd('S')}`;
+      this.promptEl.innerHTML = isTouch
+        ? t('tutorial.s4.promptTouch', { pill: this.pill('TRICK') })
+        : t('tutorial.s4.promptDesktop', { keys: trickKeys });
+      this.lastHintSignature = '';
+      this.setStep4Hint('default');
+      this.setProgressBar(0);
     } else {
-      this.stepTitleEl.textContent = t('tutorial.s4.title');
-      this.stepSubtitleEl.textContent = t('tutorial.s4.subtitle');
-      const ollieControl = this.isTouchView ? this.touchPill('OLLIE', true) : keys.ollie;
-      const indyControl = this.isTouchView ? this.touchPill('HOLD OLLIE', true) : keys.indy;
-
-      this.bodyEl.innerHTML = `
-        <div class="tut-cards-grid tut-cards-2">
-          <div class="tut-card">
-            <div class="tut-trick-top">
-              <span class="tut-card-title">🚀 ${t('tutorial.s4.ollieTitle')}</span>
-              <span class="tut-trick-key">${ollieControl}</span>
-            </div>
-            <p class="tut-card-desc">${t('tutorial.s4.ollieDesc')}</p>
-          </div>
-          <div class="tut-card">
-            <div class="tut-trick-top">
-              <span class="tut-card-title">🦅 ${t('tutorial.s4.indyTitle')}</span>
-              <span class="tut-trick-key">${indyControl}</span>
-            </div>
-            <p class="tut-card-desc">${t('tutorial.s4.indyDesc')}</p>
-          </div>
-          <div class="tut-card">
-            <div class="tut-card-head">
-              <span class="tut-card-icon">⚡</span>
-              <span class="tut-card-title">${t('tutorial.s4.comboTitle')}</span>
-            </div>
-            <p class="tut-card-desc">${t('tutorial.s4.comboDesc')}</p>
-          </div>
-          <div class="tut-card tut-card-goals">
-            <div class="tut-card-head">
-              <span class="tut-card-icon">🥨</span>
-              <span class="tut-card-title">${t('tutorial.s4.goalsTitle')}</span>
-            </div>
-            <p class="tut-card-desc">${t('tutorial.s4.goalsDesc')}</p>
-          </div>
-        </div>
-      `;
+      this.promptEl.innerHTML = isTouch
+        ? t('tutorial.s5.promptTouch', { pill: this.pill('OLLIE') })
+        : t('tutorial.s5.promptDesktop', { key: this.kbd('Space') });
+      this.hintEl.textContent = t('tutorial.s5.hint');
+      this.setProgressBar(15);
     }
-
-    this.bodyEl.scrollTop = 0;
   }
 }

@@ -1051,12 +1051,15 @@
       #landing-overlay:not(.hidden) ~ #hud-coach-hint,
       #landing-overlay:not(.hidden) ~ #hud-snap-banner,
       #landing-overlay:not(.hidden) ~ #hud-snap-hint,
+      #landing-overlay:not(.hidden) ~ #tutorial-hud,
       #loading-overlay:not(.hidden) ~ #hud-coach-hint,
       #loading-overlay:not(.hidden) ~ #hud-snap-banner,
       #loading-overlay:not(.hidden) ~ #hud-snap-hint,
+      #loading-overlay:not(.hidden) ~ #tutorial-hud,
       body.landing-active #hud-coach-hint,
       body.landing-active #hud-snap-banner,
-      body.landing-active #hud-snap-hint {
+      body.landing-active #hud-snap-hint,
+      body.landing-active #tutorial-hud {
         display: none !important;
         opacity: 0 !important;
         visibility: hidden !important;
@@ -3545,236 +3548,172 @@
         transform: skewX(var(--skew)) translateY(-1px);
       }
 
-      /* First-Run Interactive Tutorial Modal (#tutorial-modal) */
-      .tutorial-modal-overlay {
+      /* Interactive Live Learn-by-Doing Tutorial HUD (#tutorial-hud — Issue #39) */
+      .tutorial-hud {
         position: absolute;
-        inset: 0;
-        z-index: 10050;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 14px;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 75;
+        width: min(92vw, 410px);
+        pointer-events: none;
         opacity: 1;
         visibility: visible;
-        transition: opacity 0.2s ease, visibility 0.2s ease;
+        transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
       }
-      .tutorial-modal-overlay.hidden {
+      .tutorial-hud.hidden {
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
+        transform: translateX(-50%) translateY(-10px);
       }
-      .tutorial-modal-backdrop {
-        position: absolute;
-        inset: 0;
-        background: rgba(8, 7, 6, 0.84);
+      .tut-hud-card {
+        background: rgba(16, 14, 12, 0.8);
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
-      }
-      .tutorial-modal-card {
-        position: relative;
-        z-index: 2;
-        width: 100%;
-        max-width: 700px;
-        max-height: 92vh;
-        max-height: 92dvh;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-top: 2.5px solid var(--orange);
+        border-radius: 9px;
+        padding: 8px 13px 9px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
         display: flex;
         flex-direction: column;
-        overflow: hidden;
-        background: linear-gradient(145deg, rgba(26, 23, 20, 0.98), rgba(14, 12, 10, 0.98));
-        border: 1px solid rgba(255, 255, 255, 0.22);
-        border-top: 3px solid var(--orange);
-        border-radius: 10px;
-        box-shadow: 0 20px 56px rgba(0, 0, 0, 0.88), 0 0 0 1px rgba(0, 0, 0, 0.65);
-        color: #f3f2ee;
+        gap: 4px;
+        color: #f5f4f0;
+        transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
       }
-      .tutorial-header {
-        flex-shrink: 0;
-        padding: 14px 20px 10px 20px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
+      .tut-hud-card.is-step-done {
+        border-color: rgba(52, 211, 153, 0.9);
+        border-top-color: #34d399;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55), 0 0 22px rgba(52, 211, 153, 0.45);
       }
-      .tutorial-header-top {
+      .tut-hud-card.is-celebrating {
+        border-color: rgba(250, 204, 21, 0.9);
+        border-top-color: #34d399;
+        background: linear-gradient(135deg, rgba(16, 30, 22, 0.88), rgba(32, 24, 12, 0.88));
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), 0 0 24px rgba(242, 204, 38, 0.38);
+      }
+      .tut-hud-top {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 8px;
-        padding-right: 30px;
-        flex-wrap: wrap;
       }
-      .tutorial-badge {
+      .tut-hud-progress-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tut-hud-count {
         font-family: var(--font-hud);
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 900;
-        letter-spacing: 0.12em;
+        letter-spacing: 0.08em;
         color: var(--yellow);
-        text-transform: uppercase;
+        font-variant-numeric: tabular-nums;
       }
-      .tutorial-header-pills {
+      .tut-hud-dots {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .tut-hud-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.22);
+        transition: all 0.16s ease;
+      }
+      .tut-hud-dot.done {
+        background: #34d399;
+        box-shadow: 0 0 6px rgba(52, 211, 153, 0.6);
+      }
+      .tut-hud-dot.active {
+        width: 18px;
+        background: var(--yellow);
+      }
+      .tut-hud-top-right {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        flex-wrap: wrap;
       }
-      .tut-mode-pill {
-        background: rgba(255, 255, 255, 0.07);
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        color: rgba(243, 242, 238, 0.8);
+      .tut-hud-done-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 1px 7px;
+        border-radius: 999px;
+        background: rgba(52, 211, 153, 0.22);
+        border: 1px solid #34d399;
+        color: #6ee7b7;
+        font-family: var(--font-hud);
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .tut-hud-done-badge.hidden {
+        display: none;
+      }
+      .tut-hud-skip-btn {
+        pointer-events: auto;
+        cursor: pointer;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.24);
+        color: rgba(245, 244, 240, 0.88);
         font-family: var(--font-hud);
         font-size: 11px;
         font-weight: 800;
-        letter-spacing: 0.05em;
-        padding: 3px 9px;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        padding: 2px 9px;
         border-radius: 999px;
-        cursor: pointer;
-        transition: all 0.14s ease;
+        transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
       }
-      .tut-mode-pill:hover {
-        border-color: rgba(255, 255, 255, 0.4);
-        color: #fff;
-      }
-      .tut-mode-pill.active {
-        background: var(--orange);
+      .tut-hud-skip-btn:hover {
+        background: rgba(242, 204, 38, 0.18);
         border-color: var(--yellow);
-        color: #111;
-      }
-      .tut-mode-pill.tut-ctrl-pill {
-        background: rgba(0, 214, 195, 0.12);
-        border-color: rgba(0, 214, 195, 0.45);
-        color: #6df3e5;
-      }
-      .tut-mode-pill.tut-ctrl-pill:hover {
-        background: rgba(0, 214, 195, 0.22);
-      }
-      .tut-mode-pill.hidden {
-        display: none;
-      }
-      .tutorial-close-x {
-        position: absolute;
-        top: 10px;
-        right: 12px;
-        background: none;
-        border: none;
-        color: rgba(255, 255, 255, 0.6);
-        font-size: 26px;
-        line-height: 1;
-        cursor: pointer;
-        padding: 4px 8px;
-        z-index: 5;
-        transition: color 0.14s ease;
-      }
-      .tutorial-close-x:hover {
         color: var(--yellow);
       }
-      .tutorial-title {
+      .tut-hud-prompt {
         font-family: var(--font-hud);
-        font-size: 22px;
+        font-size: clamp(16px, 2.2vw, 19px);
         font-weight: 900;
         letter-spacing: 0.04em;
-        line-height: 1.15;
-        margin: 0;
-        color: #ffffff;
+        line-height: 1.18;
         text-transform: uppercase;
-      }
-      .tutorial-subtitle {
-        margin: 0;
-        font-family: var(--font-hud);
-        font-size: 13px;
-        line-height: 1.35;
-        color: rgba(243, 242, 238, 0.78);
-      }
-      .tutorial-progress-track {
-        height: 4px;
-        width: 100%;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 999px;
-        overflow: hidden;
-        margin-top: 2px;
-      }
-      .tutorial-progress-fill {
-        height: 100%;
-        width: 25%;
-        background: linear-gradient(90deg, var(--orange), var(--yellow));
-        border-radius: 999px;
-        transition: width 0.22s ease;
-      }
-      .tutorial-body {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-        padding: 14px 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      }
-      .tut-cards-grid {
-        display: grid;
-        gap: 10px;
-      }
-      .tut-cards-3 {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-      .tut-cards-2 {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-      .tut-card {
-        background: rgba(255, 255, 255, 0.045);
-        border: 1px solid rgba(255, 255, 255, 0.11);
-        border-radius: 8px;
-        padding: 10px 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-      .tut-card-goals {
-        border-color: rgba(242, 204, 38, 0.35);
-        background: rgba(242, 204, 38, 0.06);
-      }
-      .tut-card-head {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-      }
-      .tut-card-icon {
-        font-size: 16px;
-        line-height: 1;
-      }
-      .tut-card-title {
-        font-family: var(--font-hud);
-        font-size: 14px;
-        font-weight: 900;
-        letter-spacing: 0.03em;
         color: #ffffff;
-      }
-      .tut-control-row {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
         gap: 5px;
       }
-      .tut-trick-top {
+      .tut-hud-card.is-step-done .tut-hud-prompt {
+        color: #6ee7b7;
+      }
+      .tut-hud-card.is-celebrating .tut-hud-prompt {
+        color: var(--yellow);
+        font-size: clamp(18px, 2.5vw, 22px);
+      }
+      .tut-hud-hint {
+        font-family: var(--font-hud);
+        font-size: 12.5px;
+        font-weight: 600;
+        line-height: 1.25;
+        color: rgba(243, 242, 238, 0.8);
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 6px;
         flex-wrap: wrap;
-      }
-      .tut-trick-key {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        flex-wrap: wrap;
+        gap: 5px;
       }
       .tut-kbd {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 24px;
-        padding: 2px 7px;
+        min-width: 22px;
+        padding: 1px 6px;
         background: #1d1a17;
-        border: 1px solid rgba(242, 204, 38, 0.65);
+        border: 1px solid rgba(242, 204, 38, 0.72);
         border-bottom-width: 2px;
         border-radius: 4px;
         color: var(--yellow);
@@ -3782,240 +3721,112 @@
         font-size: 12px;
         font-weight: 900;
         letter-spacing: 0.04em;
-        line-height: 1.25;
+        line-height: 1.2;
       }
-      .tut-touch-pill {
+      .tut-pill {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        padding: 2px 9px;
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.35);
-        border-radius: 999px;
-        color: #ffffff;
-        font-family: var(--font-hud);
-        font-size: 11.5px;
-        font-weight: 900;
-        letter-spacing: 0.06em;
-      }
-      .tut-touch-pill.is-accent {
+        padding: 1px 7px;
         background: rgba(242, 116, 31, 0.24);
-        border-color: var(--orange);
+        border: 1px solid var(--orange);
+        border-radius: 999px;
         color: var(--yellow);
-      }
-      .tut-or {
-        font-size: 11px;
-        color: rgba(255, 255, 255, 0.5);
-        font-weight: 700;
-      }
-      .tut-card-desc {
-        margin: 0;
-        font-family: var(--font-hud);
-        font-size: 12.5px;
-        line-height: 1.38;
-        color: rgba(243, 242, 238, 0.86);
-      }
-      .tut-card-desc strong {
-        color: var(--yellow);
-      }
-      .tut-when-row {
-        margin-top: auto;
-        padding-top: 5px;
-        border-top: 1px dashed rgba(255, 255, 255, 0.1);
         font-family: var(--font-hud);
         font-size: 11.5px;
-        line-height: 1.35;
-        color: #8bece2;
-      }
-      .tut-when-label {
         font-weight: 900;
-        color: #00d6c3;
         letter-spacing: 0.05em;
+        line-height: 1.2;
       }
-      .tut-callout {
-        background: rgba(242, 116, 31, 0.14);
-        border-left: 3px solid var(--orange);
+      .tut-dir-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 0 6px;
         border-radius: 4px;
-        padding: 9px 12px;
-        font-family: var(--font-hud);
-        font-size: 12.5px;
-        line-height: 1.38;
-        color: #f7f6f2;
-      }
-      .tut-callout strong {
-        color: var(--yellow);
-      }
-      .tut-callout-flow {
-        background: linear-gradient(135deg, rgba(242, 116, 31, 0.18), rgba(242, 204, 38, 0.1));
-        border-left-color: var(--yellow);
-      }
-      .tut-callout-title {
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.72);
+        font-size: 11px;
         font-weight: 900;
-        font-size: 13.5px;
-        color: var(--yellow);
-        margin-bottom: 3px;
+        line-height: 1.35;
       }
-      .tut-callout-compact {
-        padding: 7px 11px;
-        font-size: 12px;
+      .tut-dir-chip.done {
+        border-color: #34d399;
+        background: rgba(52, 211, 153, 0.22);
+        color: #6ee7b7;
       }
-      .tutorial-footer {
-        flex-shrink: 0;
-        padding: 10px 20px 13px 20px;
-        border-top: 1px solid rgba(255, 255, 255, 0.12);
-        background: rgba(14, 12, 10, 0.92);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-      }
-      .tut-footer-center {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-      }
-      .tut-step-count {
-        font-family: var(--font-hud);
-        font-size: 12px;
-        font-weight: 900;
-        letter-spacing: 0.08em;
-        color: rgba(243, 242, 238, 0.72);
-        font-variant-numeric: tabular-nums;
-      }
-      .tut-dots {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-      }
-      .tut-dot {
-        width: 9px;
-        height: 9px;
-        padding: 0;
+      .tut-hud-bar-track {
+        height: 4px;
+        width: 100%;
+        background: rgba(255, 255, 255, 0.12);
         border-radius: 999px;
-        border: none;
-        background: rgba(255, 255, 255, 0.24);
-        cursor: pointer;
-        transition: all 0.16s ease;
+        overflow: hidden;
+        margin-top: 2px;
       }
-      .tut-dot.done {
-        background: rgba(242, 116, 31, 0.65);
+      .tut-hud-bar-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, var(--orange), var(--yellow));
+        border-radius: 999px;
+        transition: width 0.12s ease, background 0.18s ease;
       }
-      .tut-dot.active {
-        width: 22px;
-        background: var(--yellow);
-      }
-      .tut-footer-actions {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .tut-btn-ghost {
-        background: transparent;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        color: rgba(243, 242, 238, 0.82);
-        font-family: var(--font-hud);
-        font-size: 12.5px;
-        font-weight: 800;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        padding: 7px 12px;
-        border-radius: 5px;
-        cursor: pointer;
-        transition: all 0.14s ease;
-      }
-      .tut-btn-ghost:hover:not(:disabled) {
-        border-color: rgba(255, 255, 255, 0.45);
-        color: #ffffff;
-      }
-      .tut-btn-ghost:disabled {
-        opacity: 0.32;
-        cursor: not-allowed;
-      }
-      .tut-btn-primary {
-        background: var(--orange);
-        border: none;
-        color: #100e0c;
-        font-family: var(--font-hud);
-        font-size: 13.5px;
-        font-weight: 900;
-        letter-spacing: 0.07em;
-        text-transform: uppercase;
-        padding: 8px 18px;
-        transform: skewX(var(--skew));
-        box-shadow: 0 4px 14px rgba(242, 116, 31, 0.4);
-        cursor: pointer;
-        transition: transform 0.14s ease, background 0.14s ease;
-      }
-      .tut-btn-primary:hover {
-        background: var(--yellow);
-        transform: skewX(var(--skew)) translateY(-1px);
-      }
-      .tut-btn-primary.is-finish {
-        background: linear-gradient(135deg, var(--yellow), var(--orange));
+      .tut-hud-card.is-step-done .tut-hud-bar-fill,
+      .tut-hud-card.is-celebrating .tut-hud-bar-fill {
+        width: 100% !important;
+        background: linear-gradient(90deg, #10b981, #34d399);
       }
 
-      @media (max-width: 640px) {
-        .tutorial-modal-overlay {
-          padding: 8px;
-        }
-        .tutorial-header {
-          padding: 11px 14px 8px 14px;
-        }
-        .tutorial-title {
-          font-size: 18px;
-        }
-        .tutorial-body {
-          padding: 10px 14px;
-          gap: 9px;
-        }
-        .tut-cards-3,
-        .tut-cards-2 {
-          grid-template-columns: 1fr;
-        }
-        .tutorial-footer {
-          padding: 8px 14px 10px 14px;
-          gap: 6px;
-          flex-wrap: wrap;
-        }
-        .tut-btn-ghost {
-          padding: 6px 9px;
-          font-size: 11.5px;
-        }
-        .tut-btn-primary {
-          padding: 7px 13px;
-          font-size: 12.5px;
+      @media (max-width: 1359px) and (min-width: 961px) and (min-height: 541px) {
+        .tutorial-hud {
+          top: 86px;
+          left: clamp(395px, 54%, calc(100% - 210px));
+          width: min(46vw, 390px);
         }
       }
-      @media (max-height: 500px) {
-        .tutorial-modal-overlay {
-          padding: 6px 10px;
+      body.reel-mode .tutorial-hud {
+        top: calc(64px + env(safe-area-inset-top, 0px));
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(92%, 376px);
+      }
+      @media (max-width: 960px) and (orientation: portrait) {
+        .tutorial-hud {
+          top: calc(64px + env(safe-area-inset-top, 0px));
+          left: 50%;
+          transform: translateX(-50%);
+          width: min(92vw, 376px);
         }
-        .tutorial-header {
-          padding: 8px 14px 6px 14px;
+      }
+      @media (max-height: 540px), (max-width: 960px) and (orientation: landscape) {
+        .tutorial-hud {
+          top: calc(48px + env(safe-area-inset-top, 0px));
+          left: 50%;
+          transform: translateX(-50%);
+          width: min(62vw, 344px);
+        }
+        body.has-touch-controls .tutorial-hud {
+          left: auto;
+          right: max(12px, env(safe-area-inset-right, 12px));
+          transform: none;
+          width: min(55vw, 336px);
+        }
+        body.has-touch-controls .tutorial-hud.hidden {
+          transform: translateY(-10px);
+        }
+        .tut-hud-card {
+          padding: 6px 10px 7px;
           gap: 3px;
         }
-        .tutorial-title {
-          font-size: 16.5px;
+        .tut-hud-prompt {
+          font-size: 14.5px;
         }
-        .tutorial-subtitle {
+        .tut-hud-hint {
           font-size: 11.5px;
         }
-        .tutorial-body {
-          padding: 8px 14px;
-          gap: 8px;
-        }
-        .tut-cards-3 {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
-        .tut-cards-2 {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-        .tut-card {
-          padding: 7px 9px;
-          gap: 4px;
-        }
-        .tutorial-footer {
-          padding: 7px 14px;
+        .tut-kbd,
+        .tut-pill {
+          font-size: 10.5px;
         }
       }
       .hud-help-btn {
@@ -6004,45 +5815,29 @@
         </div>
       </div>
 
-      <!-- First-Run Interactive Tutorial Modal (#tutorial-modal — Issue #33) -->
-      <div id="tutorial-modal" class="tutorial-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="tutorial-step-title">
-        <div class="tutorial-modal-backdrop" id="tutorial-modal-backdrop"></div>
-        <div class="tutorial-modal-card">
-          <button id="tutorial-close-x" class="tutorial-close-x" type="button" aria-label="Close Tutorial">&times;</button>
-
-          <div class="tutorial-header">
-            <div class="tutorial-header-top">
-              <span class="tutorial-badge" data-i18n="tutorial.badge">SURFSKATE CRASH COURSE</span>
-              <div class="tutorial-header-pills">
-                <button id="tutorial-mode-desktop" type="button" class="tut-mode-pill" data-i18n="tutorial.modeDesktop">⌨️ Desktop</button>
-                <button id="tutorial-mode-touch" type="button" class="tut-mode-pill" data-i18n="tutorial.modeTouch">📱 Touch</button>
-                <button id="tutorial-ctrl-toggle" type="button" class="tut-mode-pill tut-ctrl-pill" title="Switch Arrows / WASD">ARROWS ⇄</button>
+      <!-- Interactive Live Learn-by-Doing Tutorial HUD (#tutorial-hud — Issue #39) -->
+      <div id="tutorial-hud" class="tutorial-hud hidden" role="status" aria-live="polite">
+        <div class="tut-hud-card" id="tut-hud-card">
+          <div class="tut-hud-top">
+            <div class="tut-hud-progress-group">
+              <span id="tutorial-step-count" class="tut-hud-count">1/5</span>
+              <div class="tut-hud-dots" id="tutorial-dots" aria-hidden="true">
+                <span class="tut-hud-dot active"></span>
+                <span class="tut-hud-dot"></span>
+                <span class="tut-hud-dot"></span>
+                <span class="tut-hud-dot"></span>
+                <span class="tut-hud-dot"></span>
               </div>
             </div>
-            <h2 id="tutorial-step-title" class="tutorial-title">1. PUSH &amp; CARVE</h2>
-            <p id="tutorial-step-subtitle" class="tutorial-subtitle"></p>
-            <div class="tutorial-progress-track" aria-hidden="true">
-              <div class="tutorial-progress-fill" id="tutorial-progress-fill"></div>
+            <div class="tut-hud-top-right">
+              <span id="tutorial-done-badge" class="tut-hud-done-badge hidden" data-i18n="tutorial.doneBadge">✓ NICE!</span>
+              <button id="tutorial-skip-btn" type="button" class="tut-hud-skip-btn" data-i18n="tutorial.skip">Skip</button>
             </div>
           </div>
-
-          <div class="tutorial-body" id="tutorial-body"></div>
-
-          <div class="tutorial-footer">
-            <button id="tutorial-skip-btn" type="button" class="tut-btn-ghost" data-i18n="tutorial.skip">Skip</button>
-            <div class="tut-footer-center">
-              <span id="tutorial-step-count" class="tut-step-count">1/4</span>
-              <div class="tut-dots" id="tutorial-dots" aria-label="Tutorial steps">
-                <button type="button" class="tut-dot active" aria-label="Step 1"></button>
-                <button type="button" class="tut-dot" aria-label="Step 2"></button>
-                <button type="button" class="tut-dot" aria-label="Step 3"></button>
-                <button type="button" class="tut-dot" aria-label="Step 4"></button>
-              </div>
-            </div>
-            <div class="tut-footer-actions">
-              <button id="tutorial-prev-btn" type="button" class="tut-btn-ghost" data-i18n="tutorial.back">Back</button>
-              <button id="tutorial-next-btn" type="button" class="tut-btn-primary" data-i18n="tutorial.next">Next →</button>
-            </div>
+          <div class="tut-hud-prompt" id="tutorial-prompt"></div>
+          <div class="tut-hud-hint" id="tutorial-hint"></div>
+          <div class="tut-hud-bar-track" aria-hidden="true">
+            <div class="tut-hud-bar-fill" id="tutorial-bar-fill"></div>
           </div>
         </div>
       </div>

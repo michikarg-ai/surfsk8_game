@@ -39,7 +39,7 @@ class SurfskateMunichGame {
   public landingPage: LandingPage;
   public touchControls: TouchControls;
   public tutorial: FirstRunTutorial;
-  private isTutorialPaused = false;
+  private forceStartTutorialOnDropIn = false;
   public audio = new SurfAudio();
   public pretzels: PretzelCollectibles;
   public flowLine: FlowLineChallenge;
@@ -202,7 +202,8 @@ class SurfskateMunichGame {
         this.lastTime = performance.now();
         this.touchControls.setVisible(true);
         this.syncHUDButtons();
-        if (this.tutorial.shouldAutoOpenOnStart()) {
+        if (this.forceStartTutorialOnDropIn || this.tutorial.shouldAutoOpenOnStart()) {
+          this.forceStartTutorialOnDropIn = false;
           this.tutorial.open();
         }
         try {
@@ -227,27 +228,41 @@ class SurfskateMunichGame {
     );
     this.tutorial = new FirstRunTutorial({
       getControlMode: () => this.controlMode,
-      onToggleControlMode: () => this.toggleControlMode(),
-      isTouchDevice: () => this.touchControls.isTouchActive(),
-      onOpen: () => {
-        this.isTutorialPaused = !this.landingPage.isVisible;
-        this.keys.clear();
-        this.touchControls.setVisible(false);
-      },
-      onClose: () => {
-        this.isTutorialPaused = false;
-        this.lastTime = performance.now();
-        this.keys.clear();
+      isTouchDevice: () => this.touchControls.isEnabled,
+      onStart: () => {
+        this.controller.sessionTimerPaused = true;
+        this.hud.sessionTimerPaused = true;
+        this.hud.tutorialActive = true;
+        document.body.classList.add('tutorial-active');
         if (!this.landingPage.isVisible) {
           this.touchControls.setVisible(true);
         }
+      },
+      onStepComplete: () => {
+        this.audio.playManeuverChime();
+      },
+      onAllStepsComplete: () => {
+        this.audio.playPretzelPickup(true);
+      },
+      onComplete: () => {
+        this.controller.sessionTimerPaused = false;
+        this.hud.sessionTimerPaused = false;
+        this.hud.tutorialActive = false;
+        document.body.classList.remove('tutorial-active');
       },
     });
     this.controller.setSkaterStats(this.landingPage.getSelectedSkater().stats);
     this.landingPage.onCycleQuality = () => this.cycleGraphicsQuality();
     this.landingPage.onToggleFullscreen = () => this.toggleFullscreen();
     this.landingPage.onToggleSound = () => this.toggleMusic();
-    this.landingPage.onOpenTutorial = () => this.tutorial.open();
+    this.landingPage.onOpenTutorial = () => {
+      if (this.landingPage.isVisible) {
+        this.forceStartTutorialOnDropIn = true;
+        this.landingPage.startGame();
+      } else {
+        this.tutorial.open();
+      }
+    };
     this.landingPage.onSelectGameMode = (mode) => {
       this.gameMode = mode;
     };
@@ -400,7 +415,13 @@ class SurfskateMunichGame {
     if (helpTutorialBtn) {
       helpTutorialBtn.addEventListener('click', () => {
         this.closeHelpModal();
-        this.tutorial.open();
+        this.keys.clear();
+        if (this.landingPage.isVisible) {
+          this.forceStartTutorialOnDropIn = true;
+          this.landingPage.startGame();
+        } else {
+          this.tutorial.open();
+        }
       });
     }
     if (tabMobile) tabMobile.addEventListener('click', () => this.switchHelpTab('mobile'));
@@ -420,13 +441,6 @@ class SurfskateMunichGame {
 
       this.audio.initOnFirstGesture();
       const code = e.code;
-
-      if (this.tutorial.isOpen()) {
-        if (this.tutorial.handleKeyDown(e)) {
-          e.preventDefault();
-        }
-        return;
-      }
 
       if (e.key === '?' || (e.shiftKey && code === 'Slash')) {
         e.preventDefault();
@@ -509,6 +523,10 @@ class SurfskateMunichGame {
         }
         if (this.flowLine.isExportModalOpen()) {
           this.flowLine.closeExportModal();
+          return;
+        }
+        if (this.tutorial.isOpen() && this.tutorial.handleKeyDown(e)) {
+          e.preventDefault();
           return;
         }
         this.pauseGameAndOpenLanding();
@@ -604,7 +622,6 @@ class SurfskateMunichGame {
     const helpOpen = Boolean(helpModal && !helpModal.classList.contains('hidden'));
     if (
       this.landingPage.isVisible ||
-      this.isTutorialPaused ||
       this.tutorial.isOpen() ||
       this.hud.isSummaryModalOpen() ||
       helpOpen ||
@@ -796,6 +813,7 @@ class SurfskateMunichGame {
   public toggleTouchControls(): void {
     this.touchControls.toggleEnabled();
     this.syncHUDButtons();
+    this.tutorial?.refresh();
   }
 
   public openHelpModal(forceTab?: 'mobile' | 'keyboard'): void {
@@ -832,9 +850,8 @@ class SurfskateMunichGame {
   public pauseGameAndOpenLanding(): void {
     if (this.landingPage.isVisible) return;
     if (this.tutorial.isOpen()) {
-      this.tutorial.close(false);
+      this.tutorial.abort();
     }
-    this.isTutorialPaused = false;
     this.hud.closeSessionSummary();
     this.keys.clear();
     this.touchControls.setVisible(false);
@@ -896,6 +913,9 @@ class SurfskateMunichGame {
     this.controller.resetToSpawn();
     this.surfCamera.reset(this.controller);
     this.hud.resetSession();
+    this.controller.sessionTimerPaused = this.tutorial.isOpen();
+    this.hud.sessionTimerPaused = this.tutorial.isOpen();
+    this.hud.tutorialActive = this.tutorial.isOpen();
     this.pretzels.reset();
     this.flowLine.reset();
     this.parkCrew.resetSession();
@@ -1174,14 +1194,6 @@ class SurfskateMunichGame {
       return;
     }
 
-    if (this.isTutorialPaused) {
-      this.skaterVisuals.update(0, this.controller);
-      this.surfCamera.update(0, this.controller);
-      this.renderer.render(this.scene, this.surfCamera.camera);
-      requestAnimationFrame((t) => this.animate(t));
-      return;
-    }
-
     // SNAP slow motion: hold at slowMoScale, then ease back to real time over the last 0.4 s
     let timeScale = 1;
     if (this.slowMoTimer > 0) {
@@ -1205,6 +1217,7 @@ class SurfskateMunichGame {
 
     const input = this.buildInputState(timeSec);
     this.controller.update(dt, input, (ev) => {
+      this.tutorial.notifyManeuver(ev);
       const effectiveEv =
         this.inOutlawSpotlight && ev.points > 0
           ? { ...ev, points: Math.round(ev.points * 2.5) }
@@ -1237,9 +1250,11 @@ class SurfskateMunichGame {
     this.skaterVisuals.update(dt, this.controller);
     this.pretzels.update(dt, this.controller.position);
     this.flowLine.update(dt, timeSec, this.controller);
+    this.tutorial.update(realDt, this.controller, input);
 
     const helpModal = document.getElementById('help-modal');
     const isGameplayActive =
+      !this.tutorial.isOpen() &&
       !this.hud.isSummaryModalOpen() &&
       !(helpModal && !helpModal.classList.contains('hidden')) &&
       !this.flowLine.isExportModalOpen();

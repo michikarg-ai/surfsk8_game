@@ -39,6 +39,8 @@ export class SurfHUD {
   private readonly comboMaxHold = 4.2;
 
   public sessionTimeRemaining = 120.0; // 2-minute THPS session timer
+  public sessionTimerPaused = false;
+  public tutorialActive = false;
   public sessionEnded = false;
   public endlessMode = false;
   public isOvertime = false;
@@ -256,10 +258,6 @@ export class SurfHUD {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || activeEl?.isContentEditable) {
         return;
       }
-      const tutModal = document.getElementById('tutorial-modal');
-      if (tutModal && !tutModal.classList.contains('hidden')) {
-        return;
-      }
       if (e.code === 'KeyH') this.toggleDock();
     });
     this.flowFillEl = document.getElementById('hud-flow-fill')!;
@@ -411,7 +409,7 @@ export class SurfHUD {
       if (this.sessionLabelEl) this.sessionLabelEl.textContent = t('hud.freeSurf');
     } else {
       this.sessionBlockEl?.classList.remove('zen-mode');
-      if (!this.sessionEnded) {
+      if (!this.sessionEnded && !this.sessionTimerPaused) {
         this.sessionTimeRemaining = Math.max(0, this.sessionTimeRemaining - dt);
         if (this.sessionTimeRemaining === 0) {
           const comboStillAlive =
@@ -527,6 +525,8 @@ export class SurfHUD {
         reason: ctrl.bailReason || t('hud.wipeoutFallback'),
       });
       this.coachHintEl.className = 'visible bail';
+    } else if (this.tutorialActive) {
+      this.coachHintEl.className = '';
     } else if (this.flowLineHint) {
       this.coachHintEl.textContent = this.flowLineHint;
       this.coachHintEl.className = 'visible ready';

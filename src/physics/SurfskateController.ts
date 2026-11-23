@@ -150,6 +150,7 @@ export class SurfskateController {
 
   // Session timer, Overtime & Endless Mode state
   public endlessMode = false;
+  public sessionTimerPaused = false;
   public sessionTimer = 120.0;
   public sessionOvertime = false;
   public sessionFinished = false;
@@ -202,6 +203,8 @@ export class SurfskateController {
   private prevPushInput = false;
   /** 0..1 pulse that drives a visible body pump when a pump lands. */
   public pumpPulse = 0;
+  /** Cumulative count of landed rhythm/wall pumps in the current session. */
+  public pumpCount = 0;
 
   // Layback
   public laybackActive = false;
@@ -350,6 +353,7 @@ export class SurfskateController {
     this.bailTimer = 0;
     this.lastPumpDir = 0;
     this.timeSincePumpSwitch = 99;
+    this.pumpCount = 0;
 
     // Reset session timer, overtime, Surf-Zone & Perfect Pump state
     this.sessionTimer = 120.0;
@@ -409,10 +413,10 @@ export class SurfskateController {
     // Session Timer, Overtime & Endless Mode
     // -------------------------------------------------------------------------
     if (!this.endlessMode) {
-      if (this.sessionTimer > 0) {
+      if (!this.sessionTimerPaused && this.sessionTimer > 0) {
         this.sessionTimer = Math.max(0, this.sessionTimer - clampedDt);
       }
-      if (this.sessionTimer <= 0) {
+      if (!this.sessionTimerPaused && this.sessionTimer <= 0) {
         const isInComboOrAir =
           this.comboCount > 0 ||
           this.comboScore > 0 ||
@@ -763,6 +767,7 @@ export class SurfskateController {
           this.pumpSyncQuality = 'PERFECT PUMP!';
           this.pumpQualityTimer = 0.8;
           this.pumpPulse = 1.0;
+          this.pumpCount += 1;
           onManeuver({
             name: '⚡ PERFECT PUMP!',
             points: this.applyScoreMultipliers(150),
@@ -1198,12 +1203,14 @@ export class SurfskateController {
       this.pumpSyncQuality = 'PERFECT PUMP!';
       this.pumpQualityTimer = 0.7;
       this.pumpPulse = 1;
+      this.pumpCount += 1;
       this.flowMeter = Math.min(100, this.flowMeter + 4 * this.flowScale);
     } else {
       this.speed = Math.min(this.maxSpeedLimit, this.speed + PUMP_GAIN_GOOD * taper * this.pumpScale);
       this.pumpSyncQuality = 'FLOW PUMP';
       this.pumpQualityTimer = 0.6;
       this.pumpPulse = 0.7;
+      this.pumpCount += 1;
       this.flowMeter = Math.min(100, this.flowMeter + 2 * this.flowScale);
     }
   }
