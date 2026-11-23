@@ -251,7 +251,11 @@ export class SurfHUD {
     // Foldable tricks & options dock (bottom-right): folded by default, state remembered across reloads
     this.dockEl = document.getElementById('hud-dock')!;
     this.setDockOpen(false);
-    document.getElementById('dock-toggle')!.addEventListener('click', () => this.toggleDock());
+    const dockToggleBtn = document.getElementById('dock-toggle')!;
+    dockToggleBtn.addEventListener('click', () => {
+      this.toggleDock();
+      dockToggleBtn.blur();
+    });
     window.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement as HTMLElement | null;
       const tag = activeEl?.tagName;
@@ -288,32 +292,26 @@ export class SurfHUD {
     this.btnHudFullscreenEl = document.getElementById('btn-hud-fullscreen') as HTMLButtonElement | null;
     const btnResetEl = document.getElementById('btn-reset') as HTMLButtonElement;
 
-    if (this.btnControlsEl) {
-      this.btnControlsEl.addEventListener('click', () => this.callbacks.onToggleControlMode?.());
-    }
-    if (this.btnTouchEl) {
-      this.btnTouchEl.addEventListener('click', () => this.callbacks.onToggleTouchControls?.());
-    }
-    if (this.btnFullscreenEl) {
-      this.btnFullscreenEl.addEventListener('click', () => this.callbacks.onToggleFullscreen?.());
-    }
-    if (this.btnHudFullscreenEl) {
-      this.btnHudFullscreenEl.addEventListener('click', () => this.callbacks.onToggleFullscreen?.());
-    }
-    this.btnAspectEl.addEventListener('click', () => this.callbacks.onToggleAspect());
-    if (this.btnAtmosphereEl) {
-      this.btnAtmosphereEl.addEventListener('click', () => this.callbacks.onToggleAtmosphere());
-    }
-    this.btnCameraEl.addEventListener('click', () => this.callbacks.onCycleCamera());
-    this.btnTruckFeelEl.addEventListener('click', () => this.callbacks.onCycleTruckFeel());
-    this.btnAutoFlowEl.addEventListener('click', () => this.callbacks.onToggleAutoFlow());
-    if (this.btnMusicEl) {
-      this.btnMusicEl.addEventListener('click', () => this.callbacks.onToggleMusic());
-    }
-    if (this.btnQualityEl) {
-      this.btnQualityEl.addEventListener('click', () => this.callbacks.onCycleQuality?.());
-    }
-    btnResetEl.addEventListener('click', () => this.callbacks.onResetSession());
+    const bindHudBtn = (btn: HTMLButtonElement | null, action: (() => void) | undefined) => {
+      if (!btn || !action) return;
+      btn.addEventListener('click', () => {
+        action();
+        btn.blur();
+      });
+    };
+
+    bindHudBtn(this.btnControlsEl, () => this.callbacks.onToggleControlMode?.());
+    bindHudBtn(this.btnTouchEl, () => this.callbacks.onToggleTouchControls?.());
+    bindHudBtn(this.btnFullscreenEl, () => this.callbacks.onToggleFullscreen?.());
+    bindHudBtn(this.btnHudFullscreenEl, () => this.callbacks.onToggleFullscreen?.());
+    bindHudBtn(this.btnAspectEl, () => this.callbacks.onToggleAspect());
+    bindHudBtn(this.btnAtmosphereEl, () => this.callbacks.onToggleAtmosphere());
+    bindHudBtn(this.btnCameraEl, () => this.callbacks.onCycleCamera());
+    bindHudBtn(this.btnTruckFeelEl, () => this.callbacks.onCycleTruckFeel());
+    bindHudBtn(this.btnAutoFlowEl, () => this.callbacks.onToggleAutoFlow());
+    bindHudBtn(this.btnMusicEl, () => this.callbacks.onToggleMusic());
+    bindHudBtn(this.btnQualityEl, () => this.callbacks.onCycleQuality?.());
+    bindHudBtn(btnResetEl, () => this.callbacks.onResetSession());
 
     onLangChange(() => {
       this.refreshLocalizedUI();

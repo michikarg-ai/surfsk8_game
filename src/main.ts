@@ -99,6 +99,7 @@ class SurfskateMunichGame {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.08;
+    this.renderer.domElement.tabIndex = 0;
     this.viewportContainer.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
@@ -202,6 +203,7 @@ class SurfskateMunichGame {
         this.lastTime = performance.now();
         this.touchControls.setVisible(true);
         this.syncHUDButtons();
+        this.focusGameSurface(true);
         if (this.forceStartTutorialOnDropIn || this.tutorial.shouldAutoOpenOnStart()) {
           this.forceStartTutorialOnDropIn = false;
           this.tutorial.open();
@@ -343,10 +345,28 @@ class SurfskateMunichGame {
       setTimeout(() => this.updateAppDimensions(), 100);
       setTimeout(() => this.updateAppDimensions(), 300);
     });
-    document.addEventListener('fullscreenchange', () => this.syncFullscreenUI());
-    document.addEventListener('webkitfullscreenchange', () => this.syncFullscreenUI());
+    const handleFsChange = () => this.handleFullscreenChange();
+    document.addEventListener('fullscreenchange', handleFsChange);
+    document.addEventListener('webkitfullscreenchange', handleFsChange);
+    window.addEventListener('fullscreenchange', handleFsChange);
+    window.addEventListener('webkitfullscreenchange', handleFsChange);
+    window.addEventListener('blur', () => this.keys.clear());
     new ResizeObserver(() => this.updateAppDimensions()).observe(this.viewportContainer);
     window.addEventListener('pointerdown', () => this.audio.initOnFirstGesture(), { once: true });
+
+    const focusCanvasOnPointer = () => this.focusGameSurface(true);
+    this.renderer.domElement.addEventListener('pointerdown', focusCanvasOnPointer, { passive: true });
+    this.renderer.domElement.addEventListener('mousedown', focusCanvasOnPointer, { passive: true });
+
+    const focusViewportOnPointer = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable], button, a, label')) {
+        return;
+      }
+      this.focusGameSurface(true);
+    };
+    this.viewportContainer.addEventListener('pointerdown', focusViewportOnPointer, { passive: true });
+    this.viewportContainer.addEventListener('mousedown', focusViewportOnPointer, { passive: true });
     document.addEventListener('visibilitychange', () => {
       this.audio.handleVisibilityChange(!document.hidden);
     });
@@ -429,183 +449,214 @@ class SurfskateMunichGame {
     if (tabMobile) tabMobile.addEventListener('click', () => this.switchHelpTab('mobile'));
     if (tabKeyboard) tabKeyboard.addEventListener('click', () => this.switchHelpTab('keyboard'));
 
-    window.addEventListener('keydown', (e) => {
-      const activeEl = document.activeElement as HTMLElement | null;
-      const activeTag = activeEl?.tagName;
-      if (
-        activeTag === 'INPUT' ||
-        activeTag === 'TEXTAREA' ||
-        activeTag === 'SELECT' ||
-        activeEl?.isContentEditable
-      ) {
-        return;
-      }
-
-      this.audio.initOnFirstGesture();
-      const code = e.code;
-
-      if (e.key === '?' || (e.shiftKey && code === 'Slash')) {
-        e.preventDefault();
-        const helpModal = document.getElementById('help-modal');
-        if (helpModal && !helpModal.classList.contains('hidden')) {
-          this.closeHelpModal();
-        } else {
-          this.openHelpModal();
-        }
-        return;
-      }
-
-      if (this.landingPage.isVisible) {
-        if (code === 'Escape') {
-          this.landingPage.handleKeyDown(code);
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        const isTextInput = (el: HTMLElement | null): boolean => {
+          const tag = el?.tagName;
+          return (
+            tag === 'INPUT' ||
+            tag === 'TEXTAREA' ||
+            tag === 'SELECT' ||
+            Boolean(el?.isContentEditable)
+          );
+        };
+        const activeEl = document.activeElement as HTMLElement | null;
+        const targetEl = e.target as HTMLElement | null;
+        if (isTextInput(activeEl) || isTextInput(targetEl)) {
           return;
         }
-        if (
-          this.landingPage.isLeaderboardModalOpen() ||
-          this.landingPage.isNamePromptModalOpen()
-        ) {
-          return;
-        }
-        if (code === 'Enter' || code === 'NumpadEnter') {
-          e.preventDefault();
-          this.landingPage.startGame();
-        } else if (
+
+        const code = e.code;
+        const isScrollableModalOpen = this.isScrollableModalOpen();
+        const isNavOrActionKey =
           code === 'ArrowUp' ||
           code === 'ArrowDown' ||
           code === 'ArrowLeft' ||
           code === 'ArrowRight' ||
-          code === 'KeyW' ||
-          code === 'KeyS' ||
-          code === 'KeyA' ||
-          code === 'KeyD'
-        ) {
-          e.preventDefault();
-          this.landingPage.handleKeyDown(code);
-        } else if (code === 'Tab') {
-          e.preventDefault();
-          this.toggleControlMode();
-        } else if (code === 'KeyF') {
-          this.toggleFullscreen();
-        } else if (code === 'KeyR') {
-          this.toggleAspectMode();
-        } else if (code === 'KeyM') {
-          this.toggleMusic();
-        } else if (code === 'KeyU' || code === 'KeyQ') {
-          this.cycleGraphicsQuality();
-        }
-        return;
-      }
+          code === 'Space' ||
+          e.key === ' ';
+        const isInGameScrollKey =
+          !this.landingPage.isVisible && (code === 'PageUp' || code === 'PageDown');
 
-      if (this.landingPage.isLeaderboardModalOpen()) {
-        if (code === 'Escape') {
+        if (!isScrollableModalOpen && (isNavOrActionKey || isInGameScrollKey)) {
           e.preventDefault();
-          this.landingPage.closeLeaderboardModal();
         }
-        return;
-      }
 
-      if (this.hud.isSummaryModalOpen()) {
-        if (code === 'Space' || code === 'Enter' || code === 'NumpadEnter') {
+        this.audio.initOnFirstGesture();
+
+        if (e.key === '?' || (e.shiftKey && code === 'Slash')) {
           e.preventDefault();
-          this.hud.closeSessionSummary();
-          window.setTimeout(() => this.resetSession(), 80);
+          const helpModal = document.getElementById('help-modal');
+          if (helpModal && !helpModal.classList.contains('hidden')) {
+            this.closeHelpModal();
+          } else {
+            this.openHelpModal();
+          }
           return;
         }
+
+        if (this.landingPage.isVisible) {
+          if (code === 'Escape') {
+            const helpModal = document.getElementById('help-modal');
+            if (helpModal && !helpModal.classList.contains('hidden')) {
+              e.preventDefault();
+              this.closeHelpModal();
+              return;
+            }
+            this.landingPage.handleKeyDown(code);
+            return;
+          }
+          if (isScrollableModalOpen || this.landingPage.isNamePromptModalOpen()) {
+            return;
+          }
+          if (code === 'Enter' || code === 'NumpadEnter') {
+            e.preventDefault();
+            this.landingPage.startGame();
+          } else if (
+            code === 'Space' ||
+            code === 'ArrowUp' ||
+            code === 'ArrowDown' ||
+            code === 'ArrowLeft' ||
+            code === 'ArrowRight' ||
+            code === 'KeyW' ||
+            code === 'KeyS' ||
+            code === 'KeyA' ||
+            code === 'KeyD'
+          ) {
+            e.preventDefault();
+            this.landingPage.handleKeyDown(code);
+          } else if (code === 'Tab') {
+            e.preventDefault();
+            this.toggleControlMode();
+          } else if (code === 'KeyF') {
+            this.toggleFullscreen();
+          } else if (code === 'KeyR') {
+            this.toggleAspectMode();
+          } else if (code === 'KeyM') {
+            this.toggleMusic();
+          } else if (code === 'KeyU' || code === 'KeyQ') {
+            this.cycleGraphicsQuality();
+          }
+          return;
+        }
+
+        if (this.landingPage.isLeaderboardModalOpen()) {
+          if (code === 'Escape') {
+            e.preventDefault();
+            this.landingPage.closeLeaderboardModal();
+          }
+          return;
+        }
+
+        if (this.hud.isSummaryModalOpen()) {
+          if (code === 'Space' || code === 'Enter' || code === 'NumpadEnter') {
+            e.preventDefault();
+            this.hud.closeSessionSummary();
+            window.setTimeout(() => this.resetSession(), 80);
+            return;
+          }
+          if (code === 'Escape') {
+            e.preventDefault();
+            this.hud.closeSessionSummary();
+            this.pauseGameAndOpenLanding();
+            return;
+          }
+          return;
+        }
+
         if (code === 'Escape') {
-          e.preventDefault();
-          this.hud.closeSessionSummary();
+          const helpModal = document.getElementById('help-modal');
+          if (helpModal && !helpModal.classList.contains('hidden')) {
+            this.closeHelpModal();
+            return;
+          }
+          if (this.flowLine.isExportModalOpen()) {
+            this.flowLine.closeExportModal();
+            return;
+          }
+          if (this.tutorial.isOpen() && this.tutorial.handleKeyDown(e)) {
+            e.preventDefault();
+            return;
+          }
           this.pauseGameAndOpenLanding();
           return;
         }
-        return;
-      }
 
-      if (code === 'Escape') {
-        const helpModal = document.getElementById('help-modal');
-        if (helpModal && !helpModal.classList.contains('hidden')) {
-          this.closeHelpModal();
-          return;
+        if (code === 'KeyL') {
+          const activeTag = document.activeElement?.tagName.toLowerCase();
+          if (activeTag !== 'input' && activeTag !== 'textarea') {
+            if (
+              this.controlMode === 'arrows' ||
+              e.shiftKey ||
+              this.flowLine.isRecording ||
+              this.controller.speed < 2.0
+            ) {
+              e.preventDefault();
+              this.toggleFlowLineRecording();
+              return;
+            }
+          }
         }
-        if (this.flowLine.isExportModalOpen()) {
-          this.flowLine.closeExportModal();
-          return;
+
+        this.keys.add(code);
+
+        if (['KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight', 'KeyW', 'ArrowUp'].includes(code)) {
+          if (this.autoFlowEnabled) {
+            this.autoFlowEnabled = false;
+            this.syncHUDButtons();
+          }
         }
-        if (this.tutorial.isOpen() && this.tutorial.handleKeyDown(e)) {
+
+        if (code === 'Tab') {
           e.preventDefault();
-          return;
-        }
-        this.pauseGameAndOpenLanding();
-        return;
-      }
-
-      if (code === 'KeyL') {
-        const activeTag = document.activeElement?.tagName.toLowerCase();
-        if (activeTag !== 'input' && activeTag !== 'textarea') {
-          if (
-            this.controlMode === 'arrows' ||
-            e.shiftKey ||
-            this.flowLine.isRecording ||
-            this.controller.speed < 2.0
-          ) {
-            e.preventDefault();
-            this.toggleFlowLineRecording();
-            return;
+          this.toggleControlMode();
+        } else if (code === 'Digit1' || code === 'Numpad1') {
+          this.setCameraStyle('follow');
+        } else if (code === 'Digit2' || code === 'Numpad2') {
+          this.setCameraStyle('filmer');
+        } else if (code === 'Digit3' || code === 'Numpad3') {
+          this.setCameraStyle('mural');
+        } else if (code === 'Digit4' || code === 'Numpad4' || code === 'KeyO') {
+          this.setCameraStyle(this.surfCamera.cameraStyle === 'orbit' ? 'follow' : 'orbit');
+        } else if (code === 'KeyC') {
+          this.cycleCameraStyle();
+        } else if (code === 'KeyR') {
+          this.toggleAspectMode();
+        } else if (code === 'KeyT') {
+          this.cycleTruckFeel();
+        } else if (code === 'KeyJ') {
+          this.toggleAutoFlow();
+        } else if (code === 'KeyM') {
+          this.toggleMusic();
+        } else if (code === 'KeyN') {
+          this.nextTrack();
+        } else if (code === 'KeyU') {
+          this.cycleGraphicsQuality();
+        } else if (code === 'KeyF' && this.controlMode === 'arrows') {
+          this.toggleFullscreen();
+        } else if (code === 'KeyE') {
+          const helpModal = document.getElementById('help-modal');
+          const helpOpen = Boolean(helpModal && !helpModal.classList.contains('hidden'));
+          if (!helpOpen && !this.flowLine.isExportModalOpen()) {
+            if (this.triggerCrewInteract()) {
+              e.preventDefault();
+            }
           }
+        } else if (code === 'Backspace' || code === 'KeyX') {
+          this.resetSession();
         }
-      }
+      },
+      { capture: true, passive: false }
+    );
 
-      this.keys.add(code);
-
-      if (['KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight', 'KeyW', 'ArrowUp'].includes(code)) {
-        if (this.autoFlowEnabled) {
-          this.autoFlowEnabled = false;
-          this.syncHUDButtons();
-        }
-      }
-
-      if (code === 'Tab') {
-        e.preventDefault();
-        this.toggleControlMode();
-      } else if (code === 'Digit1' || code === 'Numpad1') {
-        this.setCameraStyle('follow');
-      } else if (code === 'Digit2' || code === 'Numpad2') {
-        this.setCameraStyle('filmer');
-      } else if (code === 'Digit3' || code === 'Numpad3') {
-        this.setCameraStyle('mural');
-      } else if (code === 'Digit4' || code === 'Numpad4' || code === 'KeyO') {
-        this.setCameraStyle(this.surfCamera.cameraStyle === 'orbit' ? 'follow' : 'orbit');
-      } else if (code === 'KeyC') {
-        this.cycleCameraStyle();
-      } else if (code === 'KeyR') {
-        this.toggleAspectMode();
-      } else if (code === 'KeyT') {
-        this.cycleTruckFeel();
-      } else if (code === 'KeyJ') {
-        this.toggleAutoFlow();
-      } else if (code === 'KeyM') {
-        this.toggleMusic();
-      } else if (code === 'KeyN') {
-        this.nextTrack();
-      } else if (code === 'KeyU') {
-        this.cycleGraphicsQuality();
-      } else if (code === 'KeyF' && this.controlMode === 'arrows') {
-        this.toggleFullscreen();
-      } else if (code === 'KeyE') {
-        const helpModal = document.getElementById('help-modal');
-        const helpOpen = Boolean(helpModal && !helpModal.classList.contains('hidden'));
-        if (!helpOpen && !this.flowLine.isExportModalOpen()) {
-          if (this.triggerCrewInteract()) {
-            e.preventDefault();
-          }
-        }
-      } else if (code === 'Backspace' || code === 'KeyX') {
-        this.resetSession();
-      }
-    });
-
-    window.addEventListener('keyup', (e) => {
-      this.keys.delete(e.code);
-    });
+    window.addEventListener(
+      'keyup',
+      (e) => {
+        this.keys.delete(e.code);
+      },
+      { capture: true }
+    );
   }
 
   private userSelectedAspect = false;
@@ -689,20 +740,71 @@ class SurfskateMunichGame {
     this.syncHUDButtons();
   }
 
+  private isScrollableModalOpen(): boolean {
+    const isVisible = (id: string): boolean => {
+      const el = document.getElementById(id);
+      return Boolean(el && !el.classList.contains('hidden'));
+    };
+    return (
+      isVisible('leaderboard-modal') ||
+      isVisible('help-modal') ||
+      isVisible('terms-modal') ||
+      this.hud.isSummaryModalOpen()
+    );
+  }
+
+  private focusGameSurface(blurButtons = false): void {
+    const activeEl = document.activeElement as HTMLElement | null;
+    const tag = activeEl?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || activeEl?.isContentEditable) {
+      return;
+    }
+    if (blurButtons && activeEl instanceof HTMLButtonElement) {
+      activeEl.blur();
+    }
+    try {
+      window.focus();
+    } catch {}
+    if (!this.landingPage.isVisible && !this.isScrollableModalOpen()) {
+      try {
+        this.renderer.domElement.focus({ preventScroll: true });
+      } catch {}
+    }
+  }
+
+  private handleFullscreenChange(): void {
+    this.keys.clear();
+    this.syncFullscreenUI();
+    this.focusGameSurface(true);
+    window.setTimeout(() => this.focusGameSurface(true), 100);
+  }
+
   public toggleFullscreen(): void {
     const doc = document as any;
     const docEl = document.documentElement as any;
+    const refocus = () => {
+      this.focusGameSurface(true);
+      window.setTimeout(() => this.focusGameSurface(true), 100);
+    };
     if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
       if (docEl.requestFullscreen) {
-        docEl.requestFullscreen().catch(() => {});
+        docEl
+          .requestFullscreen()
+          .then(refocus)
+          .catch(() => {});
       } else if (docEl.webkitRequestFullscreen) {
         docEl.webkitRequestFullscreen();
+        refocus();
       }
     } else {
       if (doc.exitFullscreen) {
-        doc.exitFullscreen().catch(() => {});
+        doc
+          .exitFullscreen()
+          .then(refocus)
+          .catch(() => {});
       } else if (doc.webkitExitFullscreen) {
         doc.webkitExitFullscreen();
+        refocus();
       }
     }
   }

@@ -606,6 +606,7 @@ export class LandingPage {
       this.fullscreenBtnEl.addEventListener('click', (e) => {
         e.stopPropagation();
         this.onToggleFullscreen?.();
+        (this.fullscreenBtnEl as HTMLElement).blur();
       });
     }
 
