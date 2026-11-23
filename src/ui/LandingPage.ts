@@ -8,8 +8,11 @@ import {
   getPlayerName,
   LeaderboardEntry,
   LeaderboardPark,
+  sanitizePlayerName,
   setPlayerName,
 } from '../services/LeaderboardService';
+
+const NAME_PROMPT_SEEN_KEY = 'surfsk8.namePromptSeen.v1';
 import {
   applyDomTranslations,
   formatNum,
@@ -158,6 +161,13 @@ export class LandingPage {
   private lastLbEntries: LeaderboardEntry[] = [];
   private lastLbSource: 'global' | 'local' = 'global';
   private lbHasLoaded = false;
+  private rotateHintHandled = false;
+  private rotateHintEl: HTMLElement | null = null;
+  private rotateHintTimer: number | null = null;
+  private namePromptModalEl: HTMLElement | null = null;
+  private namePromptInputEl: HTMLInputElement | null = null;
+  private namePromptErrorEl: HTMLElement | null = null;
+  private namePromptAttempted = false;
 
   private getModeDesc(mode: GameModeId): string {
     switch (mode) {
@@ -266,6 +276,7 @@ export class LandingPage {
     this.bindUIEvents();
     this.updateLangToggleDisplay();
     applyDomTranslations(document);
+    this.initMobileRotateHint();
     this.updateFullscreenLabel(this.lastIsFs);
     this.updateSoundLabel(this.lastSoundActive);
     this.updateQualityLabel(this.lastQualityPreset, this.lastQualityEffective);
@@ -688,7 +699,163 @@ export class LandingPage {
       });
     }
 
+    // First-Launch Rider Name Prompt Modal (#name-prompt-modal — Issue #41)
+    this.namePromptModalEl = document.getElementById('name-prompt-modal');
+    this.namePromptInputEl = document.getElementById('name-prompt-input') as HTMLInputElement | null;
+    this.namePromptErrorEl = document.getElementById('name-prompt-error');
+    const namePromptBackdrop = document.getElementById('name-prompt-backdrop');
+    const namePromptSaveBtn = document.getElementById('name-prompt-save');
+    const namePromptSkipBtn = document.getElementById('name-prompt-skip');
+
+    namePromptSaveBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.handleNamePromptSave();
+    });
+    namePromptSkipBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.handleNamePromptSkip();
+    });
+    namePromptBackdrop?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.handleNamePromptSkip();
+    });
+
+    if (this.namePromptInputEl) {
+      this.namePromptInputEl.addEventListener('input', () => {
+        if (this.namePromptErrorEl && !this.namePromptErrorEl.classList.contains('hidden')) {
+          this.namePromptErrorEl.classList.add('hidden');
+          this.namePromptErrorEl.textContent = '';
+        }
+      });
+      this.namePromptInputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+          this.handleNamePromptSave();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          this.handleNamePromptSkip();
+        }
+      });
+    }
+
     this.updateActiveSectionVisuals();
+  }
+
+  private initMobileRotateHint(): void {
+    if (this.rotateHintHandled) return;
+    this.rotateHintHandled = true;
+
+    const isTouchDevice =
+      window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+    const isSmallViewport = Math.min(window.innerWidth, window.innerHeight) <= 900;
+    const isPortrait = window.innerHeight > window.innerWidth;
+
+    if (!isTouchDevice || !isSmallViewport || !isPortrait) return;
+
+    this.rotateHintEl = document.getElementById('mobile-rotate-hint');
+    if (!this.rotateHintEl) return;
+
+    const dismiss = () => {
+      if (this.rotateHintTimer !== null) {
+        window.clearTimeout(this.rotateHintTimer);
+        this.rotateHintTimer = null;
+      }
+      window.removeEventListener('resize', onOrientationCheck);
+      window.removeEventListener('orientationchange', onOrientationCheck);
+      this.rotateHintEl?.classList.add('hidden');
+    };
+
+    const onOrientationCheck = () => {
+      if (window.innerWidth > window.innerHeight) {
+        dismiss();
+      }
+    };
+
+    this.rotateHintEl.classList.remove('hidden');
+    this.rotateHintEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dismiss();
+    }, { once: true });
+    window.addEventListener('resize', onOrientationCheck);
+    window.addEventListener('orientationchange', onOrientationCheck);
+
+    this.rotateHintTimer = window.setTimeout(dismiss, 5000);
+  }
+
+  private markNamePromptSeen(): void {
+    try {
+      localStorage.setItem(NAME_PROMPT_SEEN_KEY, '1');
+    } catch {
+      // Ignore storage quota / privacy mode errors
+    }
+  }
+
+  private hasSeenNamePrompt(): boolean {
+    try {
+      return localStorage.getItem(NAME_PROMPT_SEEN_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  public isNamePromptModalOpen(): boolean {
+    return Boolean(this.namePromptModalEl && !this.namePromptModalEl.classList.contains('hidden'));
+  }
+
+  public closeNamePromptModal(): void {
+    this.namePromptModalEl?.classList.add('hidden');
+  }
+
+  public maybeShowFirstLaunchNamePrompt(): void {
+    if (this.namePromptAttempted || !this.isVisible || !this.namePromptModalEl) return;
+    this.namePromptAttempted = true;
+
+    if (getPlayerName().length >= 2 || this.hasSeenNamePrompt()) {
+      return;
+    }
+
+    if (this.namePromptInputEl) {
+      this.namePromptInputEl.value = '';
+    }
+    if (this.namePromptErrorEl) {
+      this.namePromptErrorEl.textContent = '';
+      this.namePromptErrorEl.classList.add('hidden');
+    }
+
+    this.namePromptModalEl.classList.remove('hidden');
+
+    if (!window.matchMedia('(pointer: coarse)').matches) {
+      window.requestAnimationFrame(() => {
+        this.namePromptInputEl?.focus();
+      });
+    }
+  }
+
+  private handleNamePromptSave(): void {
+    const raw = this.namePromptInputEl?.value || '';
+    const clean = sanitizePlayerName(raw);
+    if (clean.length < 2) {
+      if (this.namePromptErrorEl) {
+        this.namePromptErrorEl.textContent = t('namePrompt.errorMin');
+        this.namePromptErrorEl.classList.remove('hidden');
+      }
+      this.namePromptInputEl?.focus();
+      return;
+    }
+
+    const saved = setPlayerName(clean);
+    if (this.riderNameInputEl) {
+      this.riderNameInputEl.value = saved;
+    }
+    this.markNamePromptSeen();
+    this.closeNamePromptModal();
+  }
+
+  private handleNamePromptSkip(): void {
+    this.markNamePromptSeen();
+    this.closeNamePromptModal();
   }
 
   public syncRiderNameInput(): void {
@@ -809,6 +976,13 @@ export class LandingPage {
   }
 
   public handleKeyDown(code: string): void {
+    if (this.isNamePromptModalOpen()) {
+      if (code === 'Escape') {
+        this.handleNamePromptSkip();
+      }
+      return;
+    }
+
     const activeEl = document.activeElement as HTMLElement | null;
     const tag = activeEl?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || activeEl?.isContentEditable) {
@@ -1053,6 +1227,7 @@ export class LandingPage {
     }
     this.closeSettingsPopover();
     this.closeLeaderboardModal();
+    this.closeNamePromptModal();
     const termsModal = document.getElementById('terms-modal');
     termsModal?.classList.add('hidden');
     this.isVisible = false;

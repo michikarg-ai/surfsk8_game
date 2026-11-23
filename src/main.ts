@@ -328,6 +328,8 @@ class SurfskateMunichGame {
 
     if (new URLSearchParams(window.location.search).get('play') === '1') {
       this.landingPage.startGame();
+    } else {
+      this.landingPage.maybeShowFirstLaunchNamePrompt();
     }
   }
 
@@ -458,7 +460,10 @@ class SurfskateMunichGame {
           this.landingPage.handleKeyDown(code);
           return;
         }
-        if (this.landingPage.isLeaderboardModalOpen()) {
+        if (
+          this.landingPage.isLeaderboardModalOpen() ||
+          this.landingPage.isNamePromptModalOpen()
+        ) {
           return;
         }
         if (code === 'Enter' || code === 'NumpadEnter') {

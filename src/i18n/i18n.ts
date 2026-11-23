@@ -84,6 +84,20 @@ const EN_TRANSLATIONS = {
   'lb.youTag': 'YOU',
   'lb.footerHint': 'Each rider keeps their personal best score.',
 
+  // Mobile Portrait Rotate Hint (Issue #40)
+  'mobile.rotateHint': 'Rotate phone horizontally for the best game experience',
+
+  // First-Launch Rider Name Prompt Modal (Issue #41)
+  'namePrompt.badge': 'WELCOME TO SRFSK8',
+  'namePrompt.title': '🏆 CHOOSE YOUR RIDER NAME',
+  'namePrompt.desc':
+    'Your rider name is needed to save your scores on the global highscore leaderboard. You can also play without a name and add one later.',
+  'namePrompt.inputLabel': 'RIDER NICKNAME',
+  'namePrompt.placeholder': 'e.g. MunichSurfer (min. 2 chars)',
+  'namePrompt.errorMin': 'Please enter at least 2 characters (letters or numbers).',
+  'namePrompt.saveBtn': 'Save & Continue',
+  'namePrompt.skipBtn': 'Play without Name',
+
   // Help & Controls Modal
   'help.badge': 'HOW TO PLAY',
   'help.title': 'CONTROLS & BOWL GUIDE',
@@ -527,6 +541,20 @@ const DE_TRANSLATIONS: Record<TranslationKey, string> = {
   'lb.empty': '🏄 Noch keine Scores eingetragen — starte eine 2-Min Session und hol dir Platz #1!',
   'lb.youTag': 'DU',
   'lb.footerHint': 'Jeder Rider behält seinen persönlichen Best-Score.',
+
+  // Mobile Portrait Rotate Hint (Issue #40)
+  'mobile.rotateHint': 'Für die beste Game-Experience Handy horizontal halten',
+
+  // First-Launch Rider Name Prompt Modal (Issue #41)
+  'namePrompt.badge': 'WILLKOMMEN BEI SRFSK8',
+  'namePrompt.title': '🏆 WÄHLE DEINEN RIDER-NAMEN',
+  'namePrompt.desc':
+    'Dein Rider-Name wird für die globale Highscore-Rangliste benötigt. Du kannst auch ohne Namen spielen und ihn später jederzeit angeben.',
+  'namePrompt.inputLabel': 'RIDER-NICKNAME',
+  'namePrompt.placeholder': 'z. B. IsarSurfer (min. 2 Zeichen)',
+  'namePrompt.errorMin': 'Bitte mindestens 2 Zeichen eingeben (Buchstaben oder Zahlen).',
+  'namePrompt.saveBtn': 'Speichern & Los',
+  'namePrompt.skipBtn': 'Ohne Namen spielen',
 
   // Help & Controls Modal
   'help.badge': 'SPIELANLEITUNG',
