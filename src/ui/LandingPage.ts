@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SkaterVisuals } from '../entities/SkaterVisuals';
+import { resolveAssetUrl } from '../utils/assetUrl';
 import { ParkSurface } from '../physics/ParkSurface';
 import { SkaterStats, SurfskateController } from '../physics/SurfskateController';
 import { GameModeId, SkaterRankInfo, SurfMission } from '../progression/SurfProgression';
@@ -349,7 +350,7 @@ export class LandingPage {
       this.parkSubtitleEl.textContent = park.subtitle;
     }
     if (this.parkThumbImgEl) {
-      this.parkThumbImgEl.src = park.thumbUrl;
+      this.parkThumbImgEl.src = resolveAssetUrl(park.thumbUrl);
       this.parkThumbImgEl.alt = park.name;
     }
   }
@@ -525,7 +526,7 @@ export class LandingPage {
         if (this.onInspectPark) {
           this.onInspectPark(park);
         } else {
-          window.open(park.viewerUrl || 'viewer.html', '_blank');
+          window.open(resolveAssetUrl(park.viewerUrl || 'viewer.html'), '_blank');
         }
       });
     }
