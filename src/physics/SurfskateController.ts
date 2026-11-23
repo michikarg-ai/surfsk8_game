@@ -172,8 +172,12 @@ export class SurfskateController {
   public isBailing = false;
   public bailTimer = 0;
   public readonly bailDuration = 1.35;
+  public bailGraceTimer = 0;
+  private readonly bailGraceDuration = 1.15;
   public bailImpactPos = new THREE.Vector3();
   public bailImpactHeading = 0;
+  private bailRecoveryPos = new THREE.Vector3();
+  private bailRecoveryHeading = 0;
   public bailReason = '';
   public onBail?: (reason: string) => void;
 
@@ -316,41 +320,15 @@ export class SurfskateController {
     this.currentSurface = this.park.sample(this.position.x, this.position.z);
     this.position.y = this.currentSurface.height;
     this.heading = this.spawnHeading;
-    this.speed = 0; // start standing still: one push-off, then pump!
-    this.velocity.set(0, 0, 0);
-    this.leanAngle = 0;
-    this.leanRate = 0;
-    this.steerHoldTime = 0;
-    this.smoothedYawRate = 0;
-    this.frontTruckYaw = 0;
-    this.rearTruckYaw = 0;
-    this.isGrounded = true;
-    this.isGrinding = false;
-    this.snapActive = false;
-    this.snapTimer = 0;
-    this.snapWindow = 'NONE';
-    this.laybackActive = false;
-    this.laybackAmount = 0;
-    this.laybackHold = 0;
-    this.laybackScored = false;
-    this.laybackAccumulatedYaw = 0;
-    this.laybackKeyReleased = true;
-    this.bertSlideActive = false;
-    this.bertSlideAmount = 0;
-    this.bertHold = 0;
-    this.bertScored = false;
-    this.bertSlideAccumulatedYaw = 0;
-    this.bertKeyReleased = true;
-    this.reverseActive = false;
-    this.boardYawOffset = 0;
-    this.indyGrabActive = false;
-    this.indyGrabAmount = 0;
-    this.indyGrabReady = false;
-    this.indyGrabHold = 0;
-    this.indyGrabScored = false;
-    this.airLaunchedFromWall = false;
+    this.resetMotionAndTrickState();
+    this.compression = 0.15;
     this.isBailing = false;
     this.bailTimer = 0;
+    this.bailGraceTimer = 0;
+    this.bailImpactPos.copy(this.position);
+    this.bailImpactHeading = this.heading;
+    this.bailRecoveryPos.copy(this.position);
+    this.bailRecoveryHeading = this.heading;
     this.lastPumpDir = 0;
     this.timeSincePumpSwitch = 99;
     this.pumpCount = 0;
@@ -371,42 +349,60 @@ export class SurfskateController {
     this.prevSinT = 0;
     this.slideTrickCooldown = 0;
     this.ollieCooldown = 0;
-    this.postJumpFlatTimer = 0;
   }
 
   public update(dt: number, input: InputState, onManeuver: (ev: ManeuverEvent) => void): void {
-    const clampedDt = Math.min(dt, 0.033);
+    const clampedDt = Number.isFinite(dt) ? Math.max(0, Math.min(dt, 0.033)) : 0;
     // Translational simulation step (gameplay runs at TIME_SCALE of real time)
     const simDt = clampedDt * TIME_SCALE;
 
-    // While bailing: skater is sliding/falling on the ground, then respawns right at impact point
+    // While bailing: skater slides smoothly onto a safe flat concrete recovery spot
     if (this.isBailing) {
       this.bailTimer -= clampedDt;
       this.speed = 0;
       this.velocity.set(0, 0, 0);
-      this.position.copy(this.bailImpactPos);
-      this.currentSurface = this.park.sample(this.position.x, this.position.z);
-      this.position.y = this.currentSurface.height;
+      this.isGrounded = true;
       this.leanAngle = 0;
+      this.leanRate = 0;
       this.frontTruckYaw = 0;
       this.rearTruckYaw = 0;
+      this.boardYawOffset = 0;
+      this.indyGrabActive = false;
+      this.indyGrabAmount = 0;
       this.sprayIntensity = Math.max(0, this.sprayIntensity - clampedDt * 2.5);
 
+      const p = 1.0 - Math.max(0, this.bailTimer / Math.max(0.01, this.bailDuration));
+      const slideT = Math.min(1, p / 0.80);
+      const slideEase = slideT * slideT * (3 - 2 * slideT);
+      this.position.x = THREE.MathUtils.lerp(this.bailImpactPos.x, this.bailRecoveryPos.x, slideEase);
+      this.position.z = THREE.MathUtils.lerp(this.bailImpactPos.z, this.bailRecoveryPos.z, slideEase);
+      this.currentSurface = this.park.sample(this.position.x, this.position.z);
+      this.position.y = this.currentSurface.height;
+
+      const headingDiff = this.normalizeAngleDiff(this.bailRecoveryHeading - this.bailImpactHeading);
+      this.heading = this.bailImpactHeading + headingDiff * slideEase;
+
       if (this.bailTimer <= 0) {
-        // Respawn exactly where the player landed!
+        // Re-evaluate safe flat ground & clear rollout heading at recovery completion
+        const safe = this.computeSafeBailRecovery(this.bailRecoveryPos, this.bailRecoveryHeading);
         this.isBailing = false;
-        this.position.copy(this.bailImpactPos);
-        this.currentSurface = this.park.sample(this.position.x, this.position.z);
-        this.position.y = this.currentSurface.height;
-        this.heading = this.bailImpactHeading;
-        this.boardYawOffset = 0;
-        this.speed = 0;
-        this.velocity.set(0, 0, 0);
+        this.bailTimer = 0;
+        this.bailGraceTimer = this.bailGraceDuration;
+        this.position.set(safe.pos.x, safe.surface.height, safe.pos.z);
+        this.currentSurface = safe.surface;
+        this.heading = safe.heading;
+        this.resetMotionAndTrickState(input);
+        this.pitchAngle = Math.atan(this.computeGradeAlongHeading()) * 0.72;
         this.compression = 0.15;
+        this.ollieCooldown = 0.35;
         this.coachHint = t('ctrl.coachAligned');
         this.coachHintTimer = 2.5;
       }
       return;
+    }
+
+    if (this.bailGraceTimer > 0) {
+      this.bailGraceTimer = Math.max(0, this.bailGraceTimer - clampedDt);
     }
 
     // -------------------------------------------------------------------------
@@ -703,7 +699,9 @@ export class SurfskateController {
       if (this.reverseActive) aExtra -= 2.0;
 
       // ---- Push-off: snappy surfskate kick-start up to cruising speed, then pump! ----
-      const canPush = Math.abs(grade) < 0.12 && h0 < 0.35;
+      // Gate pushing by local slope/grade (not absolute elevation h0) so elevated flat
+      // decks, street boxes, and bowl plateaus remain pushable while steep walls still require pumping.
+      const canPush = slopeMag < 0.28 && grade < 0.18;
       const pushPressed = input.forwardPush && !this.prevPushInput;
       this.prevPushInput = input.forwardPush;
       if (input.forwardPush) {
@@ -828,7 +826,7 @@ export class SurfskateController {
         const horiz = pathDist * cosT;
         this.position.x += -Math.sin(this.heading) * horiz;
         this.position.z += -Math.cos(this.heading) * horiz;
-        this.constrainToParkBounds(clampedDt);
+        const hitBounds = this.constrainToParkBounds(clampedDt);
 
         const h1 = this.park.evaluateHeight(this.position.x, this.position.z);
         const dh = h1 - h0;
@@ -847,6 +845,7 @@ export class SurfskateController {
 
         // Stall on a wall: at very low speed gravity pulls the nose down the fall line
         if (
+          !hitBounds &&
           slopeMag > 0.12 &&
           this.speed < 0.9 &&
           !this.snapActive &&
@@ -973,14 +972,16 @@ export class SurfskateController {
           }
         }
 
-        if (shouldBail) {
+        if (shouldBail && this.bailGraceTimer <= 0) {
           const travelHeading =
-            horizSpeed >= 0.5 ? Math.atan2(-tangentVel.x, -tangentVel.z) : this.heading;
+            horizSpeed >= 0.5 && Number.isFinite(tangentVel.x) && Number.isFinite(tangentVel.z)
+              ? Math.atan2(-tangentVel.x, -tangentVel.z)
+              : this.heading;
           this.triggerBail(bailReason, travelHeading, onManeuver);
           return;
         }
 
-        if (this.indyGrabActive && !this.indyGrabScored) {
+        if (this.bailGraceTimer <= 0 && this.indyGrabActive && !this.indyGrabScored) {
           this.trickFail('INDY GRAB: Let go before landing or get more air!');
         } else if (this.indyGrabScored) {
           this.flowMeter = Math.min(100, this.flowMeter + 15);
@@ -988,6 +989,12 @@ export class SurfskateController {
         this.indyGrabActive = false;
         this.indyGrabAmount = 0;
         this.indyGrabReady = false;
+        this.indyGrabHold = 0;
+        this.indyGrabScored = false;
+        this.airTime = 0;
+        this.airRotation = 0;
+        this.maxAirHeight = 0;
+        this.airLaunchedFromWall = false;
 
         // Land flat on the concrete with zero lingering surfboard tilt/roll
         this.leanAngle = 0;
@@ -1232,26 +1239,380 @@ export class SurfskateController {
     this.boardYawOffset = 0;
   }
 
+  /** Wrap an angle difference into [-PI, PI]. */
+  private normalizeAngleDiff(diff: number): number {
+    let wrapped = diff;
+    while (wrapped > Math.PI) wrapped -= Math.PI * 2;
+    while (wrapped < -Math.PI) wrapped += Math.PI * 2;
+    return wrapped;
+  }
+
+  /**
+   * Reset all air, ollie, grab, slide, trick, lean, steering, and velocity state
+   * so recovery / spawn starts cleanly on the concrete.
+   */
+  private resetMotionAndTrickState(input?: InputState): void {
+    this.speed = 0;
+    this.velocity.set(0, 0, 0);
+    this.isGrounded = true;
+    this.isGrinding = false;
+    this.activeCopingName = '';
+
+    this.airTime = 0;
+    this.airRotation = 0;
+    this.maxAirHeight = 0;
+    this.airLaunchedFromWall = false;
+    this.airLaunchHeight = 0;
+    this.airLaunchSpeed = 0;
+    this.postJumpFlatTimer = 0;
+
+    this.leanAngle = 0;
+    this.leanRate = 0;
+    this.frontTruckYaw = 0;
+    this.rearTruckYaw = 0;
+    this.pitchAngle = 0;
+    this.steerHoldTime = 0;
+    this.lastSteerDir = 0;
+    this.smoothedYawRate = 0;
+    this.upperBodyLeadYaw = 0;
+    this.compressionVel = 0;
+
+    this.snapActive = false;
+    this.snapTimer = 0;
+    this.snapTurnRate = 0;
+    this.snapWindow = 'NONE';
+
+    this.laybackActive = false;
+    this.laybackAmount = 0;
+    this.laybackHold = 0;
+    this.laybackScored = false;
+    this.laybackAccumulatedYaw = 0;
+    this.laybackKeyReleased = true;
+
+    this.bertSlideActive = false;
+    this.bertSlideAmount = 0;
+    this.bertHold = 0;
+    this.bertScored = false;
+    this.bertSlideAccumulatedYaw = 0;
+    this.bertKeyReleased = true;
+
+    this.reverseActive = false;
+    this.reverseTimer = 0;
+    this.boardYawOffset = 0;
+
+    this.indyGrabActive = false;
+    this.indyGrabAmount = 0;
+    this.indyGrabReady = false;
+    this.indyGrabHold = 0;
+    this.indyGrabScored = false;
+
+    this.prevPushInput = false;
+    this.prevIndyInput = input ? input.indyGrabTrick : false;
+    this.prevSnapInput = input ? input.snapTrick : false;
+    this.prevLaybackInput = input ? input.laybackTrick : false;
+    this.prevBertInput = input ? input.snapSlide : false;
+    this.prevReverseInput = input ? input.reverseTrick : false;
+  }
+
+  /** Return true if (x, z) lies comfortably inside the active park's recovery bounds. */
+  private isInsideRecoveryBounds(x: number, z: number, margin: number): boolean {
+    const bounds = this.park.getBounds();
+    if (this.park.getParkId() === 'im_gefilde') {
+      const ang = 0.488;
+      const ca = Math.cos(ang);
+      const sa = Math.sin(ang);
+      const dx = x - 2.5;
+      const dz = z - 1.0;
+      const lx = dx * ca + dz * sa;
+      const lz = -dx * sa + dz * ca;
+      const rx = Math.max(5, 33.5 - margin);
+      const rz = Math.max(5, 24.5 - margin);
+      if (Math.hypot(lx / rx, lz / rz) > 1.0) return false;
+      if (bounds) {
+        return (
+          x >= bounds.xMin + margin &&
+          x <= bounds.xMax - margin &&
+          z >= bounds.zMin + margin &&
+          z <= bounds.zMax - margin
+        );
+      }
+      return true;
+    }
+    if (!bounds) return true;
+    return (
+      x >= bounds.xMin + margin &&
+      x <= bounds.xMax - margin &&
+      z >= bounds.zMin + margin &&
+      z <= bounds.zMax - margin
+    );
+  }
+
+  /**
+   * Ensure Im Gefilde recovery candidates stay inside the skateable concrete bowl
+   * rather than on outside grass/berms or behind-wall trenches.
+   */
+  private isInsideParkBasin(x: number, z: number): boolean {
+    if (this.park.getParkId() !== 'im_gefilde') return true;
+    const ang = 0.488;
+    const ca = Math.cos(ang);
+    const sa = Math.sin(ang);
+    const dx = x - 3.0;
+    const dz = z - 1.5;
+    const lx = dx * ca + dz * sa;
+    const lz = -dx * sa + dz * ca;
+    if (Math.hypot(lx / 23.5, lz / 15.8) > 1.0) return false;
+    for (let i = 1; i <= 6; i++) {
+      const t = i / 6;
+      if (this.park.evaluateHeight(x + (3.0 - x) * t, z + (1.5 - z) * t) > 1.35) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** Score a candidate rollout heading: penalize uphill grades, walls, coping, and bounds. */
+  private scoreForwardRolloutHeading(
+    x: number,
+    z: number,
+    h0: number,
+    heading: number
+  ): number {
+    const fx = -Math.sin(heading);
+    const fz = -Math.cos(heading);
+    const e = 0.3;
+    const hAhead = this.park.evaluateHeight(x + fx * e, z + fz * e);
+    const hBehind = this.park.evaluateHeight(x - fx * e, z - fz * e);
+    const grade = Math.max(-4, Math.min(4, (hAhead - hBehind) / (2 * e)));
+    if (grade > 0.16) return -1e6;
+
+    let penalty = Math.max(0, grade) * 20;
+    for (const dist of [0.8, 1.6, 2.5, 3.5]) {
+      const px = x + fx * dist;
+      const pz = z + fz * dist;
+      if (!this.isInsideRecoveryBounds(px, pz, 1.4)) return -1e5 + dist;
+      const ps = this.park.sample(px, pz);
+      const slopeMag = Math.hypot(ps.slopeX, ps.slopeZ);
+      if (ps.height - h0 > 0.40 || slopeMag > 0.55 || ps.isNearCoping) {
+        penalty += (4.0 - dist) * 50 + Math.max(0, ps.height - h0) * 30;
+      }
+      if (!this.isInsideParkBasin(px, pz)) {
+        penalty += 100;
+      }
+    }
+    return -penalty - Math.abs(grade) * 2;
+  }
+
+  /** Choose a clear rollout heading away from walls/bounds, keeping flow direction when safe. */
+  private pickSafeRolloutHeading(
+    x: number,
+    z: number,
+    surface: SurfaceSample,
+    preferredHeading: number
+  ): { heading: number; score: number } {
+    const baseScore = this.scoreForwardRolloutHeading(x, z, surface.height, preferredHeading);
+    if (baseScore > -15) {
+      return { heading: preferredHeading, score: baseScore };
+    }
+
+    const isImGefilde = this.park.getParkId() === 'im_gefilde';
+    const centerX = isImGefilde ? 3.0 : 0.0;
+    const centerZ = isImGefilde ? 1.5 : 0.0;
+    const inwardHeading = Math.atan2(-(centerX - x), -(centerZ - z));
+
+    const candidates: number[] = [preferredHeading, inwardHeading];
+    if (Math.hypot(surface.slopeX, surface.slopeZ) > 0.05) {
+      candidates.push(Math.atan2(surface.slopeX, surface.slopeZ));
+    }
+    for (let i = 0; i < 16; i++) {
+      candidates.push((i / 16) * Math.PI * 2 - Math.PI);
+    }
+
+    let bestHeading = inwardHeading;
+    let bestScore = -Infinity;
+    for (const cand of candidates) {
+      const diff = Math.abs(this.normalizeAngleDiff(cand - preferredHeading));
+      const sc = this.scoreForwardRolloutHeading(x, z, surface.height, cand) - diff * 0.5;
+      if (sc > bestScore) {
+        bestScore = sc;
+        bestHeading = cand;
+      }
+    }
+    return { heading: bestHeading, score: bestScore };
+  }
+
+  /** Return true if (x, z) is a safe, flat, unobstructed concrete recovery spot. */
+  private isSafeRecoverySpot(
+    x: number,
+    z: number,
+    maxSlope: number,
+    requireClearRollout: boolean
+  ): SurfaceSample | null {
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return null;
+    if (!this.isInsideRecoveryBounds(x, z, 2.0)) return null;
+
+    const s = this.park.sample(x, z);
+    if (!Number.isFinite(s.height)) return null;
+
+    const slopeMag = Math.hypot(s.slopeX, s.slopeZ);
+    if (slopeMag > maxSlope || s.isNearCoping) return null;
+
+    const maxH = this.park.getParkId() === 'im_gefilde' ? 1.35 : 1.1;
+    if (s.height > maxH || !this.isInsideParkBasin(x, z)) return null;
+
+    // Reject narrow knife-edge ridges or steep drops right next to the landing spot
+    for (const [ox, oz] of [
+      [0.7, 0],
+      [-0.7, 0],
+      [0, 0.7],
+      [0, -0.7],
+    ]) {
+      if (Math.abs(this.park.evaluateHeight(x + ox, z + oz) - s.height) > 0.42) {
+        return null;
+      }
+    }
+
+    if (requireClearRollout) {
+      const { score } = this.pickSafeRolloutHeading(x, z, s, 0);
+      if (score <= -20) return null;
+    }
+
+    return s;
+  }
+
+  /**
+   * Evaluate the recovery point and, if on a steep slope (> 0.25), coping/wall, or
+   * near/outside park bounds, find the nearest safe flat concrete spot and align
+   * heading toward an unobstructed rollout direction.
+   */
+  private computeSafeBailRecovery(
+    impactPos: THREE.Vector3,
+    impactHeading: number
+  ): { pos: THREE.Vector3; surface: SurfaceSample; heading: number } {
+    const rawX = Number.isFinite(impactPos.x) ? impactPos.x : this.spawnX;
+    const rawZ = Number.isFinite(impactPos.z) ? impactPos.z : this.spawnZ;
+    const rawHeading = Number.isFinite(impactHeading)
+      ? impactHeading
+      : Number.isFinite(this.heading)
+      ? this.heading
+      : this.spawnHeading;
+
+    const directSurface = this.isSafeRecoverySpot(rawX, rawZ, 0.25, true);
+    if (directSurface) {
+      const { heading } = this.pickSafeRolloutHeading(rawX, rawZ, directSurface, rawHeading);
+      return {
+        pos: new THREE.Vector3(rawX, directSurface.height, rawZ),
+        surface: directSurface,
+        heading,
+      };
+    }
+
+    // If impact was outside/far past perimeter, start search from nearest in-bounds anchor
+    let anchorX = rawX;
+    let anchorZ = rawZ;
+    if (!this.isInsideRecoveryBounds(anchorX, anchorZ, 1.5)) {
+      const centerX = this.park.getParkId() === 'im_gefilde' ? 3.0 : 0.0;
+      const centerZ = this.park.getParkId() === 'im_gefilde' ? 1.5 : 0.0;
+      for (let i = 1; i <= 10; i++) {
+        const t = i / 10;
+        const tx = THREE.MathUtils.lerp(rawX, centerX, t);
+        const tz = THREE.MathUtils.lerp(rawZ, centerZ, t);
+        if (this.isInsideRecoveryBounds(tx, tz, 2.0)) {
+          anchorX = tx;
+          anchorZ = tz;
+          break;
+        }
+      }
+    }
+
+    const impactSample = this.park.sample(anchorX, anchorZ);
+    const downhillX = -impactSample.slopeX;
+    const downhillZ = -impactSample.slopeZ;
+    const downhillLen = Math.hypot(downhillX, downhillZ);
+
+    let bestPos: THREE.Vector3 | null = null;
+    let bestSurface: SurfaceSample | null = null;
+    let bestCost = Infinity;
+
+    for (const r of [0.8, 1.6, 2.5, 3.6, 5.0, 6.8, 9.0, 12.0, 16.0, 21.0, 26.0]) {
+      const steps = r <= 3 ? 12 : 20;
+      for (let i = 0; i < steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        const dirX = Math.cos(a);
+        const dirZ = Math.sin(a);
+        const cx = anchorX + dirX * r;
+        const cz = anchorZ + dirZ * r;
+        const cs = this.isSafeRecoverySpot(cx, cz, 0.22, true);
+        if (!cs) continue;
+
+        const slopeMag = Math.hypot(cs.slopeX, cs.slopeZ);
+        const downBias =
+          downhillLen > 0.05 ? -0.35 * ((dirX * downhillX + dirZ * downhillZ) / downhillLen) : 0;
+        const cost = r + slopeMag * 4.0 + Math.max(0, cs.height) * 0.5 + downBias;
+        if (cost < bestCost) {
+          bestCost = cost;
+          bestPos = new THREE.Vector3(cx, cs.height, cz);
+          bestSurface = cs;
+        }
+      }
+      if (bestPos) break;
+    }
+
+    if (!bestPos || !bestSurface) {
+      for (const r of [2.0, 5.0, 9.0, 14.0, 20.0, 26.0]) {
+        for (let i = 0; i < 20; i++) {
+          const a = (i / 20) * Math.PI * 2;
+          const cx = anchorX + Math.cos(a) * r;
+          const cz = anchorZ + Math.sin(a) * r;
+          const cs = this.isSafeRecoverySpot(cx, cz, 0.25, false);
+          if (cs) {
+            bestPos = new THREE.Vector3(cx, cs.height, cz);
+            bestSurface = cs;
+            break;
+          }
+        }
+        if (bestPos) break;
+      }
+    }
+
+    if (!bestPos || !bestSurface) {
+      const spawnSurf = this.park.sample(this.spawnX, this.spawnZ);
+      bestPos = new THREE.Vector3(this.spawnX, spawnSurf.height, this.spawnZ);
+      bestSurface = spawnSurf;
+    }
+
+    const { heading } = this.pickSafeRolloutHeading(bestPos.x, bestPos.z, bestSurface, rawHeading);
+    return { pos: bestPos, surface: bestSurface, heading };
+  }
+
   public triggerBail(
     reason: string,
     travelHeading: number,
     onManeuver?: (ev: ManeuverEvent) => void
   ): void {
+    const safeImpactX = Number.isFinite(this.position.x) ? this.position.x : this.spawnX;
+    const safeImpactZ = Number.isFinite(this.position.z) ? this.position.z : this.spawnZ;
+    this.position.x = safeImpactX;
+    this.position.z = safeImpactZ;
+    this.currentSurface = this.park.sample(safeImpactX, safeImpactZ);
+    this.position.y = this.currentSurface.height;
+
+    const safeTravelHeading = Number.isFinite(travelHeading)
+      ? travelHeading
+      : Number.isFinite(this.heading)
+      ? this.heading
+      : this.spawnHeading;
+
+    const recovery = this.computeSafeBailRecovery(this.position, safeTravelHeading);
+
     this.isBailing = true;
     this.bailTimer = this.bailDuration;
     this.bailReason = reason;
     this.bailImpactPos.copy(this.position);
-    this.bailImpactHeading = travelHeading;
-    this.speed = 0;
-    this.velocity.set(0, 0, 0);
-    this.isGrounded = true;
-    this.airTime = 0;
-    this.maxAirHeight = 0;
-    this.airLaunchedFromWall = false;
-    this.postJumpFlatTimer = 0;
-    this.indyGrabActive = false;
-    this.indyGrabReady = false;
-    this.indyGrabAmount = 0;
+    this.bailImpactHeading = safeTravelHeading;
+    this.bailRecoveryPos.copy(recovery.pos);
+    this.bailRecoveryHeading = recovery.heading;
+
+    this.resetMotionAndTrickState();
     this.flowMeter = 0;
     this.sprayIntensity = 0.95;
 
@@ -1576,7 +1937,7 @@ export class SurfskateController {
     this.flowMeter = Math.min(100, this.flowMeter + 15 * dt);
   }
 
-  private constrainToParkBounds(dt = 0.016): void {
+  private constrainToParkBounds(dt = 0.016): boolean {
     if (this.park.getParkId() !== 'im_gefilde') {
       const bounds = this.park.getBounds();
       if (bounds) {
@@ -1586,19 +1947,33 @@ export class SurfskateController {
         const minZ = bounds.zMin + margin;
         const maxZ = bounds.zMax - margin;
         let hit = false;
-        if (this.position.x < minX) { this.position.x = minX; hit = true; }
-        if (this.position.x > maxX) { this.position.x = maxX; hit = true; }
-        if (this.position.z < minZ) { this.position.z = minZ; hit = true; }
-        if (this.position.z > maxZ) { this.position.z = maxZ; hit = true; }
+        if (this.position.x < minX) {
+          this.position.x = minX;
+          if (!this.isGrounded && this.velocity.x < 0) this.velocity.x = 0;
+          hit = true;
+        }
+        if (this.position.x > maxX) {
+          this.position.x = maxX;
+          if (!this.isGrounded && this.velocity.x > 0) this.velocity.x = 0;
+          hit = true;
+        }
+        if (this.position.z < minZ) {
+          this.position.z = minZ;
+          if (!this.isGrounded && this.velocity.z < 0) this.velocity.z = 0;
+          hit = true;
+        }
+        if (this.position.z > maxZ) {
+          this.position.z = maxZ;
+          if (!this.isGrounded && this.velocity.z > 0) this.velocity.z = 0;
+          hit = true;
+        }
         if (hit) {
           const inwardAngle = Math.atan2(this.position.x, this.position.z);
-          let diff = inwardAngle - this.heading;
-          while (diff > Math.PI) diff -= Math.PI * 2;
-          while (diff < -Math.PI) diff += Math.PI * 2;
+          const diff = this.normalizeAngleDiff(inwardAngle - this.heading);
           this.heading += (Math.sign(diff) || 1) * Math.min(Math.abs(diff), 4.5 * dt);
           this.sprayIntensity = 1.0;
         }
-        return;
+        return hit;
       }
     }
 
@@ -1624,15 +1999,30 @@ export class SurfskateController {
       this.position.x = 2.5 + newLx * ca - newLz * sa;
       this.position.z = 1.0 + newLx * sa + newLz * ca;
 
+      if (!this.isGrounded) {
+        const outX = this.position.x - 2.5;
+        const outZ = this.position.z - 1.0;
+        const outLen = Math.hypot(outX, outZ);
+        if (outLen > 0.001) {
+          const nx = outX / outLen;
+          const nz = outZ / outLen;
+          const vOut = this.velocity.x * nx + this.velocity.z * nz;
+          if (vOut > 0) {
+            this.velocity.x -= vOut * nx;
+            this.velocity.z -= vOut * nz;
+          }
+        }
+      }
+
       const inwardAngle = Math.atan2(this.position.x - 2.5, this.position.z - 1.0);
-      let diff = inwardAngle - this.heading;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
+      const diff = this.normalizeAngleDiff(inwardAngle - this.heading);
 
       const turnSign = Math.sign(diff) || 1;
       this.heading += turnSign * Math.min(Math.abs(diff), 4.5 * dt);
       this.sprayIntensity = 1.0;
+      return true;
     }
+    return false;
   }
 
   private canTrigger(id: string): boolean {
