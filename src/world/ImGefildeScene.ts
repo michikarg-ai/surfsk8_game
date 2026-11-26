@@ -1,10 +1,17 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { ParkSurface } from '../physics/ParkSurface';
 import { resolveAssetUrl } from '../utils/assetUrl';
+import { SunLensFlare } from './SunLensFlare';
 
 export type AtmosphereMode = 'night' | 'golden_hour';
 
 export class ImGefildeScene {
+  // Exact world direction of the visible sunset sun in `textures/airport_golden_hour_bg.jpg`
+  // (inverse-mapped from skyDome shader: az ≈ 0.8074, elev ≈ 5.9° above horizon)
+  private static readonly GOLDEN_SKY_SUN_DIR = new THREE.Vector3(-0.35069, 0.10367, 0.93065).normalize();
+  private static readonly SKY_DOME_SUN_DIST = 148;
+
   public mode: AtmosphereMode = 'night';
   public parkRoot = new THREE.Group();
 
@@ -14,6 +21,7 @@ export class ImGefildeScene {
   private floodLights: THREE.SpotLight[] = [];
   private skyDome: THREE.Mesh;
   private nightCityBackdrop: THREE.Mesh;
+  private sunLensFlare: SunLensFlare;
   private skyUniforms: {
     uMode: { value: number };
     uSunDir: { value: THREE.Vector3 };
@@ -164,6 +172,12 @@ export class ImGefildeScene {
 
     this.nightEnvMap = this.buildNightIBL();
     this.goldenEnvMap = this.buildGoldenIBL();
+
+    this.sunLensFlare = new SunLensFlare(this.scene);
+    this.sunLensFlare.setSunWorldPosition(
+      ImGefildeScene.GOLDEN_SKY_SUN_DIR.clone().multiplyScalar(ImGefildeScene.SKY_DOME_SUN_DIST)
+    );
+
     this.setAtmosphereMode('night');
   }
 
@@ -332,6 +346,15 @@ export class ImGefildeScene {
     this.skyUniforms.uTime.value = timeSec;
   }
 
+  public updateLensFlare(
+    camera: THREE.Camera,
+    dt: number,
+    timeSec: number,
+    parkSurface?: ParkSurface
+  ): void {
+    this.sunLensFlare.update(camera, dt, timeSec, parkSurface);
+  }
+
   public toggleAtmosphere(): AtmosphereMode {
     this.setAtmosphereMode(this.mode === 'night' ? 'golden_hour' : 'night');
     return this.mode;
@@ -354,6 +377,7 @@ export class ImGefildeScene {
       this.fillLight.color.setHex(0x7aa4d6);
       this.fillLight.intensity = 0.45;
       this.nightCityBackdrop.visible = false;
+      this.sunLensFlare.setEnabled(true);
 
       this.floodLights.forEach((spot) => {
         spot.intensity = 0.0;
@@ -376,11 +400,16 @@ export class ImGefildeScene {
     this.fillLight.color.setHex(0x5278b8);
     this.fillLight.intensity = 0.38;
     this.nightCityBackdrop.visible = false;
+    this.sunLensFlare.setEnabled(false);
 
     this.floodLights.forEach((spot) => {
       spot.intensity = 15.0;
       spot.visible = true;
     });
+  }
+
+  public dispose(): void {
+    this.sunLensFlare.dispose();
   }
 
   public setQuality(quality: 'high' | 'medium' | 'low'): void {

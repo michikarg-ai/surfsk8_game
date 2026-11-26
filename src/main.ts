@@ -1468,6 +1468,7 @@ class SurfskateMunichGame {
     this.scooterRider.update(dt, timeSec, activeParkId);
 
     this.surfCamera.update(realDt, this.controller);
+    this.worldScene.updateLensFlare(this.surfCamera.camera, realDt, timeSec, this.parkSurface);
     this.hud.update(dt, this.controller);
     this.progression.update(
       dt,
