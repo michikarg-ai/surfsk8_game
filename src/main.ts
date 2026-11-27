@@ -17,6 +17,7 @@ import { HotSpotZone } from './world/HotSpotZone';
 import { CrewParkId, ParkCrewEncounters } from './world/ParkCrewEncounters';
 import { AfterHoursWanted, WantedParkId } from './world/AfterHoursWanted';
 import { GameModeId, SurfProgression } from './progression/SurfProgression';
+import { getBoardById } from './config/SurfBoards';
 import { inject, track } from '@vercel/analytics';
 import { applyDomTranslations, formatNum, onLangChange, t, TranslationKey } from './i18n/i18n';
 
@@ -52,6 +53,7 @@ class SurfskateMunichGame {
   public progression: SurfProgression;
   public gameMode: GameModeId = 'jam';
   private summaryShownForSession = false;
+  private pendingLockedBoardToast: string | null = null;
 
   public controlMode: DriveControlMode =
     (localStorage.getItem('surfsk8.controlMode') as DriveControlMode) || 'arrows';
@@ -73,6 +75,14 @@ class SurfskateMunichGame {
   private slowMoTimer = 0;
   private readonly slowMoDuration = 1.2;
   private readonly slowMoScale = 0.22;
+
+  // Jetwash Stunt cooldown & cinematic slow-mo pulse state (real seconds remaining)
+  private jetwashCooldown = 0;
+  private readonly jetwashCooldownDuration = 15.0;
+  private jetwashSlowMoTimer = 0;
+  private readonly jetwashSlowMoDuration = 0.35;
+  private readonly jetwashSlowMoScale = 0.28;
+  private crowdHypeQuoteIdx: Record<'sepp' | 'michi', number> = { sepp: 0, michi: 0 };
 
   // Exact LiDAR/DOP20 Waypoints around Skatepark "Im Gefilde" for Auto-Shred / Instagram Reel Filmer
   private readonly flowWaypoints = [
@@ -194,7 +204,14 @@ class SurfskateMunichGame {
         }
         this.gameMode = this.landingPage.getSelectedGameMode();
         this.controller.setSkaterStats(this.landingPage.getSelectedSkater().stats);
+        const selectedBoard = this.landingPage.getSelectedUnlockedBoard();
+        this.controller.setBoardSpec(selectedBoard);
+        this.skaterVisuals.setBoardSpec(selectedBoard);
         this.resetSession();
+        if (this.pendingLockedBoardToast) {
+          this.hud.showMissionToast(this.pendingLockedBoardToast);
+          this.pendingLockedBoardToast = null;
+        }
         if (this.gameMode === 'flow_cup') {
           (this.flowLine as unknown as { setTier?: (t: 0 | 1 | 2) => void }).setTier?.(0);
           this.hud.showTrickBanner(t('hud.flowCupBanner'), true);
@@ -211,6 +228,7 @@ class SurfskateMunichGame {
         try {
           track('game_start', {
             skater: this.landingPage.getSelectedSkaterName(),
+            board: selectedBoard.id,
             mode: this.gameMode,
           });
         } catch {}
@@ -226,8 +244,18 @@ class SurfskateMunichGame {
       },
       (park) => {
         this.inspectPark(park);
+      },
+      (board) => {
+        this.controller.setBoardSpec(board);
+        this.skaterVisuals.setBoardSpec(board);
       }
     );
+    this.landingPage.onLockedBoardFallback = (lockedBoard, activeBoard) => {
+      this.pendingLockedBoardToast = t('board.lockedFallbackToast', {
+        locked: lockedBoard.name,
+        active: activeBoard.name,
+      });
+    };
     this.tutorial = new FirstRunTutorial({
       getControlMode: () => this.controlMode,
       isTouchDevice: () => this.touchControls.isEnabled,
@@ -274,6 +302,9 @@ class SurfskateMunichGame {
     this.afterHoursWanted = new AfterHoursWanted(this.scene, this.parkSurface, initialSpecialParkId);
     this.afterHoursWanted.setNightMode(this.worldScene.mode === 'night');
     this.syncProgressionUI();
+    const initialBoard = this.landingPage.getSelectedUnlockedBoard();
+    this.controller.setBoardSpec(initialBoard);
+    this.skaterVisuals.setBoardSpec(initialBoard);
 
     this.audio.onTrackChange = () => {
       this.syncHUDButtons();
@@ -873,6 +904,8 @@ class SurfskateMunichGame {
       this.controller.resetToSpawn();
       this.surfCamera.reset(this.controller);
       this.scooterRider.reset();
+      this.jetwashCooldown = 0;
+      this.jetwashSlowMoTimer = 0;
     } catch (e) {
       console.error('Error switching skatepark:', e);
     }
@@ -967,6 +1000,8 @@ class SurfskateMunichGame {
     this.audio.pause();
     this.audio.playGarageMusic();
     this.slowMoTimer = 0;
+    this.jetwashSlowMoTimer = 0;
+    this.progression.recordSessionScore(this.hud.totalScore);
     this.syncProgressionUI();
     this.syncHUDButtons();
     this.landingPage.show();
@@ -1016,6 +1051,7 @@ class SurfskateMunichGame {
     this.hud.endlessMode = isZen;
     this.hotSpotZone.setEnabled(this.gameMode === 'jam');
     this.hotSpotZone.reset();
+    this.progression.recordSessionScore(this.hud.totalScore);
     this.progression.resetSessionCounters();
     this.controller.resetToSpawn();
     this.surfCamera.reset(this.controller);
@@ -1029,6 +1065,8 @@ class SurfskateMunichGame {
     this.afterHoursWanted.resetSession();
     this.afterHoursWanted.setNightMode(this.worldScene.mode === 'night');
     this.inOutlawSpotlight = false;
+    this.jetwashCooldown = 0;
+    this.jetwashSlowMoTimer = 0;
     this.syncProgressionUI();
     this.syncFlowRecorderUI();
   }
@@ -1039,6 +1077,13 @@ class SurfskateMunichGame {
     this.hud.updateMissionsWidget(rank, missions);
     if (this.landingPage) {
       this.landingPage.updateProgressionDisplay(rank, missions);
+      const newlyUnlocked = this.landingPage.refreshBoardUnlocks(
+        this.progression.getBoardUnlockProgress()
+      );
+      if (newlyUnlocked.length > 0 && !this.landingPage.isVisible) {
+        const unlockedBoard = getBoardById(newlyUnlocked[0]);
+        this.hud.showMissionToast(t('board.unlockedToast', { board: unlockedBoard.name }));
+      }
     }
   }
 
@@ -1290,6 +1335,47 @@ class SurfskateMunichGame {
     };
   }
 
+  private isGameplayActive(): boolean {
+    const helpModal = document.getElementById('help-modal');
+    return (
+      !this.tutorial.isOpen() &&
+      !this.hud.isSummaryModalOpen() &&
+      !(helpModal && !helpModal.classList.contains('hidden')) &&
+      !this.flowLine.isExportModalOpen()
+    );
+  }
+
+  private canTriggerJetwashStunt(activeParkId: string): boolean {
+    if (
+      activeParkId !== 'airport_skatepark' ||
+      this.jetwashCooldown > 0 ||
+      this.controller.isBailing ||
+      !this.isGameplayActive()
+    ) {
+      return false;
+    }
+    const shadow = this.airportFlyover?.getShadowInfo();
+    if (!shadow?.active) return false;
+    const pos = this.controller.position;
+    return Math.hypot(pos.x - shadow.x, pos.z - shadow.z) <= shadow.radius + 3.5;
+  }
+
+  private triggerJetwashStunt(): void {
+    this.jetwashCooldown = this.jetwashCooldownDuration;
+    this.jetwashSlowMoTimer = this.jetwashSlowMoDuration;
+    this.airportFlyover.triggerJetwashPulse();
+    if (this.surfCamera.cameraStyle !== 'orbit') {
+      this.surfCamera.camera.fov = Math.min(92, this.surfCamera.camera.fov + 4.0);
+      this.surfCamera.camera.updateProjectionMatrix();
+    }
+    this.surfCamera.triggerBailShake(0.22, 0.07);
+    this.hud.addBonusScore(2000);
+    this.progression.recordSessionScore(this.hud.totalScore);
+    this.syncProgressionUI();
+    this.hud.showTrickBanner(t('stunt.jetwashBanner'), true);
+    this.audio.playPretzelPickup(true);
+  }
+
   private animate(now: number): void {
     const realDt = Math.min((now - this.lastTime) * 0.001, 0.05);
     this.lastTime = now;
@@ -1308,7 +1394,18 @@ class SurfskateMunichGame {
       const easeOut = Math.min(1, this.slowMoTimer / 0.4);
       timeScale = this.slowMoScale + (1 - this.slowMoScale) * (1 - easeOut);
     }
+    // Jetwash Stunt slow-motion pulse: dip to 0.28 and ease smoothly back to 1.0 over the last 0.10 s
+    if (this.jetwashSlowMoTimer > 0) {
+      this.jetwashSlowMoTimer = Math.max(0, this.jetwashSlowMoTimer - realDt);
+      const easeOut = Math.min(1, this.jetwashSlowMoTimer / 0.10);
+      const jetwashScale = this.jetwashSlowMoScale + (1 - this.jetwashSlowMoScale) * (1 - easeOut);
+      timeScale = Math.min(timeScale, jetwashScale);
+    }
     const dt = realDt * timeScale;
+
+    if (this.jetwashCooldown > 0 && this.isGameplayActive()) {
+      this.jetwashCooldown = Math.max(0, this.jetwashCooldown - realDt);
+    }
 
     const activeParkId = this.landingPage.getSelectedPark().id;
     this.hotSpotZone.update(dt, timeSec, this.controller.position, activeParkId);
@@ -1352,6 +1449,31 @@ class SurfskateMunichGame {
           track('trick', { trick: ev.trick, quality: ev.quality, points: effectiveEv.points });
         } catch {}
       }
+
+      if (this.isGameplayActive() && !this.controller.isBailing && ev.points >= 350) {
+        const hype = this.parkCrew?.checkCrowdHype(this.controller.position, ev.points);
+        if (hype) {
+          this.hud.addBonusScore(hype.bonus);
+          this.progression.recordSessionScore(this.hud.totalScore);
+          this.syncProgressionUI();
+          const npcName = t(`crew.${hype.npcId}.name` as TranslationKey);
+          const npcIcon = hype.npcId === 'sepp' ? '👴' : '📸';
+          const shoutoutKeys: TranslationKey[] =
+            hype.npcId === 'sepp'
+              ? ['crew.sepp.hype1', 'crew.sepp.hype2']
+              : ['crew.michi.hype1', 'crew.michi.hype2'];
+          const idx = this.crowdHypeQuoteIdx[hype.npcId] % shoutoutKeys.length;
+          this.crowdHypeQuoteIdx[hype.npcId] = idx + 1;
+          this.hud.showCrewDialogue(npcIcon, npcName, t(shoutoutKeys[idx]), 3200);
+          this.audio.playPretzelPickup(false);
+        }
+      }
+
+      const isAirManeuver =
+        ev.trick === 'INDYGRAB' || /\b(air|ollie|indy)\b/i.test(ev.name);
+      if (isAirManeuver && this.canTriggerJetwashStunt(activeParkId)) {
+        this.triggerJetwashStunt();
+      }
     });
     this.worldScene.update(timeSec);
     this.skaterVisuals.update(dt, this.controller);
@@ -1359,14 +1481,16 @@ class SurfskateMunichGame {
     this.flowLine.update(dt, timeSec, this.controller);
     this.tutorial.update(realDt, this.controller, input);
 
-    const helpModal = document.getElementById('help-modal');
-    const isGameplayActive =
-      !this.tutorial.isOpen() &&
-      !this.hud.isSummaryModalOpen() &&
-      !(helpModal && !helpModal.classList.contains('hidden')) &&
-      !this.flowLine.isExportModalOpen();
+    const isGameplayActive = this.isGameplayActive();
 
     if (isGameplayActive) {
+      if (
+        !this.controller.isGrounded &&
+        this.controller.airTime > 0.08 &&
+        this.canTriggerJetwashStunt(activeParkId)
+      ) {
+        this.triggerJetwashStunt();
+      }
       const crewState = this.parkCrew.update(dt, this.controller.position, this.controller.speed);
       this.hud.updateCrewInteract(
         crewState.canInteract,

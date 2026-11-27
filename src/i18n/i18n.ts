@@ -440,6 +440,11 @@ const EN_TRANSLATIONS = {
   'crew.michi.missionShort': "Michi's 4 SD Cards",
   'crew.completedToast': '✅ {mission} • +{pts} PTS & +1 MISSION!',
   'crew.completedBanner': 'CREW QUEST COMPLETE! +{pts} PTS',
+  'crew.sepp.hype1': 'Clean shred, kid — proper surf style! (+500 CROWD HYPE)',
+  'crew.sepp.hype2': 'Whoa, even Wasti is barking for that one! (+500 CROWD HYPE)',
+  'crew.michi.hype1': 'Money shot! Straight to the magazine! (+500 CROWD HYPE)',
+  'crew.michi.hype2': '10/10 frame — caught every pixel! (+500 CROWD HYPE)',
+  'stunt.jetwashBanner': '✈️ JETWASH STUNT! +2,000 PTS',
 
   // AFTER HOURS: 5-Star Park-Verbot (Issue #38)
   'wanted.outlawBadge': '🚨 OUTLAW 2.5×',
@@ -456,6 +461,20 @@ const EN_TRANSLATIONS = {
   'wanted.sprayEscapeToast': '🎨 SPRAYED & LOST THE HEAT! +{pts} PTS',
   'wanted.daylightEscapeBanner': '☀️ DAYLIGHT ESCAPE! +1,000 PTS',
   'wanted.daylightEscapeToast': '☀️ DAYLIGHT ESCAPE! +1,000 PTS — Heat cleared by sunrise!',
+
+  // Unlockable Surfskate Boards (Issue #45)
+  'board.the_spiral.tagline': 'Balanced Allrounder • Smooth Wood Flow',
+  'board.isar_swallowtail.tagline': 'Nimble Carver • Crisp Retro Swallowtail',
+  'board.sunset_cruiser.tagline': 'High-Speed Flow • Miami Sunset Pintail',
+  'board.golden_pretzel.tagline': 'Pro Legend • Brushed Gold & Gold Trail',
+  'board.statCarve': 'CARVE',
+  'board.statSpeed': 'SPEED',
+  'board.statPop': 'POP',
+  'board.unlockSwallowtail': '🔒 LVL 2 (3 MISSIONS)',
+  'board.unlockSunset': '🔒 LVL 3 (6 MISSIONS)',
+  'board.unlockGolden': '🔒 LVL 4 / 25,000 PTS',
+  'board.lockedFallbackToast': '🔒 {locked} locked — riding {active}',
+  'board.unlockedToast': '🛹 NEW BOARD UNLOCKED: {board}!',
 } as const;
 
 export type TranslationKey = keyof typeof EN_TRANSLATIONS;
@@ -898,6 +917,11 @@ const DE_TRANSLATIONS: Record<TranslationKey, string> = {
   'crew.michi.missionShort': 'Michis 4 SD-Karten',
   'crew.completedToast': '✅ {mission} • +{pts} PTS & +1 MISSION!',
   'crew.completedBanner': 'CREW-QUEST GESCHAFFT! +{pts} PTS',
+  'crew.sepp.hype1': 'Sauber, Bua — des war a Brett! (+500 CROWD HYPE)',
+  'crew.sepp.hype2': 'Ja mei, da wackelt ja da Dackel! (+500 CROWD HYPE)',
+  'crew.michi.hype1': 'Perfekter Shot, direkt im Kasten! (+500 CROWD HYPE)',
+  'crew.michi.hype2': 'Magazin-Cover-verdächtig! (+500 CROWD HYPE)',
+  'stunt.jetwashBanner': '✈️ JETWASH STUNT! +2.000 PTS',
 
   // AFTER HOURS: 5-Star Park-Verbot (Issue #38)
   'wanted.outlawBadge': '🚨 OUTLAW 2.5×',
@@ -914,6 +938,20 @@ const DE_TRANSLATIONS: Record<TranslationKey, string> = {
   'wanted.sprayEscapeToast': '🎨 SPRAYED & VERFOLGER ABGEHÄNGT! +{pts} PTS',
   'wanted.daylightEscapeBanner': '☀️ DAYLIGHT ESCAPE! +1.000 PTS',
   'wanted.daylightEscapeToast': '☀️ DAYLIGHT ESCAPE! +1.000 PTS — Sonnenaufgang rettet dich!',
+
+  // Unlockable Surfskate Boards (Issue #45)
+  'board.the_spiral.tagline': 'Ausgewogener Allrounder • Warmes Holz-Setup',
+  'board.isar_swallowtail.tagline': 'Wendiger Carver • Retro Swallowtail',
+  'board.sunset_cruiser.tagline': 'High-Speed Flow • Miami Sunset Pintail',
+  'board.golden_pretzel.tagline': 'Pro-Legende • Gebürstetes Gold & Gold-Trail',
+  'board.statCarve': 'CARVE',
+  'board.statSpeed': 'SPEED',
+  'board.statPop': 'POP',
+  'board.unlockSwallowtail': '🔒 LVL 2 (3 MISSIONEN)',
+  'board.unlockSunset': '🔒 LVL 3 (6 MISSIONEN)',
+  'board.unlockGolden': '🔒 LVL 4 / 25.000 PKT',
+  'board.lockedFallbackToast': '🔒 {locked} gesperrt — fährst {active}',
+  'board.unlockedToast': '🛹 NEUES BOARD FREIGESCHALTET: {board}!',
 };
 
 const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {

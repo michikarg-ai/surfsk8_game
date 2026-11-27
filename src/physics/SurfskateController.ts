@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ParkSurface, SurfaceSample } from './ParkSurface';
 import { t } from '../i18n/i18n';
+import { getBoardById, getSelectedBoardId, SurfBoardSpec } from '../config/SurfBoards';
 
 export interface InputState {
   steerLeft: boolean;
@@ -114,6 +115,9 @@ export class SurfskateController {
 
   // Character stats (Lukas baseline 92/88/85 = 1.0x across all modifiers)
   private skaterStats: SkaterStats = { flow: 92, pump: 88, agility: 85 };
+
+  // Selected surfskate board spec (The Spiral 32" = 1.0x baseline)
+  private boardSpec: SurfBoardSpec = getBoardById(getSelectedBoardId());
 
   // Surfskate truck & deck state
   public leanAngle = 0; // Roll angle of the deck (radians, + = right, - = left)
@@ -279,16 +283,34 @@ export class SurfskateController {
     this.skaterStats = { ...stats };
   }
 
+  public setBoardSpec(board: SurfBoardSpec): void {
+    this.boardSpec = board;
+  }
+
   private get agilityScale(): number {
-    return THREE.MathUtils.clamp(1 + (this.skaterStats.agility - 85) * 0.008, 0.9, 1.12);
+    return (
+      THREE.MathUtils.clamp(1 + (this.skaterStats.agility - 85) * 0.008, 0.9, 1.12) *
+      this.boardSpec.physics.carveScale
+    );
   }
 
   private get pumpScale(): number {
-    return THREE.MathUtils.clamp(1 + (this.skaterStats.pump - 88) * 0.008, 0.88, 1.12);
+    return (
+      THREE.MathUtils.clamp(1 + (this.skaterStats.pump - 88) * 0.008, 0.88, 1.12) *
+      this.boardSpec.physics.pumpScale
+    );
   }
 
   private get flowScale(): number {
     return THREE.MathUtils.clamp(1 + (this.skaterStats.flow - 92) * 0.005, 0.92, 1.08);
+  }
+
+  private get boardSpeedScale(): number {
+    return this.boardSpec.physics.speedScale;
+  }
+
+  private get boardPopScale(): number {
+    return this.boardSpec.physics.popScale;
   }
 
   private spawnX = 15.2;
@@ -303,7 +325,8 @@ export class SurfskateController {
 
   /** Top speed cap (m/s), boosted by +8% during Surf-Zone Overdrive (>= 80% Flow). */
   public get maxSpeedLimit(): number {
-    return this.isSurfZoneActive ? MAX_SPEED * 1.08 : MAX_SPEED;
+    const base = this.isSurfZoneActive ? MAX_SPEED * 1.08 : MAX_SPEED;
+    return base * this.boardSpeedScale;
   }
 
   /**
@@ -693,7 +716,8 @@ export class SurfskateController {
       const cosT = 1 / Math.sqrt(1 + grade * grade);
 
       // Non-gravitational tangential acceleration (pump, friction, slides)
-      let aExtra = -ROLLING_RESISTANCE - AIR_DRAG * this.speed * this.speed;
+      const effectiveRolling = ROLLING_RESISTANCE / this.boardSpeedScale;
+      let aExtra = -effectiveRolling - AIR_DRAG * this.speed * this.speed;
       if (this.bertSlideActive) aExtra -= 2.2;
       if (this.laybackActive) aExtra -= 1.8;
       if (this.reverseActive) aExtra -= 2.0;
@@ -704,13 +728,15 @@ export class SurfskateController {
       const canPush = slopeMag < 0.28 && grade < 0.18;
       const pushPressed = input.forwardPush && !this.prevPushInput;
       this.prevPushInput = input.forwardPush;
+      const effectivePushOff = PUSH_OFF_SPEED * this.boardSpeedScale;
+      const effectivePushStartup = PUSH_STARTUP_SPEED * this.boardSpeedScale;
       if (input.forwardPush) {
-        if (canPush && this.speed < PUSH_STARTUP_SPEED) {
+        if (canPush && this.speed < effectivePushStartup) {
           if (pushPressed) {
             if (this.speed < STANDSTILL_SPEED) {
-              this.speed = PUSH_OFF_SPEED; // immediate punchy kick-push from standstill
+              this.speed = effectivePushOff; // immediate punchy kick-push from standstill
             } else {
-              this.speed = Math.min(PUSH_STARTUP_SPEED, Math.max(PUSH_OFF_SPEED, this.speed + 1.4));
+              this.speed = Math.min(effectivePushStartup, Math.max(effectivePushOff, this.speed + 1.4));
             }
             this.pumpPulse = Math.max(this.pumpPulse, 0.7);
             this.pumpSyncQuality = 'FLOW PUMP';
@@ -719,8 +745,8 @@ export class SurfskateController {
             this.coachHintTimer = 3.0;
           }
           // Smooth startup acceleration while holding push below cruising speed
-          aExtra += PUSH_ACCEL;
-        } else if (this.speed >= PUSH_STARTUP_SPEED) {
+          aExtra += PUSH_ACCEL * this.boardSpeedScale;
+        } else if (this.speed >= effectivePushStartup) {
           this.coachHint = t('ctrl.coachPumpCruise');
           this.coachHintTimer = 2.5;
         }
@@ -808,7 +834,7 @@ export class SurfskateController {
         const wallBase = isWallPop ? 3.1 : 2.55;
         const rampLaunchBoost = this.speed * Math.max(0, sinT) * 0.78;
         const compressionPop = this.compression * (isWallPop ? 0.75 : 0.50);
-        const vy = wallBase + rampLaunchBoost + compressionPop;
+        const vy = (wallBase + compressionPop) * this.boardPopScale + rampLaunchBoost;
 
         this.velocity.set(
           -Math.sin(this.heading) * this.speed * cosT,
@@ -1190,7 +1216,7 @@ export class SurfskateController {
     if (this.bertSlideActive || this.reverseActive || this.snapActive) return;
 
     // Pumping gets harder the faster you already go
-    const taper = Math.max(0, 1 - this.speed / MAX_PUMP_SPEED);
+    const taper = Math.max(0, 1 - this.speed / (MAX_PUMP_SPEED * this.boardSpeedScale));
 
     if (interval < PUMP_MIN_INTERVAL) {
       // Wiggling hectically just scrubs speed
@@ -1904,7 +1930,7 @@ export class SurfskateController {
         this.steerHoldTime = 0;
         this.lastSteerDir = 0;
         this.cancelGroundTricks();
-        this.velocity.set(-Math.sin(this.heading) * this.speed, 3.4, -Math.cos(this.heading) * this.speed);
+        this.velocity.set(-Math.sin(this.heading) * this.speed, 3.4 * this.boardPopScale, -Math.cos(this.heading) * this.speed);
         this.triggerManeuver(onManeuver, 'Lip Re-Entry Air', 420, this.currentSurface.zoneName, false, 'STYLISH');
       }
       return;

@@ -823,7 +823,12 @@ export class SurfHUD {
     }
   }
 
-  public showCrewDialogue(icon: string, speaker: string, quote: string): void {
+  public showCrewDialogue(
+    icon: string,
+    speaker: string,
+    quote: string,
+    durationMs = 5000
+  ): void {
     if (!this.crewDialogueEl || !this.crewDialogueSpeakerEl || !this.crewDialogueTextEl) return;
     this.crewDialogueSpeakerEl.textContent = `${icon} ${speaker}`;
     this.crewDialogueTextEl.textContent = quote;
@@ -834,7 +839,7 @@ export class SurfHUD {
     }
     this.crewDialogueTimeout = window.setTimeout(() => {
       this.crewDialogueEl?.classList.remove('visible');
-    }, 5000);
+    }, durationMs);
   }
 
   public hideCrewDialogue(): void {

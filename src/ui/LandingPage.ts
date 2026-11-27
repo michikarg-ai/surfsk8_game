@@ -5,6 +5,16 @@ import { ParkSurface } from '../physics/ParkSurface';
 import { SkaterStats, SurfskateController } from '../physics/SurfskateController';
 import { GameModeId, SkaterRankInfo, SurfMission } from '../progression/SurfProgression';
 import {
+  BoardUnlockProgress,
+  getBoardById,
+  getSelectedBoardId,
+  isBoardUnlocked,
+  setSelectedBoardId,
+  SURF_BOARDS,
+  SurfBoardId,
+  SurfBoardSpec,
+} from '../config/SurfBoards';
+import {
   fetchLeaderboard,
   getPlayerName,
   LeaderboardEntry,
@@ -113,6 +123,18 @@ export class LandingPage {
     const p = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('park') : null;
     return p === 'airport' || p === 'airport_skatepark' || p === '1' ? 1 : 0;
   })();
+  private currentBoardIndex = (() => {
+    const savedId = getSelectedBoardId();
+    const idx = SURF_BOARDS.findIndex((b) => b.id === savedId);
+    return idx >= 0 ? idx : 0;
+  })();
+  private lastUnlockedBoardId: SurfBoardId = 'the_spiral';
+  private boardUnlockProgress: BoardUnlockProgress = {
+    rankLevel: 1,
+    totalCompletedMissions: 0,
+    bestSessionScore: 0,
+  };
+  private hasInitializedBoardUnlocks = false;
 
   // In-slot notice views for skatepark & board selection
   private parkSubtitleEl: HTMLElement | null = null;
@@ -122,6 +144,12 @@ export class LandingPage {
   private parkNoticeView: HTMLElement | null = null;
   private boardIconView: HTMLElement | null = null;
   private boardNoticeView: HTMLElement | null = null;
+  private boardNameEl: HTMLElement | null = null;
+  private boardTaglineEl: HTMLElement | null = null;
+  private boardStatsEl: HTMLElement | null = null;
+  private boardSlotWrapEl: HTMLElement | null = null;
+  private boardLockBadgeEl: HTMLElement | null = null;
+  private boardLockTextEl: HTMLElement | null = null;
   private parkNoticeTimeout: number | null = null;
   private boardNoticeTimeout: number | null = null;
   private qualityBtnEl: HTMLElement | null = null;
@@ -131,6 +159,7 @@ export class LandingPage {
   public onToggleSound?: () => void;
   public onSelectGameMode?: (mode: GameModeId) => void;
   public onOpenTutorial?: () => void;
+  public onLockedBoardFallback?: (lockedBoard: SurfBoardSpec, activeBoard: SurfBoardSpec) => void;
   private fullscreenBtnEl: HTMLElement | null = null;
   private soundBtnEl: HTMLElement | null = null;
   private modeDescEl: HTMLElement | null = null;
@@ -187,7 +216,8 @@ export class LandingPage {
     private onStartGame: () => void,
     private onSelectSkater?: (modelUrl: string, skater?: SkaterCharacter) => void,
     private onSelectPark?: (park: SkateparkLocation) => void,
-    private onInspectPark?: (park: SkateparkLocation) => void
+    private onInspectPark?: (park: SkateparkLocation) => void,
+    private onSelectBoard?: (board: SurfBoardSpec) => void
   ) {
     this.overlayEl = document.getElementById('landing-overlay')!;
     this.canvasEl = document.getElementById('landing-skater-canvas') as HTMLCanvasElement;
@@ -200,6 +230,12 @@ export class LandingPage {
     this.skaterStatsEl =
       document.getElementById('landing-skater-stats') ||
       this.overlayEl.querySelector('#sel-section-skater .sel-stats');
+    this.boardNameEl = document.getElementById('landing-board-name');
+    this.boardTaglineEl = document.getElementById('landing-board-tagline');
+    this.boardStatsEl = document.getElementById('landing-board-stats');
+    this.boardSlotWrapEl = document.getElementById('board-slot-wrap');
+    this.boardLockBadgeEl = document.getElementById('landing-board-lock');
+    this.boardLockTextEl = document.getElementById('landing-board-lock-text');
     this.updateSkaterDisplay();
     this.riderNameInputEl = document.getElementById('landing-player-name') as HTMLInputElement | null;
     this.parkSubtitleEl = document.getElementById('landing-park-subtitle') || this.overlayEl.querySelector('#sel-section-skatepark .sel-subtitle');
@@ -275,6 +311,7 @@ export class LandingPage {
     this.skaterVisuals.trailMesh.visible = false;
 
     this.bindUIEvents();
+    this.updateBoardDisplay();
     this.updateLangToggleDisplay();
     applyDomTranslations(document);
     this.initMobileRotateHint();
@@ -297,6 +334,7 @@ export class LandingPage {
 
   private refreshLocalizedUI(): void {
     this.updateLangToggleDisplay();
+    this.updateBoardDisplay();
     if (this.modeDescEl) {
       this.modeDescEl.textContent = this.getModeDesc(this.selectedGameMode);
     }
@@ -319,6 +357,7 @@ export class LandingPage {
     const currentSkater = this.getSelectedSkater();
     this.updateSkaterDisplay();
     this.updateParkDisplay();
+    this.updateBoardDisplay();
     await this.skaterVisuals.load(currentSkater.modelUrl);
   }
 
@@ -353,6 +392,109 @@ export class LandingPage {
       this.parkThumbImgEl.src = resolveAssetUrl(park.thumbUrl);
       this.parkThumbImgEl.alt = park.name;
     }
+  }
+
+  public getPreviewedBoard(): SurfBoardSpec {
+    return SURF_BOARDS[this.currentBoardIndex] ?? SURF_BOARDS[0];
+  }
+
+  public getSelectedUnlockedBoard(): SurfBoardSpec {
+    const previewed = this.getPreviewedBoard();
+    if (isBoardUnlocked(previewed, this.boardUnlockProgress)) {
+      return previewed;
+    }
+    const fallback = getBoardById(this.lastUnlockedBoardId);
+    if (isBoardUnlocked(fallback, this.boardUnlockProgress)) {
+      return fallback;
+    }
+    return SURF_BOARDS[0];
+  }
+
+  public refreshBoardUnlocks(progress: BoardUnlockProgress): SurfBoardId[] {
+    const prevUnlocked = new Set(
+      SURF_BOARDS.filter((b) => isBoardUnlocked(b, this.boardUnlockProgress)).map((b) => b.id)
+    );
+    this.boardUnlockProgress = { ...progress };
+
+    const newlyUnlocked: SurfBoardId[] = [];
+    for (const board of SURF_BOARDS) {
+      const unlockedNow = isBoardUnlocked(board, this.boardUnlockProgress);
+      if (this.hasInitializedBoardUnlocks && unlockedNow && !prevUnlocked.has(board.id)) {
+        newlyUnlocked.push(board.id);
+      }
+    }
+
+    if (!this.hasInitializedBoardUnlocks) {
+      this.hasInitializedBoardUnlocks = true;
+      const initialBoard = this.getPreviewedBoard();
+      if (isBoardUnlocked(initialBoard, this.boardUnlockProgress)) {
+        this.lastUnlockedBoardId = initialBoard.id;
+      } else {
+        this.currentBoardIndex = 0;
+        this.lastUnlockedBoardId = SURF_BOARDS[0].id;
+        setSelectedBoardId(this.lastUnlockedBoardId);
+      }
+    } else if (!isBoardUnlocked(getBoardById(this.lastUnlockedBoardId), this.boardUnlockProgress)) {
+      this.lastUnlockedBoardId = SURF_BOARDS[0].id;
+    }
+
+    this.updateBoardDisplay();
+    return newlyUnlocked;
+  }
+
+  public updateBoardDisplay(): void {
+    const board = this.getPreviewedBoard();
+    const unlocked = isBoardUnlocked(board, this.boardUnlockProgress);
+    const isGold = board.id === 'golden_pretzel';
+
+    if (this.boardNameEl) {
+      this.boardNameEl.textContent = board.name;
+      this.boardNameEl.classList.toggle('is-gold', isGold);
+    }
+    if (this.boardTaglineEl) {
+      this.boardTaglineEl.textContent = t(board.taglineKey);
+      this.boardTaglineEl.classList.toggle('is-gold', isGold);
+    }
+    if (this.boardStatsEl) {
+      const labels = [
+        `${t('board.statCarve')} ${board.stats.carve}`,
+        `${t('board.statSpeed')} ${board.stats.speed}`,
+        `${t('board.statPop')} ${board.stats.pop}`,
+      ];
+      const spans = this.boardStatsEl.querySelectorAll('span');
+      if (spans.length === labels.length) {
+        spans.forEach((span, idx) => {
+          span.textContent = labels[idx];
+        });
+      } else {
+        this.boardStatsEl.innerHTML = labels.map((label) => `<span>${label}</span>`).join('');
+      }
+    }
+
+    // Recolor inline SVG deck, pinstripe, accent wave & urethane wheels
+    const svg = board.svgColors;
+    for (let i = 0; i < 4; i++) {
+      document.getElementById(`board-svg-wood-${i}`)?.setAttribute('stop-color', svg.woodStops[i]);
+      document.getElementById(`board-svg-wheel-${i}`)?.setAttribute('stop-color', svg.wheelStops[i]);
+    }
+    document.getElementById('board-svg-deck')?.setAttribute('stroke', svg.deckStroke);
+    document.getElementById('board-svg-pinstripe')?.setAttribute('stroke', svg.pinstripe);
+    document.getElementById('board-svg-accent')?.setAttribute('stroke', svg.accent);
+    document.getElementById('board-svg-wheel-front')?.setAttribute('stroke', svg.wheelStroke);
+    document.getElementById('board-svg-wheel-rear')?.setAttribute('stroke', svg.wheelStroke);
+
+    if (this.boardSlotWrapEl) {
+      this.boardSlotWrapEl.classList.toggle('is-locked', !unlocked);
+    }
+    if (this.boardLockBadgeEl) {
+      this.boardLockBadgeEl.classList.toggle('hidden', unlocked);
+    }
+    if (this.boardLockTextEl) {
+      this.boardLockTextEl.textContent = !unlocked && board.unlockKey ? t(board.unlockKey) : '';
+    }
+
+    // Live-update 3D board showcase on Landing Page
+    this.skaterVisuals.setBoardSpec(board);
   }
 
   public getSelectedPark(): SkateparkLocation {
@@ -541,7 +683,7 @@ export class LandingPage {
     if (this.boardIconView) {
       this.boardIconView.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.showInstagramPrompt('board');
+        this.triggerSelect('board', 1);
       });
     }
 
@@ -1123,6 +1265,24 @@ export class LandingPage {
       if (this.onSelectPark) {
         this.onSelectPark(park);
       }
+    } else if (kind === 'board') {
+      this.currentBoardIndex =
+        (this.currentBoardIndex + dir + SURF_BOARDS.length) % SURF_BOARDS.length;
+      const board = this.getPreviewedBoard();
+      this.revertBoardView();
+      this.updateBoardDisplay();
+      const row = (btn || rowEl)?.closest<HTMLElement>('.sel-section') || rowEl;
+      if (row) {
+        row.classList.remove('bump');
+        void row.offsetWidth;
+        row.classList.add('bump');
+        setTimeout(() => row.classList.remove('bump'), 320);
+      }
+      if (isBoardUnlocked(board, this.boardUnlockProgress)) {
+        this.lastUnlockedBoardId = board.id;
+        setSelectedBoardId(board.id);
+        this.onSelectBoard?.(board);
+      }
     } else {
       this.showInstagramPrompt(kind, btn || rowEl || undefined);
     }
@@ -1232,6 +1392,19 @@ export class LandingPage {
     this.closeNamePromptModal();
     const termsModal = document.getElementById('terms-modal');
     termsModal?.classList.add('hidden');
+    const previewedBoard = this.getPreviewedBoard();
+    const activeBoard = this.getSelectedUnlockedBoard();
+    if (previewedBoard.id !== activeBoard.id) {
+      const idx = SURF_BOARDS.findIndex((b) => b.id === activeBoard.id);
+      if (idx >= 0) {
+        this.currentBoardIndex = idx;
+      }
+      this.updateBoardDisplay();
+      this.onLockedBoardFallback?.(previewedBoard, activeBoard);
+    }
+    this.lastUnlockedBoardId = activeBoard.id;
+    setSelectedBoardId(activeBoard.id);
+    this.onSelectBoard?.(activeBoard);
     this.isVisible = false;
     this.overlayEl.classList.add('hidden');
     if (this.onSelectSkater) {
@@ -1250,6 +1423,7 @@ export class LandingPage {
     this.closeSettingsPopover();
     this.overlayEl.classList.remove('hidden');
     this.updateSkaterDisplay();
+    this.updateBoardDisplay();
     this.syncRiderNameInput();
     this.updateActiveSectionVisuals();
     this.handleResize();

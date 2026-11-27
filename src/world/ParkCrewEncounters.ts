@@ -158,8 +158,15 @@ export class ParkCrewEncounters {
   private static readonly POP_OUT_DURATION = 0.38;
   private static readonly POP_IN_DURATION = 0.42;
   private static readonly MAX_BURST_PARTICLES = 72;
+  private static readonly CROWD_HYPE_RADIUS = 9.5;
+  private static readonly CROWD_HYPE_MIN_POINTS = 350;
+  private static readonly CROWD_HYPE_BONUS = 500;
+  private static readonly CROWD_HYPE_COOLDOWN_SEC = 12.0;
+  private static readonly CHEER_DURATION_SEC = 2.2;
+  private static readonly HYPE_POPUP_DURATION_SEC = 1.65;
 
   private parkId: CrewParkId;
+  private currentNpcId: CrewNpcId;
   private parkSurface: ParkSurface;
   private questState: CrewQuestState = 'idle';
   private collectedCount = 0;
@@ -167,11 +174,23 @@ export class ParkCrewEncounters {
   private isDisposed = false;
   private playerInRange = false;
 
+  // Crowd Hype state & cooldowns (per NPC)
+  private crowdHypeCooldownByNpc: Record<CrewNpcId, number> = {
+    sepp: 0,
+    michi: 0,
+  };
+  private cheerTimer = 0;
+  private cheerNpcId: CrewNpcId | null = null;
+  private hypePopupTimer = 0;
+  private hypePopupOrigin = new THREE.Vector3();
+
   // NPC Groups & Rigs
   private seppRig: MakeHumanRig;
   private michiRig: MakeHumanRig;
   private seppRoot = new THREE.Group();
   private michiRoot = new THREE.Group();
+  private seppCaneGroup: THREE.Group | null = null;
+  private seppCaneRestPos = new THREE.Vector3(0.255, 0, 0.155);
 
   // Wasti (Sculpted 3D Dachshund)
   private wastiRoot = new THREE.Group();
@@ -187,14 +206,18 @@ export class ParkCrewEncounters {
   private camGripL = new THREE.Object3D();
   private camGripR = new THREE.Object3D();
   private camRaiseBlend = 1.0;
+  private camFlashSprite: THREE.Sprite | null = null;
+  private camFlashMat: THREE.SpriteMaterial | null = null;
 
-  // Floating 3D Overhead Marker Sprite
+  // Floating 3D Overhead Marker Sprite & Hype Popup Sprite
   private markerSprite: THREE.Sprite;
   private markerCanvas: HTMLCanvasElement;
   private markerCtx: CanvasRenderingContext2D;
   private markerTex: THREE.CanvasTexture;
   private markerMat: THREE.SpriteMaterial;
   private lastMarkerKey = '';
+  private hypeSprite: THREE.Sprite;
+  private hypeMat: THREE.SpriteMaterial;
 
   // Collectibles per park
   private collectiblesByPark: Record<CrewParkId, CollectibleRuntime[]> = {
@@ -229,6 +252,7 @@ export class ParkCrewEncounters {
   ) {
     this.parkSurface = parkSurface;
     this.parkId = parkId;
+    this.currentNpcId = PARK_CREW_CONFIGS[parkId].npcId;
 
     this.rootGroup.name = 'ParkCrewEncounters';
     this.scene.add(this.rootGroup);
@@ -257,7 +281,7 @@ export class ParkCrewEncounters {
     void this.loadMakeHumanNpc(this.seppRig);
     void this.loadMakeHumanNpc(this.michiRig);
 
-    // 2. Floating 3D Overhead Marker Sprite
+    // 2. Floating 3D Overhead Marker Sprite & Crowd Hype Popup Sprite
     const marker = this.buildOverheadMarker();
     this.markerSprite = marker.sprite;
     this.markerCanvas = marker.canvas;
@@ -265,6 +289,11 @@ export class ParkCrewEncounters {
     this.markerTex = marker.tex;
     this.markerMat = marker.mat;
     this.rootGroup.add(this.markerSprite);
+
+    const hypePopup = this.buildHypePopupSprite();
+    this.hypeSprite = hypePopup.sprite;
+    this.hypeMat = hypePopup.mat;
+    this.rootGroup.add(this.hypeSprite);
 
     // 3. Collectibles for both parks
     this.seppCollectiblesGroup.name = 'CrewCollectibles_Sepp';
@@ -311,7 +340,10 @@ export class ParkCrewEncounters {
 
   public setPark(parkId: CrewParkId, parkSurface: ParkSurface): void {
     this.parkId = parkId;
+    this.currentNpcId = PARK_CREW_CONFIGS[parkId].npcId;
     this.parkSurface = parkSurface;
+    this.crowdHypeCooldownByNpc.sepp = 0;
+    this.crowdHypeCooldownByNpc.michi = 0;
     this.applyParkState(parkId, parkSurface);
   }
 
@@ -352,6 +384,19 @@ export class ParkCrewEncounters {
     this.collectedCount = 0;
     this.playerInRange = false;
     this.wastiHopTimer = 0;
+    this.crowdHypeCooldownByNpc.sepp = 0;
+    this.crowdHypeCooldownByNpc.michi = 0;
+    this.cheerTimer = 0;
+    this.cheerNpcId = null;
+    this.hypePopupTimer = 0;
+    this.hypeSprite.visible = false;
+    if (this.camFlashSprite) {
+      this.camFlashSprite.visible = false;
+    }
+    if (this.seppCaneGroup) {
+      this.seppCaneGroup.position.copy(this.seppCaneRestPos);
+      this.seppCaneGroup.rotation.set(0, 0, 0);
+    }
 
     for (const pId of ['im_gefilde', 'airport_skatepark'] as const) {
       for (const item of this.collectiblesByPark[pId]) {
@@ -378,6 +423,39 @@ export class ParkCrewEncounters {
   public update(dt: number, playerPos: THREE.Vector3, playerSpeed: number): CrewUpdateState {
     const safeDt = Math.min(Math.max(dt, 0), 0.1);
     this.elapsedSec += safeDt;
+
+    // Tick per-NPC Crowd Hype cooldowns & active cheer/popup timers
+    if (this.crowdHypeCooldownByNpc.sepp > 0) {
+      this.crowdHypeCooldownByNpc.sepp = Math.max(0, this.crowdHypeCooldownByNpc.sepp - safeDt);
+    }
+    if (this.crowdHypeCooldownByNpc.michi > 0) {
+      this.crowdHypeCooldownByNpc.michi = Math.max(0, this.crowdHypeCooldownByNpc.michi - safeDt);
+    }
+    if (this.cheerTimer > 0) {
+      this.cheerTimer = Math.max(0, this.cheerTimer - safeDt);
+      if (this.cheerTimer <= 0) {
+        this.cheerNpcId = null;
+      }
+    }
+    if (this.hypePopupTimer > 0) {
+      this.hypePopupTimer = Math.max(0, this.hypePopupTimer - safeDt);
+      const u = 1.0 - this.hypePopupTimer / ParkCrewEncounters.HYPE_POPUP_DURATION_SEC;
+      const rise = (1.0 - Math.pow(1.0 - u, 2.0)) * 0.95;
+      this.hypeSprite.position.set(
+        this.hypePopupOrigin.x,
+        this.hypePopupOrigin.y + rise,
+        this.hypePopupOrigin.z
+      );
+      const popScale =
+        u < 0.18
+          ? THREE.MathUtils.lerp(0.35, 1.18, u / 0.18)
+          : THREE.MathUtils.lerp(1.18, 1.0, Math.min(1, (u - 0.18) / 0.25));
+      this.hypeSprite.scale.set(1.25 * popScale, 0.625 * popScale, 1);
+      this.hypeMat.opacity = u > 0.68 ? Math.max(0, 1.0 - (u - 0.68) / 0.32) : 1.0;
+      if (this.hypePopupTimer <= 0) {
+        this.hypeSprite.visible = false;
+      }
+    }
 
     const cfg = PARK_CREW_CONFIGS[this.parkId];
     const activeRig = this.parkId === 'im_gefilde' ? this.seppRig : this.michiRig;
@@ -482,6 +560,7 @@ export class ParkCrewEncounters {
         this.collectedCount++;
         newlyCollected = true;
 
+        this.burstMat.color.setHex(this.parkId === 'im_gefilde' ? 0xfbbf24 : 0x22d3ee);
         this.emitCollectBurst(item.container.position, 28);
 
         if (this.collectedCount >= ParkCrewEncounters.TOTAL_COLLECTIBLES) {
@@ -570,6 +649,52 @@ export class ParkCrewEncounters {
     };
   }
 
+  /**
+   * Checks whether a landed trick near the active park NPC triggers Crowd Hype.
+   * Requires trickPoints >= 350 and player within 9.5m XZ, with a 12.0s per-NPC cooldown.
+   */
+  public checkCrowdHype(
+    playerPos: THREE.Vector3,
+    trickPoints: number
+  ): { npcId: CrewNpcId; bonus: number } | null {
+    if (this.isDisposed || trickPoints < ParkCrewEncounters.CROWD_HYPE_MIN_POINTS) {
+      return null;
+    }
+
+    const npcId = this.currentNpcId;
+    if (this.crowdHypeCooldownByNpc[npcId] > 0) {
+      return null;
+    }
+
+    const activeRig = npcId === 'sepp' ? this.seppRig : this.michiRig;
+    const npcPos = activeRig.group.position;
+    const distXZ = Math.hypot(playerPos.x - npcPos.x, playerPos.z - npcPos.z);
+    if (distXZ > ParkCrewEncounters.CROWD_HYPE_RADIUS) {
+      return null;
+    }
+
+    // Activate cooldown, 2.2s NPC cheer reaction, floating 🔥 +500 popup & golden burst
+    this.crowdHypeCooldownByNpc[npcId] = ParkCrewEncounters.CROWD_HYPE_COOLDOWN_SEC;
+    this.cheerTimer = ParkCrewEncounters.CHEER_DURATION_SEC;
+    this.cheerNpcId = npcId;
+
+    this.hypePopupTimer = ParkCrewEncounters.HYPE_POPUP_DURATION_SEC;
+    this.hypePopupOrigin.set(npcPos.x, npcPos.y + 2.48, npcPos.z);
+    this.hypeSprite.position.copy(this.hypePopupOrigin);
+    this.hypeSprite.scale.set(0.45, 0.225, 1);
+    this.hypeSprite.visible = true;
+    this.hypeMat.opacity = 1.0;
+
+    this.burstMat.color.setHex(0xfbbf24);
+    this.tempVecA.set(npcPos.x, npcPos.y + 1.95, npcPos.z);
+    this.emitCollectBurst(this.tempVecA, 34);
+
+    return {
+      npcId,
+      bonus: ParkCrewEncounters.CROWD_HYPE_BONUS,
+    };
+  }
+
   public dispose(): void {
     if (this.isDisposed) return;
     this.isDisposed = true;
@@ -610,6 +735,7 @@ export class ParkCrewEncounters {
   // Park Switching & Setup
   // ---------------------------------------------------------------------------
   private applyParkState(parkId: CrewParkId, parkSurface: ParkSurface): void {
+    this.currentNpcId = PARK_CREW_CONFIGS[parkId].npcId;
     const isSepp = parkId === 'im_gefilde';
     this.seppRoot.visible = isSepp;
     this.wastiRoot.visible = isSepp;
@@ -1051,8 +1177,9 @@ diffuseColor.rgb = outfitCol * fabricShade;
       })
     );
     const caneGroup = new THREE.Group();
-    caneGroup.position.set(0.255, 0, 0.155);
+    caneGroup.position.copy(this.seppCaneRestPos);
     rig.group.add(caneGroup);
+    this.seppCaneGroup = caneGroup;
 
     const shaftGeo = this.trackGeo(new THREE.CylinderGeometry(0.012, 0.010, 0.85, 10));
     const shaft = new THREE.Mesh(shaftGeo, woodMat);
@@ -1432,6 +1559,36 @@ diffuseColor.rgb = outfitCol * fabricShade;
 
     this.camGripR.position.set(-0.115, -0.012, -0.055);
     this.camRigPivot.add(this.camGripR);
+
+    // Lightweight additive shutter flash sprite on camera front (zero PointLights)
+    const flashCanvas = document.createElement('canvas');
+    flashCanvas.width = 64;
+    flashCanvas.height = 64;
+    const fCtx = flashCanvas.getContext('2d')!;
+    const fGrad = fCtx.createRadialGradient(32, 32, 0, 32, 32, 30);
+    fGrad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+    fGrad.addColorStop(0.32, 'rgba(224, 242, 254, 0.85)');
+    fGrad.addColorStop(0.68, 'rgba(56, 189, 248, 0.28)');
+    fGrad.addColorStop(1.0, 'rgba(56, 189, 248, 0)');
+    fCtx.fillStyle = fGrad;
+    fCtx.fillRect(0, 0, 64, 64);
+
+    const flashTex = this.trackTex(new THREE.CanvasTexture(flashCanvas));
+    flashTex.colorSpace = THREE.SRGBColorSpace;
+    this.camFlashMat = this.trackMat(
+      new THREE.SpriteMaterial({
+        map: flashTex,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    this.camFlashSprite = new THREE.Sprite(this.camFlashMat);
+    this.camFlashSprite.position.set(0, 0.085, 0.055);
+    this.camFlashSprite.scale.setScalar(0.55);
+    this.camFlashSprite.visible = false;
+    this.camRigPivot.add(this.camFlashSprite);
   }
 
   // ---------------------------------------------------------------------------
@@ -1445,16 +1602,22 @@ diffuseColor.rgb = outfitCol * fabricShade;
   ): void {
     const rig = this.seppRig;
 
-    // Smoothly turn Opa Sepp slightly toward nearby player
+    const isCheering = this.cheerTimer > 0 && this.cheerNpcId === 'sepp';
+    const cheerElapsed = isCheering
+      ? ParkCrewEncounters.CHEER_DURATION_SEC - this.cheerTimer
+      : 0;
+
+    // Smoothly turn Opa Sepp slightly toward nearby player (or directly when cheering)
     const toPlayerYaw = Math.atan2(
       playerPos.x - rig.group.position.x,
       playerPos.z - rig.group.position.z
     );
-    const targetBodyYaw =
-      distNpcXZ < 11.0
+    const targetBodyYaw = isCheering
+      ? toPlayerYaw
+      : distNpcXZ < 11.0
         ? this.lerpAngle(rig.baseYaw, toPlayerYaw, THREE.MathUtils.clamp((11.0 - distNpcXZ) / 6.0, 0, 0.85))
         : rig.baseYaw;
-    rig.currentYaw = this.lerpAngle(rig.currentYaw, targetBodyYaw, Math.min(1, dt * 4.5));
+    rig.currentYaw = this.lerpAngle(rig.currentYaw, targetBodyYaw, Math.min(1, dt * (isCheering ? 7.5 : 4.5)));
     rig.group.rotation.y = rig.currentYaw;
 
     // Head look toward player
@@ -1477,21 +1640,30 @@ diffuseColor.rgb = outfitCol * fabricShade;
 
     const isWaving = distNpcXZ < 6.0 && this.questState === 'idle';
     if (rig.hasSkeleton) {
-      this.poseSepp(rig, dt, this.elapsedSec, isWaving);
+      this.poseSepp(rig, dt, this.elapsedSec, isWaving, isCheering, cheerElapsed);
     }
 
     // Animate Dackel Wasti
-    const wagRate = 7.5 + (distNpcXZ < 6.5 ? 6.0 : 0) + Math.min(3.5, playerSpeed * 0.35);
-    const wagAmp = distNpcXZ < 6.5 ? 0.52 : 0.34;
+    const wagRate =
+      7.5 +
+      (distNpcXZ < 6.5 ? 6.0 : 0) +
+      (isCheering ? 10.0 : 0) +
+      Math.min(3.5, playerSpeed * 0.35);
+    const wagAmp = isCheering ? 0.62 : distNpcXZ < 6.5 ? 0.52 : 0.34;
     this.wastiTailPivot.rotation.y = Math.sin(this.elapsedSec * wagRate) * wagAmp;
     this.wastiTailPivot.rotation.x = 0.12 + Math.sin(this.elapsedSec * wagRate * 0.5) * 0.08;
 
     // Floppy ear bounce & breathing
-    this.wastiEarL.rotation.z = 0.04 * Math.sin(this.elapsedSec * 4.2);
-    this.wastiEarR.rotation.z = -0.04 * Math.sin(this.elapsedSec * 4.2);
+    const earAmp = isCheering && cheerElapsed < 0.9 ? 0.15 : 0.04;
+    const earSpeed = isCheering && cheerElapsed < 0.9 ? 16.0 : 4.2;
+    this.wastiEarL.rotation.z = earAmp * Math.sin(this.elapsedSec * earSpeed);
+    this.wastiEarR.rotation.z = -earAmp * Math.sin(this.elapsedSec * earSpeed);
 
-    // Excited little hop when quest starts or completes
-    if (this.wastiHopTimer > 0) {
+    // Excited hops: 2 distinct happy hops on Crowd Hype cheer, or hop on quest start/completion
+    if (isCheering && cheerElapsed < 0.9) {
+      const hopU = cheerElapsed / 0.9;
+      this.wastiRoot.position.y = this.wastiBaseY + Math.abs(Math.sin(hopU * Math.PI * 2)) * 0.18;
+    } else if (this.wastiHopTimer > 0) {
       this.wastiHopTimer = Math.max(0, this.wastiHopTimer - dt);
       const hopPhase = this.wastiHopTimer * 14.0;
       this.wastiRoot.position.y = this.wastiBaseY + Math.abs(Math.sin(hopPhase)) * 0.14;
@@ -1526,31 +1698,64 @@ diffuseColor.rgb = outfitCol * fabricShade;
   ): void {
     const rig = this.michiRig;
     const isNear = distNpcXZ < 7.8;
+    const isCheering = this.cheerTimer > 0 && this.cheerNpcId === 'michi';
+    const cheerElapsed = isCheering
+      ? ParkCrewEncounters.CHEER_DURATION_SEC - this.cheerTimer
+      : 0;
 
     const toPlayerYaw = Math.atan2(
       playerPos.x - rig.group.position.x,
       playerPos.z - rig.group.position.z
     );
 
-    // When player is nearby, turn toward skater; otherwise gently pan skyward spotting planes
+    // When player is nearby or cheering, turn toward skater; otherwise pan skyward spotting planes
     const skyPanYaw = rig.baseYaw + Math.sin(this.elapsedSec * 0.48) * 0.36;
-    const targetBodyYaw = isNear
-      ? toPlayerYaw
-      : distNpcXZ < 13.0
-        ? this.lerpAngle(skyPanYaw, toPlayerYaw, (13.0 - distNpcXZ) / 5.2)
-        : skyPanYaw;
-    rig.currentYaw = this.lerpAngle(rig.currentYaw, targetBodyYaw, Math.min(1, dt * 4.2));
+    const targetBodyYaw =
+      isNear || isCheering
+        ? toPlayerYaw
+        : distNpcXZ < 13.0
+          ? this.lerpAngle(skyPanYaw, toPlayerYaw, (13.0 - distNpcXZ) / 5.2)
+          : skyPanYaw;
+    rig.currentYaw = this.lerpAngle(
+      rig.currentYaw,
+      targetBodyYaw,
+      Math.min(1, dt * (isCheering ? 7.5 : 4.2))
+    );
     rig.group.rotation.y = rig.currentYaw;
 
-    // Blend camera between eye-level sky spotting (1.0) and chest-level chat (0.0)
-    const targetBlend = isNear ? 0.0 : 1.0;
-    this.camRaiseBlend = THREE.MathUtils.lerp(this.camRaiseBlend, targetBlend, Math.min(1, dt * 5.0));
+    // Blend camera: during cheer Phase 1 (0..0.38s) snap photo at eye level, then lower to chest while saluting
+    const targetBlend = isCheering
+      ? cheerElapsed < 0.38
+        ? 0.88
+        : 0.12
+      : isNear
+        ? 0.0
+        : 1.0;
+    this.camRaiseBlend = THREE.MathUtils.lerp(
+      this.camRaiseBlend,
+      targetBlend,
+      Math.min(1, dt * (isCheering ? 10.0 : 5.0))
+    );
+
+    // Camera double-shutter flash during Phase 1 of cheer
+    if (this.camFlashSprite && this.camFlashMat) {
+      const flashA = isCheering && cheerElapsed < 0.12;
+      const flashB = isCheering && cheerElapsed >= 0.18 && cheerElapsed < 0.30;
+      if (flashA || flashB) {
+        const localT = flashA ? cheerElapsed / 0.12 : (cheerElapsed - 0.18) / 0.12;
+        this.camFlashSprite.visible = true;
+        this.camFlashSprite.scale.setScalar(0.35 + localT * 0.45);
+        this.camFlashMat.opacity = Math.sin(localT * Math.PI) * 0.95;
+      } else {
+        this.camFlashSprite.visible = false;
+      }
+    }
 
     // Position & tilt camera in Michi local frame
-    const skyPitch = -0.36 - Math.sin(this.elapsedSec * 0.72) * 0.08;
-    const skyLocalYaw = Math.sin(this.elapsedSec * 0.85) * 0.14;
+    const skyPitch = isCheering ? -0.06 : -0.36 - Math.sin(this.elapsedSec * 0.72) * 0.08;
+    const skyLocalYaw = isCheering ? 0 : Math.sin(this.elapsedSec * 0.85) * 0.14;
     this.camRigPivot.position.set(
-      0,
+      isCheering && cheerElapsed >= 0.38 ? 0.05 : 0,
       THREE.MathUtils.lerp(1.23, 1.50, this.camRaiseBlend) + Math.sin(this.elapsedSec * 1.9) * 0.004,
       THREE.MathUtils.lerp(0.24, 0.26, this.camRaiseBlend)
     );
@@ -1560,15 +1765,17 @@ diffuseColor.rgb = outfitCol * fabricShade;
       0
     );
 
-    // Head look follows player when near, or tracks camera viewfinder when spotting sky
+    // Head look follows player when near or cheering, or tracks camera viewfinder when spotting sky
     let relYaw = toPlayerYaw - rig.currentYaw;
     while (relYaw > Math.PI) relYaw -= Math.PI * 2;
     while (relYaw < -Math.PI) relYaw += Math.PI * 2;
     const speedFocus = Math.min(0.12, playerSpeed * 0.01);
-    const desiredHeadYaw = isNear
-      ? THREE.MathUtils.clamp(relYaw, -0.75, 0.75)
-      : skyLocalYaw * 0.85;
-    const desiredHeadPitch = isNear ? 0.04 + speedFocus : skyPitch * 0.72;
+    const desiredHeadYaw =
+      isNear || isCheering
+        ? THREE.MathUtils.clamp(relYaw, -0.75, 0.75)
+        : skyLocalYaw * 0.85;
+    const desiredHeadPitch =
+      isNear || isCheering ? 0.04 + speedFocus : skyPitch * 0.72;
 
     rig.headLookYaw = THREE.MathUtils.lerp(rig.headLookYaw, desiredHeadYaw, Math.min(1, dt * 6));
     rig.headLookPitch = THREE.MathUtils.lerp(
@@ -1578,7 +1785,7 @@ diffuseColor.rgb = outfitCol * fabricShade;
     );
 
     if (rig.hasSkeleton) {
-      this.poseMichi(rig, dt, this.elapsedSec);
+      this.poseMichi(rig, dt, this.elapsedSec, isCheering, cheerElapsed);
     }
   }
 
@@ -1586,7 +1793,9 @@ diffuseColor.rgb = outfitCol * fabricShade;
     rig: MakeHumanRig,
     _dt: number,
     timeSec: number,
-    isWaving: boolean
+    isWaving: boolean,
+    isCheering = false,
+    cheerElapsed = 0
   ): void {
     const b = rig.bones;
     this.resetRigToRest(rig);
@@ -1595,9 +1804,14 @@ diffuseColor.rgb = outfitCol * fabricShade;
     const npcX = this.localDir(rig.group, 1, 0, 0);
     const npcY = this.localDir(rig.group, 0, 1, 0);
     const breath = Math.sin(timeSec * 1.95);
+    const cheerBounce = isCheering ? Math.abs(Math.sin(cheerElapsed * 8.5)) * 0.016 : 0;
 
-    // Pelvis standing upright with tiny natural ease
-    const hipsLocal = new THREE.Vector3(0, rig.hipsRestHeight - 0.014 + breath * 0.003, 0);
+    // Pelvis standing upright with tiny natural ease (plus cheerful bounce)
+    const hipsLocal = new THREE.Vector3(
+      0,
+      rig.hipsRestHeight - 0.014 + breath * 0.003 + cheerBounce,
+      0
+    );
     const hipsWorld = rig.group.localToWorld(hipsLocal);
     if (b.Hips.parent) {
       b.Hips.position.copy(b.Hips.parent.worldToLocal(hipsWorld));
@@ -1605,11 +1819,11 @@ diffuseColor.rgb = outfitCol * fabricShade;
     }
 
     // Subtle upright breathing & head look toward player
-    this.rotateBoneAxis(b.Spine1, npcX, 0.025 * breath);
+    this.rotateBoneAxis(b.Spine1, npcX, 0.025 * breath - (isCheering ? 0.04 : 0));
     this.rotateBoneAxis(b.Spine2, npcX, -0.015 * breath);
     this.rotateBoneAxis(b.Neck, npcY, rig.headLookYaw * 0.45);
     this.rotateBoneAxis(b.Head, npcY, rig.headLookYaw * 0.55);
-    this.rotateBoneAxis(b.Head, npcX, rig.headLookPitch);
+    this.rotateBoneAxis(b.Head, npcX, rig.headLookPitch - (isCheering ? 0.06 * Math.sin(cheerElapsed * 7) : 0));
 
     // Legs standing solidly on flat ground
     const ankleL = rig.group.localToWorld(new THREE.Vector3(0.125, rig.ankleHeight, 0.018));
@@ -1618,30 +1832,72 @@ diffuseColor.rgb = outfitCol * fabricShade;
     this.solveLeg(rig, 'Right', ankleR, this.localDir(rig.group, -0.14, 0, 1));
     this.alignStandingFeet(rig);
 
-    // Left hand holds wooden walking cane handle cleanly (wrist ~5cm above crook so fingers grip handle)
-    const caneGrip = rig.group.localToWorld(
-      new THREE.Vector3(0.255, 0.935 + breath * 0.005, 0.145)
-    );
+    // Left hand holds wooden walking cane (lifted enthusiastically when cheering!)
+    let caneGrip: THREE.Vector3;
+    if (this.seppCaneGroup) {
+      if (isCheering) {
+        const pump = Math.sin(cheerElapsed * 11.0);
+        const caneLiftY = 0.24 + Math.max(0, Math.sin(cheerElapsed * 8.5)) * 0.16;
+        const caneTilt = 0.24 + pump * 0.09;
+        this.seppCaneGroup.position.set(
+          this.seppCaneRestPos.x,
+          caneLiftY,
+          this.seppCaneRestPos.z + 0.08
+        );
+        this.seppCaneGroup.rotation.set(caneTilt, 0, -0.08);
+      } else {
+        this.seppCaneGroup.position.copy(this.seppCaneRestPos);
+        this.seppCaneGroup.rotation.set(0, 0, 0);
+      }
+      this.seppCaneGroup.updateMatrixWorld(true);
+      caneGrip = this.seppCaneGroup.localToWorld(
+        new THREE.Vector3(0, 0.935 + breath * 0.005, -0.01)
+      );
+    } else {
+      caneGrip = rig.group.localToWorld(
+        new THREE.Vector3(0.255, 0.935 + breath * 0.005, 0.145)
+      );
+    }
     this.solveArm(rig, 'Left', caneGrip, this.localDir(rig.group, 0.72, -0.35, -0.60));
 
-    // Right hand waves warmly when skater is close & quest idle, otherwise relaxed at side
-    const waveX = isWaving ? -0.34 + Math.sin(timeSec * 5.8) * 0.075 : -0.245;
-    const waveY = isWaving
-      ? 1.46 + Math.cos(timeSec * 5.8) * 0.035
-      : 0.835 + breath * 0.008;
-    const waveZ = isWaving ? 0.22 : 0.08;
-    const handRTarget = rig.group.localToWorld(new THREE.Vector3(waveX, waveY, waveZ));
-    const poleR = isWaving
-      ? this.localDir(rig.group, -0.65, -0.55, -0.25)
-      : this.localDir(rig.group, -0.78, -0.25, -0.62);
+    // Right hand: enthusiastic high pump when cheering, warm wave when idle near player, else relaxed
+    let handRTarget: THREE.Vector3;
+    let poleR: THREE.Vector3;
+    if (isCheering) {
+      const cheerPump = Math.sin(cheerElapsed * 11.5);
+      handRTarget = rig.group.localToWorld(
+        new THREE.Vector3(
+          -0.34 + Math.cos(cheerElapsed * 6.5) * 0.06,
+          1.66 + cheerPump * 0.11,
+          0.20
+        )
+      );
+      poleR = this.localDir(rig.group, -0.65, -0.55, -0.25);
+    } else {
+      const waveX = isWaving ? -0.34 + Math.sin(timeSec * 5.8) * 0.075 : -0.245;
+      const waveY = isWaving
+        ? 1.46 + Math.cos(timeSec * 5.8) * 0.035
+        : 0.835 + breath * 0.008;
+      const waveZ = isWaving ? 0.22 : 0.08;
+      handRTarget = rig.group.localToWorld(new THREE.Vector3(waveX, waveY, waveZ));
+      poleR = isWaving
+        ? this.localDir(rig.group, -0.65, -0.55, -0.25)
+        : this.localDir(rig.group, -0.78, -0.25, -0.62);
+    }
     this.solveArm(rig, 'Right', handRTarget, poleR);
 
     for (const f of rig.fingerBones) {
-      f.rotateX(isWaving ? 0.14 : 0.28);
+      f.rotateX(isCheering ? 0.22 : isWaving ? 0.14 : 0.28);
     }
   }
 
-  private poseMichi(rig: MakeHumanRig, _dt: number, timeSec: number): void {
+  private poseMichi(
+    rig: MakeHumanRig,
+    _dt: number,
+    timeSec: number,
+    isCheering = false,
+    cheerElapsed = 0
+  ): void {
     const b = rig.bones;
     this.resetRigToRest(rig);
     rig.group.updateMatrixWorld(true);
@@ -1649,15 +1905,22 @@ diffuseColor.rgb = outfitCol * fabricShade;
     const npcX = this.localDir(rig.group, 1, 0, 0);
     const npcY = this.localDir(rig.group, 0, 1, 0);
     const breath = Math.sin(timeSec * 1.85);
+    const cheerBounce = isCheering && cheerElapsed >= 0.36
+      ? Math.abs(Math.sin(cheerElapsed * 8.0)) * 0.014
+      : 0;
 
-    const hipsLocal = new THREE.Vector3(0, rig.hipsRestHeight - 0.016 + breath * 0.003, 0);
+    const hipsLocal = new THREE.Vector3(
+      0,
+      rig.hipsRestHeight - 0.016 + breath * 0.003 + cheerBounce,
+      0
+    );
     const hipsWorld = rig.group.localToWorld(hipsLocal);
     if (b.Hips.parent) {
       b.Hips.position.copy(b.Hips.parent.worldToLocal(hipsWorld));
       b.Hips.updateMatrixWorld(true);
     }
 
-    this.rotateBoneAxis(b.Spine1, npcX, 0.02 * breath);
+    this.rotateBoneAxis(b.Spine1, npcX, 0.02 * breath - (isCheering && cheerElapsed >= 0.36 ? 0.045 : 0));
     this.rotateBoneAxis(b.Neck, npcY, rig.headLookYaw * 0.4);
     this.rotateBoneAxis(b.Head, npcY, rig.headLookYaw * 0.6);
     this.rotateBoneAxis(b.Head, npcX, rig.headLookPitch);
@@ -1669,14 +1932,27 @@ diffuseColor.rgb = outfitCol * fabricShade;
     this.solveLeg(rig, 'Right', ankleR, this.localDir(rig.group, -0.15, 0, 1));
     this.alignStandingFeet(rig);
 
-    // Both hands grip the DSLR telephoto camera
+    // Left hand grips the DSLR telephoto camera
     const gripLWorld = this.worldPos(this.camGripL);
-    const gripRWorld = this.worldPos(this.camGripR);
     this.solveArm(rig, 'Left', gripLWorld, this.localDir(rig.group, 0.62, -0.62, -0.38));
-    this.solveArm(rig, 'Right', gripRWorld, this.localDir(rig.group, -0.65, -0.58, -0.40));
+
+    // Right hand: after snapping the photo (0.36s), raise hand in salute / celebratory cheer
+    if (isCheering && cheerElapsed >= 0.36) {
+      const saluteTarget = rig.group.localToWorld(
+        new THREE.Vector3(
+          -0.31 + Math.sin(cheerElapsed * 9.0) * 0.045,
+          1.63 + Math.cos(cheerElapsed * 9.0) * 0.055,
+          0.22
+        )
+      );
+      this.solveArm(rig, 'Right', saluteTarget, this.localDir(rig.group, -0.68, -0.55, -0.30));
+    } else {
+      const gripRWorld = this.worldPos(this.camGripR);
+      this.solveArm(rig, 'Right', gripRWorld, this.localDir(rig.group, -0.65, -0.58, -0.40));
+    }
 
     for (const f of rig.fingerBones) {
-      f.rotateX(0.36);
+      f.rotateX(isCheering && cheerElapsed >= 0.36 ? 0.18 : 0.36);
     }
   }
 
@@ -1819,6 +2095,73 @@ diffuseColor.rgb = outfitCol * fabricShade;
     sprite.renderOrder = 12;
 
     return { sprite, canvas, ctx, tex, mat };
+  }
+
+  private buildHypePopupSprite(): {
+    sprite: THREE.Sprite;
+    mat: THREE.SpriteMaterial;
+  } {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d')!;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.shadowColor = 'rgba(251, 191, 36, 0.9)';
+    ctx.shadowBlur = 20;
+
+    // Rounded golden pill badge
+    const bx = 46;
+    const by = 52;
+    const bw = 420;
+    const bh = 148;
+    const r = 44;
+
+    ctx.beginPath();
+    ctx.moveTo(bx + r, by);
+    ctx.lineTo(bx + bw - r, by);
+    ctx.quadraticCurveTo(bx + bw, by, bx + bw, by + r);
+    ctx.lineTo(bx + bw, by + bh - r);
+    ctx.quadraticCurveTo(bx + bw, by + bh, bx + bw - r, by + bh);
+    ctx.lineTo(bx + r, by + bh);
+    ctx.quadraticCurveTo(bx, by + bh, bx, by + bh - r);
+    ctx.lineTo(bx, by + r);
+    ctx.quadraticCurveTo(bx, by, bx + r, by);
+    ctx.closePath();
+
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+    ctx.fill();
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = '#fbbf24';
+    ctx.stroke();
+
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = '#fde047';
+    ctx.font = '900 74px "Barlow Condensed", Impact, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🔥 +500 ★', canvas.width / 2, by + bh / 2 + 4);
+    ctx.restore();
+
+    const tex = this.trackTex(new THREE.CanvasTexture(canvas));
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.minFilter = THREE.LinearFilter;
+
+    const mat = this.trackMat(
+      new THREE.SpriteMaterial({
+        map: tex,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      })
+    );
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(1.25, 0.625, 1);
+    sprite.renderOrder = 14;
+    sprite.visible = false;
+
+    return { sprite, mat };
   }
 
   private updateMarkerPosition(): void {

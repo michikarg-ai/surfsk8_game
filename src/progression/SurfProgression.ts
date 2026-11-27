@@ -1,5 +1,6 @@
 import { ManeuverEvent, SurfskateController } from '../physics/SurfskateController';
 import { formatNum, onLangChange, t, TranslationKey } from '../i18n/i18n';
+import type { BoardUnlockProgress } from '../config/SurfBoards';
 
 export type GameModeId = 'jam' | 'flow_cup' | 'zen';
 
@@ -49,6 +50,7 @@ interface PersistedProgressionState {
   totalCompletedMissions: number;
   parkHighScores: Record<string, number>;
   parkBestMedals: Record<string, MedalInfo['id']>;
+  bestSessionScore?: number;
 }
 
 const STORAGE_KEY = 'surfsk8.progression.v1';
@@ -199,13 +201,26 @@ export class SurfProgression {
             typeof parsed.totalCompletedMissions === 'number' && parsed.totalCompletedMissions >= 0
               ? parsed.totalCompletedMissions
               : (parsed.rankLevel - 1) * 3 + completedIds.length;
+          const parkHighScores =
+            parsed.parkHighScores && typeof parsed.parkHighScores === 'object' ? parsed.parkHighScores : {};
+          const maxParkScore = Math.max(
+            0,
+            ...Object.values(parkHighScores).filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+          );
+          const bestSessionScore = Math.max(
+            maxParkScore,
+            typeof parsed.bestSessionScore === 'number' && Number.isFinite(parsed.bestSessionScore)
+              ? parsed.bestSessionScore
+              : 0
+          );
           return {
             version: 1,
             rankLevel: parsed.rankLevel,
             completedMissionIds: completedIds,
             totalCompletedMissions: totalDone,
-            parkHighScores: parsed.parkHighScores && typeof parsed.parkHighScores === 'object' ? parsed.parkHighScores : {},
+            parkHighScores,
             parkBestMedals: parsed.parkBestMedals && typeof parsed.parkBestMedals === 'object' ? parsed.parkBestMedals : {},
+            bestSessionScore,
           };
         }
       }
@@ -219,6 +234,7 @@ export class SurfProgression {
       totalCompletedMissions: 0,
       parkHighScores: {},
       parkBestMedals: {},
+      bestSessionScore: 0,
     };
   }
 
@@ -397,7 +413,39 @@ export class SurfProgression {
       this.sessionSurfZoneSeconds += dt;
     }
 
+    const cleanScore = Math.floor(totalScore);
+    const prevBest = this.state.bestSessionScore || 0;
+    if (cleanScore > prevBest) {
+      this.state.bestSessionScore = cleanScore;
+      // Persist immediately if we just crossed the Golden Pretzel unlock threshold
+      if (prevBest < 25000 && cleanScore >= 25000) {
+        this.saveState();
+      }
+    }
+
     this.evaluateMissionProgress(totalScore, bestOrActiveCombo, pretzelsCollected);
+  }
+
+  public recordSessionScore(score: number): void {
+    const cleanScore = Math.floor(score);
+    if (cleanScore > (this.state.bestSessionScore || 0)) {
+      this.state.bestSessionScore = cleanScore;
+      this.saveState();
+    }
+  }
+
+  public getBoardUnlockProgress(): BoardUnlockProgress {
+    const parkMax = Math.max(
+      0,
+      ...Object.values(this.state.parkHighScores || {}).filter(
+        (v): v is number => typeof v === 'number' && Number.isFinite(v)
+      )
+    );
+    return {
+      rankLevel: this.state.rankLevel,
+      totalCompletedMissions: this.state.totalCompletedMissions,
+      bestSessionScore: Math.max(this.state.bestSessionScore || 0, parkMax),
+    };
   }
 
   private evaluateMissionProgress(
@@ -527,6 +575,9 @@ export class SurfProgression {
 
     if (isNewHighScore) {
       this.state.parkHighScores[parkId] = highScore;
+    }
+    if (cleanScore > (this.state.bestSessionScore || 0)) {
+      this.state.bestSessionScore = cleanScore;
     }
 
     const { medal, nextMedal, pointsToNextMedal } = this.getMedalForScore(cleanScore);

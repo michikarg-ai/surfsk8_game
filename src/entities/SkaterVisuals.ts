@@ -3,6 +3,12 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SurfskateController } from '../physics/SurfskateController';
 import { resolveAssetUrl } from '../utils/assetUrl';
+import {
+  getBoardById,
+  getSelectedBoardId,
+  SurfBoardId,
+  SurfBoardSpec,
+} from '../config/SurfBoards';
 
 type Side = 'Left' | 'Right';
 
@@ -65,6 +71,15 @@ export class SkaterVisuals {
   private frontTruckPivot: THREE.Object3D | null = null;
   private rearTruckPivot: THREE.Object3D | null = null;
   private wheels: THREE.Object3D[] = [];
+  private baseFrontTruckZ = 0.25;
+  private baseRearTruckZ = -0.25;
+
+  // Custom unlockable board visuals & GPU resource caches
+  private activeBoardSpec: SurfBoardSpec = getBoardById(getSelectedBoardId());
+  private deckTextureCache = new Map<SurfBoardId, THREE.CanvasTexture>();
+  private deckMaterialCache = new Map<SurfBoardId, THREE.MeshStandardMaterial>();
+  private wheelMaterialClones: THREE.MeshStandardMaterial[] = [];
+  private activeWheelMat: THREE.MeshStandardMaterial | null = null;
 
   // Skeleton of the rigged human (Mixamo-style bone names)
   private bones: Record<string, THREE.Bone> = {};
@@ -257,6 +272,11 @@ export class SkaterVisuals {
     if (this.modelRoot) {
       this.root.remove(this.modelRoot);
     }
+    for (const wm of this.wheelMaterialClones) {
+      wm.dispose();
+    }
+    this.wheelMaterialClones = [];
+    this.activeWheelMat = null;
     this.modelRoot = gltf.scene;
     this.bones = {};
     this.restQuat.clear();
@@ -328,8 +348,14 @@ export class SkaterVisuals {
       }
       if (child.name === 'BoardGroup') this.boardGroup = child;
       if (child.name === 'DeckMesh') this.deckMesh = child;
-      if (child.name === 'FrontTruckPivot') this.frontTruckPivot = child;
-      if (child.name === 'RearTruckPivot') this.rearTruckPivot = child;
+      if (child.name === 'FrontTruckPivot') {
+        this.frontTruckPivot = child;
+        this.baseFrontTruckZ = child.position.z;
+      }
+      if (child.name === 'RearTruckPivot') {
+        this.rearTruckPivot = child;
+        this.baseRearTruckZ = child.position.z;
+      }
       if (child.name.startsWith('FrontWheel_') || child.name.startsWith('RearWheel_')) {
         this.wheels.push(child);
       }
@@ -385,11 +411,615 @@ export class SkaterVisuals {
       });
     }
 
+    // Prepare clean Top / Rail / Bottom UVs on DeckMesh & share a cloned urethane material across wheels
+    this.prepareDeckAndWheelMaterials();
+
     // Attach authentic surfskate trucks physically connecting deck to wheels
     this.attachRealisticSurfskateTrucks();
 
+    // Re-apply active board texture, scale, wheel color & metallic finish across skater reloads
+    this.applyBoardVisuals();
+
     this.root.position.copy(prevPos);
     this.root.rotation.copy(prevRot);
+  }
+
+  public setBoardSpec(board: SurfBoardSpec): void {
+    this.activeBoardSpec = board;
+    this.applyBoardVisuals();
+  }
+
+  public dispose(): void {
+    for (const tex of this.deckTextureCache.values()) {
+      tex.dispose();
+    }
+    this.deckTextureCache.clear();
+    for (const mat of this.deckMaterialCache.values()) {
+      mat.dispose();
+    }
+    this.deckMaterialCache.clear();
+    for (const wm of this.wheelMaterialClones) {
+      wm.dispose();
+    }
+    this.wheelMaterialClones = [];
+    this.activeWheelMat = null;
+  }
+
+  private prepareDeckAndWheelMaterials(): void {
+    if (this.deckMesh && (this.deckMesh as THREE.Mesh).isMesh) {
+      const mesh = this.deckMesh as THREE.Mesh;
+      const srcGeo = mesh.geometry;
+      if (srcGeo) {
+        const geo = srcGeo.index ? srcGeo.toNonIndexed() : srcGeo.clone();
+        srcGeo.dispose();
+        geo.computeBoundingBox();
+        const bb = geo.boundingBox!;
+        const halfW = Math.max(0.05, Math.max(Math.abs(bb.min.x), Math.abs(bb.max.x)));
+        const minZ = bb.min.z;
+        const lenZ = Math.max(0.1, bb.max.z - minZ);
+        const posAttr = geo.getAttribute('position') as THREE.BufferAttribute;
+        const normAttr = geo.getAttribute('normal') as THREE.BufferAttribute;
+        const uvArray = new Float32Array(posAttr.count * 2);
+
+        for (let i = 0; i < posAttr.count; i += 3) {
+          const avgNy =
+            (normAttr.getY(i) + normAttr.getY(i + 1) + normAttr.getY(i + 2)) / 3;
+          const isTop = avgNy > 0.22;
+          const isBottom = avgNy < -0.22;
+
+          for (let k = 0; k < 3; k++) {
+            const idx = i + k;
+            const px = posAttr.getX(idx);
+            const pz = posAttr.getZ(idx);
+            const v = THREE.MathUtils.clamp(((pz - minZ) / lenZ) * 0.94 + 0.03, 0.01, 0.99);
+            let u: number;
+            if (isTop) {
+              u = THREE.MathUtils.clamp(0.24 + (px / halfW) * 0.21, 0.02, 0.46);
+            } else if (isBottom) {
+              u = THREE.MathUtils.clamp(0.76 + (px / halfW) * 0.21, 0.54, 0.98);
+            } else {
+              // Rail ply veneer strip [0.484 .. 0.516]
+              const edgeFactor = THREE.MathUtils.clamp(Math.abs(normAttr.getX(idx)), 0, 1);
+              u = 0.485 + edgeFactor * 0.03;
+            }
+            uvArray[idx * 2] = u;
+            uvArray[idx * 2 + 1] = v;
+          }
+        }
+        geo.setAttribute('uv', new THREE.BufferAttribute(uvArray, 2));
+        mesh.geometry = geo;
+      }
+    }
+
+    if (this.wheels.length > 0) {
+      let sharedMat: THREE.MeshStandardMaterial | null = null;
+      for (const wheelObj of this.wheels) {
+        wheelObj.traverse((node) => {
+          if ((node as THREE.Mesh).isMesh) {
+            const wMesh = node as THREE.Mesh;
+            if (!sharedMat) {
+              const raw = Array.isArray(wMesh.material) ? wMesh.material[0] : wMesh.material;
+              if (raw && (raw as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
+                sharedMat = (raw as THREE.MeshStandardMaterial).clone();
+              } else {
+                sharedMat = new THREE.MeshStandardMaterial({ roughness: 0.34, metalness: 0.0 });
+              }
+              this.wheelMaterialClones.push(sharedMat);
+            }
+            wMesh.material = sharedMat;
+          }
+        });
+      }
+      this.activeWheelMat = sharedMat;
+    }
+  }
+
+  private getDeckMaterial(spec: SurfBoardSpec): THREE.MeshStandardMaterial {
+    const cached = this.deckMaterialCache.get(spec.id);
+    if (cached) return cached;
+
+    let tex = this.deckTextureCache.get(spec.id);
+    if (!tex) {
+      tex = this.createBoardDeckTexture(spec);
+      this.deckTextureCache.set(spec.id, tex);
+    }
+
+    const mat = new THREE.MeshStandardMaterial({
+      map: tex,
+      side: THREE.DoubleSide,
+      metalness: spec.metallic ? 0.54 : 0.04,
+      roughness: spec.metallic ? 0.28 : 0.58,
+      emissive: spec.metallic ? new THREE.Color('#3b2600') : new THREE.Color(0x000000),
+      emissiveIntensity: spec.metallic ? 0.14 : 0.0,
+    });
+    this.deckMaterialCache.set(spec.id, mat);
+    return mat;
+  }
+
+  private applyBoardVisuals(): void {
+    const spec = this.activeBoardSpec;
+
+    if (this.deckMesh) {
+      this.deckMesh.scale.set(spec.deckScale.x, 1.0, spec.deckScale.z);
+      if ((this.deckMesh as THREE.Mesh).isMesh) {
+        (this.deckMesh as THREE.Mesh).material = this.getDeckMaterial(spec);
+      }
+    }
+
+    if (this.frontTruckPivot) {
+      this.frontTruckPivot.position.z = this.baseFrontTruckZ * spec.deckScale.z;
+    }
+    if (this.rearTruckPivot) {
+      this.rearTruckPivot.position.z = this.baseRearTruckZ * spec.deckScale.z;
+    }
+
+    if (this.activeWheelMat) {
+      this.activeWheelMat.color.set(spec.wheelColor);
+      this.activeWheelMat.roughness = 0.34;
+      if (spec.goldTrail) {
+        this.activeWheelMat.emissive.set('#ffb800');
+        this.activeWheelMat.emissiveIntensity = 0.32;
+      } else {
+        this.activeWheelMat.emissive.setRGB(0, 0, 0);
+        this.activeWheelMat.emissiveIntensity = 0;
+      }
+      this.activeWheelMat.needsUpdate = true;
+    }
+  }
+
+  private createBoardDeckTexture(spec: SurfBoardSpec): THREE.CanvasTexture {
+    const W = 1024;
+    const H = 1024;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d')!;
+
+    // -----------------------------------------------------------------------
+    // 1. LEFT HALF [0..491]: TOP DECK (Wood/Metallic Rim + Textured Griptape)
+    // -----------------------------------------------------------------------
+    const topCx = 245;
+    const topBaseColors: Record<SurfBoardId, [string, string]> = {
+      the_spiral: ['#e6b67e', '#b97a3e'],
+      isar_swallowtail: ['#7de8dc', '#0e9087'],
+      sunset_cruiser: ['#f9a86b', '#b92b6c'],
+      golden_pretzel: ['#ffe484', '#b88214'],
+    };
+    const [topLight, topDark] = topBaseColors[spec.id];
+    const topGrad = ctx.createLinearGradient(0, 0, 491, H);
+    topGrad.addColorStop(0, topLight);
+    topGrad.addColorStop(0.5, topDark);
+    topGrad.addColorStop(1, topLight);
+    ctx.fillStyle = topGrad;
+    ctx.fillRect(0, 0, 491, H);
+
+    // Subtle longitudinal wood / brushed sheen lines on top base
+    ctx.strokeStyle = spec.metallic ? 'rgba(255, 250, 220, 0.24)' : 'rgba(60, 28, 8, 0.14)';
+    ctx.lineWidth = 2;
+    for (let x = 18; x < 480; x += 14) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x + Math.sin(x * 0.13) * 6, H);
+      ctx.stroke();
+    }
+
+    // Center racing reveal graphic underneath the die-cut griptape
+    if (spec.id === 'the_spiral') {
+      ctx.fillStyle = '#ff6b1a';
+      ctx.fillRect(topCx - 20, 0, 40, H);
+      ctx.fillStyle = '#fef3c7';
+      ctx.fillRect(topCx - 6, 0, 12, H);
+    } else if (spec.id === 'isar_swallowtail') {
+      ctx.fillStyle = '#00e5d4';
+      ctx.fillRect(topCx - 28, 0, 56, H);
+      ctx.fillStyle = '#ecfeff';
+      ctx.fillRect(topCx - 8, 0, 16, H);
+    } else if (spec.id === 'sunset_cruiser') {
+      const sGrad = ctx.createLinearGradient(topCx - 36, 0, topCx + 36, 0);
+      sGrad.addColorStop(0, '#ff3d8a');
+      sGrad.addColorStop(0.5, '#ffd54a');
+      sGrad.addColorStop(1, '#ff6b1a');
+      ctx.fillStyle = sGrad;
+      ctx.fillRect(topCx - 34, 0, 68, H);
+    } else {
+      // Golden Pretzel: rich brushed champagne-gold center & dark pretzel mark near nose
+      const gGrad = ctx.createLinearGradient(80, 0, 410, 0);
+      gGrad.addColorStop(0, '#c78c18');
+      gGrad.addColorStop(0.5, '#fff1a6');
+      gGrad.addColorStop(1, '#c78c18');
+      ctx.fillStyle = gGrad;
+      ctx.fillRect(40, 0, 410, H);
+    }
+
+    // Matte black griptape inset (leaving clean deck rim + nose/tail graphic windows)
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(36, 38, 418, H - 76, 95);
+    ctx.clip();
+
+    ctx.fillStyle = '#18181b';
+    ctx.fillRect(36, 38, 418, H - 76);
+
+    // Grip speckles
+    for (let i = 0; i < 3600; i++) {
+      const sx = 36 + ((i * 197) % 418);
+      const sy = 38 + ((i * 523) % (H - 76));
+      ctx.fillStyle = i % 3 === 0 ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.35)';
+      ctx.fillRect(sx, sy, 2, 2);
+    }
+
+    // Die-cut griptape windows at nose & tail so board personality pops from top camera!
+    ctx.globalCompositeOperation = 'destination-out';
+    if (spec.id === 'the_spiral') {
+      // Curved diagonal wood/orange racing stripe gap near nose & tail
+      ctx.beginPath();
+      ctx.moveTo(topCx - 55, 86);
+      ctx.lineTo(topCx + 55, 118);
+      ctx.lineTo(topCx + 55, 146);
+      ctx.lineTo(topCx - 55, 114);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(topCx - 55, H - 146);
+      ctx.lineTo(topCx + 55, H - 114);
+      ctx.lineTo(topCx + 55, H - 86);
+      ctx.lineTo(topCx - 55, H - 118);
+      ctx.closePath();
+      ctx.fill();
+    } else if (spec.id === 'isar_swallowtail') {
+      // Aqua swallowtail chevron cutouts
+      ctx.beginPath();
+      ctx.moveTo(topCx - 90, 92);
+      ctx.lineTo(topCx, 140);
+      ctx.lineTo(topCx + 90, 92);
+      ctx.lineTo(topCx + 90, 122);
+      ctx.lineTo(topCx, 170);
+      ctx.lineTo(topCx - 90, 122);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(topCx - 85, H - 90);
+      ctx.lineTo(topCx, H - 148);
+      ctx.lineTo(topCx + 85, H - 90);
+      ctx.lineTo(topCx + 85, H - 62);
+      ctx.lineTo(topCx, H - 118);
+      ctx.lineTo(topCx - 85, H - 62);
+      ctx.closePath();
+      ctx.fill();
+    } else if (spec.id === 'sunset_cruiser') {
+      // Miami sunset centerline racing stripe cutout
+      ctx.fillRect(topCx - 22, 40, 44, 130);
+      ctx.fillRect(topCx - 22, H - 170, 44, 130);
+    } else {
+      // Golden Pretzel: exposed gold nose, tail & center emblem window
+      ctx.fillRect(0, 0, 491, 148);
+      ctx.fillRect(0, H - 148, 491, 148);
+      ctx.beginPath();
+      ctx.arc(topCx, H * 0.5, 68, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // Redraw clean top background underneath transparent destination-out cutouts
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-over';
+    ctx.fillStyle = topGrad;
+    ctx.fillRect(0, 0, 491, H);
+    ctx.restore();
+
+    // For Golden Pretzel top, stamp crisp dark pretzel crest in the center window
+    if (spec.id === 'golden_pretzel') {
+      this.drawPretzelCrest(ctx, topCx, H * 0.5, 48, '#17130d', '#ffd54a');
+      this.drawPretzelCrest(ctx, topCx, 95, 26, '#17130d', '#ffd54a');
+    }
+
+    // 8 Truck Mounting Bolts on Top Deck (front y ≈ 224, rear y ≈ 794)
+    const boltColor = spec.wheelColor;
+    for (const by of [224, 794]) {
+      for (const dx of [-36, 36]) {
+        for (const dy of [-32, 32]) {
+          ctx.beginPath();
+          ctx.arc(topCx + dx, by + dy, 6.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#09090b';
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(topCx + dx, by + dy, 4.2, 0, Math.PI * 2);
+          ctx.fillStyle = boltColor;
+          ctx.fill();
+        }
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // 2. CENTER STRIP [491..533]: 7-PLY RAIL VENEER
+    // -----------------------------------------------------------------------
+    const plyColors = spec.metallic
+      ? ['#92610d', '#ffd54a', '#1c1917', '#ffe885', '#1c1917', '#ffd54a', '#92610d']
+      : ['#e8c391', '#9c632b', '#e8c391', spec.wheelColor, '#e8c391', '#9c632b', '#e8c391'];
+    const plyW = 42 / plyColors.length;
+    for (let p = 0; p < plyColors.length; p++) {
+      ctx.fillStyle = plyColors[p];
+      ctx.fillRect(491 + p * plyW, 0, plyW + 1, H);
+    }
+
+    // -----------------------------------------------------------------------
+    // 3. RIGHT HALF [533..1024]: BOTTOM DECK GRAPHIC
+    // -----------------------------------------------------------------------
+    const botX = 533;
+    const botW = W - botX;
+    const botCx = botX + botW * 0.5;
+
+    if (spec.id === 'the_spiral') {
+      // Warm roasted maple wood deck + bold sunset-orange hypnotic spiral
+      const bg = ctx.createLinearGradient(botX, 0, W, H);
+      bg.addColorStop(0, '#e0aa6d');
+      bg.addColorStop(0.5, '#c58040');
+      bg.addColorStop(1, '#9d5b24');
+      ctx.fillStyle = bg;
+      ctx.fillRect(botX, 0, botW, H);
+
+      ctx.strokeStyle = 'rgba(72, 34, 10, 0.16)';
+      ctx.lineWidth = 3;
+      for (let x = botX + 16; x < W; x += 18) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x + Math.sin(x * 0.11) * 10, H);
+        ctx.stroke();
+      }
+
+      // Center stringer stripe
+      ctx.fillStyle = '#1c1917';
+      ctx.fillRect(botCx - 14, 0, 28, H);
+      ctx.fillStyle = '#ff6b1a';
+      ctx.fillRect(botCx - 6, 0, 12, H);
+
+      // Hypnotic Spiral Medallion
+      ctx.save();
+      ctx.translate(botCx, H * 0.5);
+      ctx.beginPath();
+      ctx.arc(0, 0, 155, 0, Math.PI * 2);
+      ctx.fillStyle = '#181411';
+      ctx.fill();
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = '#ff6b1a';
+      ctx.beginPath();
+      for (let a = 0; a < Math.PI * 7.2; a += 0.12) {
+        const r = 6 + a * 6.2;
+        const px = Math.cos(a) * r;
+        const py = Math.sin(a) * r;
+        if (a === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#fef3c7';
+      ctx.beginPath();
+      for (let a = 0.35; a < Math.PI * 6.8; a += 0.12) {
+        const r = 4 + a * 6.0;
+        const px = Math.cos(a) * r;
+        const py = Math.sin(a) * r;
+        if (a === 0.35) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.restore();
+    } else if (spec.id === 'isar_swallowtail') {
+      // Vintage bone-cream & retro turquoise-aqua surf stripes + Isar wave crest
+      ctx.fillStyle = '#ecfeff';
+      ctx.fillRect(botX, 0, botW, H);
+
+      const tGrad = ctx.createLinearGradient(botX, 0, W, H);
+      tGrad.addColorStop(0, '#00e5d4');
+      tGrad.addColorStop(0.55, '#0891b2');
+      tGrad.addColorStop(1, '#0f766e');
+      ctx.fillStyle = tGrad;
+      ctx.fillRect(botX, 240, botW, 540);
+
+      // Diagonal surf stripes
+      ctx.fillStyle = '#fef3c7';
+      ctx.beginPath();
+      ctx.moveTo(botX, 200);
+      ctx.lineTo(W, 330);
+      ctx.lineTo(W, 372);
+      ctx.lineTo(botX, 242);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.moveTo(botX, 680);
+      ctx.lineTo(W, 550);
+      ctx.lineTo(W, 588);
+      ctx.lineTo(botX, 718);
+      ctx.closePath();
+      ctx.fill();
+
+      // Stylized Isar wave circle crest
+      ctx.save();
+      ctx.translate(botCx, H * 0.47);
+      ctx.beginPath();
+      ctx.arc(0, 0, 128, 0, Math.PI * 2);
+      ctx.fillStyle = '#083344';
+      ctx.fill();
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = '#99f6e4';
+      ctx.stroke();
+      // 3 crisp surf waves inside medallion
+      for (let w = -1; w <= 1; w++) {
+        ctx.beginPath();
+        const wy = w * 32;
+        ctx.moveTo(-95, wy + 12);
+        ctx.quadraticCurveTo(-40, wy - 28, 0, wy + 6);
+        ctx.quadraticCurveTo(40, wy + 34, 95, wy - 10);
+        ctx.strokeStyle = w === 0 ? '#00e5d4' : '#ecfeff';
+        ctx.lineWidth = 10;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Swallowtail V-notch emblem near tail
+      ctx.fillStyle = '#083344';
+      ctx.beginPath();
+      ctx.moveTo(botCx - 110, H - 150);
+      ctx.lineTo(botCx, H - 40);
+      ctx.lineTo(botCx + 110, H - 150);
+      ctx.lineTo(botCx + 110, H);
+      ctx.lineTo(botCx - 110, H);
+      ctx.closePath();
+      ctx.fill();
+    } else if (spec.id === 'sunset_cruiser') {
+      // Miami Sunset gradient + retro slatted sun + pintail stripes
+      const mGrad = ctx.createLinearGradient(botX, 0, botX, H);
+      mGrad.addColorStop(0, '#2e1065');
+      mGrad.addColorStop(0.32, '#831843');
+      mGrad.addColorStop(0.62, '#ff3d8a');
+      mGrad.addColorStop(0.85, '#ff7b1c');
+      mGrad.addColorStop(1, '#ffd54a');
+      ctx.fillStyle = mGrad;
+      ctx.fillRect(botX, 0, botW, H);
+
+      // Center pintail speed lines
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+      ctx.fillRect(botCx - 56, 0, 12, H);
+      ctx.fillRect(botCx + 44, 0, 12, H);
+
+      // Retro Miami Sun Disc with scanline cuts
+      ctx.save();
+      ctx.translate(botCx, H * 0.45);
+      const sunGrad = ctx.createLinearGradient(0, -130, 0, 130);
+      sunGrad.addColorStop(0, '#fef08a');
+      sunGrad.addColorStop(0.5, '#ff7b1c');
+      sunGrad.addColorStop(1, '#ff3d8a');
+      ctx.fillStyle = sunGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, 132, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#3b0764';
+      for (const barY of [18, 44, 68, 90, 110]) {
+        ctx.fillRect(-140, barY, 280, 11);
+      }
+      ctx.restore();
+
+      // Twin sunset chevrons toward tail
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 10;
+      for (const cy of [730, 790, 850]) {
+        ctx.beginPath();
+        ctx.moveTo(botCx - 105, cy - 35);
+        ctx.lineTo(botCx, cy + 15);
+        ctx.lineTo(botCx + 105, cy - 35);
+        ctx.stroke();
+      }
+    } else {
+      // GOLDEN PRETZEL PRO: brushed gold metallic base + dark obsidian pretzel crest emblem
+      const gBg = ctx.createLinearGradient(botX, 0, W, H);
+      gBg.addColorStop(0, '#fde047');
+      gBg.addColorStop(0.28, '#f59e0b');
+      gBg.addColorStop(0.55, '#fef08a');
+      gBg.addColorStop(0.82, '#d97706');
+      gBg.addColorStop(1, '#fde047');
+      ctx.fillStyle = gBg;
+      ctx.fillRect(botX, 0, botW, H);
+
+      // Brushed metal horizontal micro-strokes
+      for (let y = 0; y < H; y += 4) {
+        ctx.fillStyle =
+          y % 8 === 0 ? 'rgba(255, 255, 255, 0.14)' : 'rgba(120, 53, 15, 0.08)';
+        ctx.fillRect(botX, y, botW, 2);
+      }
+
+      // Dark obsidian pinstripe frame
+      ctx.strokeStyle = '#17130d';
+      ctx.lineWidth = 12;
+      ctx.strokeRect(botX + 34, 48, botW - 68, H - 96);
+      ctx.strokeStyle = '#fef9c3';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(botX + 48, 62, botW - 96, H - 124);
+
+      // Center Shield Medallion & Bavarian Pretzel Crest
+      ctx.save();
+      ctx.translate(botCx, H * 0.5);
+      ctx.beginPath();
+      ctx.arc(0, 0, 144, 0, Math.PI * 2);
+      ctx.fillStyle = '#17130d';
+      ctx.fill();
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = '#ffd54a';
+      ctx.stroke();
+      ctx.restore();
+
+      this.drawPretzelCrest(ctx, botCx, H * 0.5, 96, '#ffd54a', '#17130d');
+
+      // PRO banner pills nose & tail
+      ctx.fillStyle = '#17130d';
+      ctx.fillRect(botCx - 110, 128, 220, 44);
+      ctx.fillRect(botCx - 110, H - 172, 220, 44);
+      ctx.fillStyle = '#ffd54a';
+      ctx.font = '900 24px Impact, Arial Black, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('PRETZEL PRO', botCx, 150);
+      ctx.fillText('LIMITED EDITION', botCx, H - 150);
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  private drawPretzelCrest(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    radius: number,
+    strokeColor: string,
+    innerHoleColor: string
+  ): void {
+    ctx.save();
+    ctx.translate(cx, cy);
+    const s = radius / 100;
+    ctx.scale(s, s);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Outer loop of classic Bavarian pretzel
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 22;
+    ctx.beginPath();
+    ctx.moveTo(0, 72);
+    ctx.bezierCurveTo(-92, 72, -108, -20, -56, -64);
+    ctx.bezierCurveTo(-18, -96, 18, -42, 42, 16);
+    ctx.bezierCurveTo(60, 58, 86, 52, 92, 10);
+    ctx.bezierCurveTo(98, -32, 62, -78, 22, -68);
+    ctx.bezierCurveTo(-12, -58, -28, -2, -46, 26);
+    ctx.bezierCurveTo(-68, 58, -42, 74, 0, 72);
+    ctx.stroke();
+
+    // Inner twist highlight / core definition
+    ctx.strokeStyle = innerHoleColor;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(-24, -18);
+    ctx.lineTo(24, 18);
+    ctx.moveTo(24, -18);
+    ctx.lineTo(-24, 18);
+    ctx.stroke();
+
+    // Salt crystals on pretzel
+    ctx.fillStyle = '#fefce8';
+    for (const [sx, sy] of [
+      [-62, -26],
+      [62, -28],
+      [-52, 46],
+      [54, 44],
+      [0, -48],
+    ]) {
+      ctx.fillRect(sx - 4, sy - 4, 8, 8);
+    }
+    ctx.restore();
   }
 
   // ---------------------------------------------------------------------------
@@ -957,13 +1587,21 @@ export class SkaterVisuals {
       life = (isPumpFlash ? 0.32 : 0.25) + r() * 0.25;
       alpha = 1.0;
     } else if (kind === 1) {
-      // Warm sunset-orange glow puff
-      cr = 1.0; cg = 0.42 + r() * 0.12; cb = 0.1;
+      // Warm sunset-orange glow puff (or molten champagne-gold on Golden Pretzel Pro)
+      if (this.activeBoardSpec.goldTrail) {
+        cr = 1.0; cg = 0.78 + r() * 0.14; cb = 0.22 + r() * 0.14;
+      } else {
+        cr = 1.0; cg = 0.42 + r() * 0.12; cb = 0.1;
+      }
       size = 0.3 + r() * 0.3; life = 0.8 + r() * 0.6; alpha = 0.26 + r() * 0.14;
     } else {
-      // Glowing orange spray droplets (deep orange to golden)
+      // Glowing spray droplets (deep orange to golden, or pure liquid gold on Golden Pretzel Pro)
       const w = r();
-      cr = 1.0; cg = 0.38 + w * 0.4; cb = 0.06 + w * 0.12;
+      if (this.activeBoardSpec.goldTrail) {
+        cr = 1.0; cg = 0.74 + w * 0.22; cb = 0.18 + w * 0.24;
+      } else {
+        cr = 1.0; cg = 0.38 + w * 0.4; cb = 0.06 + w * 0.12;
+      }
       size = 0.045 + r() * 0.09; life = 0.55 + r() * 0.55; alpha = 0.8 + r() * 0.2;
     }
     this.particleColors[i3] = cr;
@@ -1069,24 +1707,47 @@ export class SkaterVisuals {
       const isSurfZone = ctrl.isSurfZoneActive;
       const isPumpFlash = ctrl.perfectPumpFlashTimer > 0;
 
-      // Base: subtle dark urethane track on concrete
+      // Base: subtle dark urethane track on concrete (or exclusive golden-amber Thaneline for Golden Pretzel Pro)
+      const hasGoldTrail = this.activeBoardSpec.goldTrail;
       let lR = 0.11, lG = 0.12, lB = 0.14;
       let rR = 0.11, rG = 0.12, rB = 0.14;
 
+      if (hasGoldTrail) {
+        const goldPulse = Math.sin(performance.now() * 0.011) * 0.5 + 0.5;
+        lR = 1.0;
+        lG = THREE.MathUtils.lerp(0.68, 0.88, goldPulse);
+        lB = THREE.MathUtils.lerp(0.12, 0.34, goldPulse);
+        rR = 1.0;
+        rG = THREE.MathUtils.lerp(0.88, 0.68, goldPulse);
+        rB = THREE.MathUtils.lerp(0.34, 0.12, goldPulse);
+      }
+
       if (isBertOrLayback) {
-        // Sunset-Orange Thanelines (#ff6a1a)
-        lR = 1.0; lG = 0.416; lB = 0.102;
-        rR = 1.0; rG = 0.416; rB = 0.102;
+        if (hasGoldTrail) {
+          lR = 1.0; lG = 0.76; lB = 0.12;
+          rR = 1.0; rG = 0.86; rB = 0.28;
+        } else {
+          // Sunset-Orange Thanelines (#ff6a1a)
+          lR = 1.0; lG = 0.416; lB = 0.102;
+          rR = 1.0; rG = 0.416; rB = 0.102;
+        }
       } else if (isSnapOrReverse) {
-        // Electric-Cyan Thanelines (#00e5ff)
-        lR = 0.0; lG = 0.898; lB = 1.0;
-        rR = 0.0; rG = 0.898; rB = 1.0;
+        if (hasGoldTrail) {
+          lR = 1.0; lG = 0.92; lB = 0.42;
+          rR = 1.0; rG = 0.78; rB = 0.16;
+        } else {
+          // Electric-Cyan Thanelines (#00e5ff)
+          lR = 0.0; lG = 0.898; lB = 1.0;
+          rR = 0.0; rG = 0.898; rB = 1.0;
+        }
       }
 
       if (isSurfZone) {
-        // Cyan-Gold Overdrive Shimmer under the board
+        // Cyan-Gold Overdrive Shimmer under the board (pure champagne-gold shimmer on Golden Pretzel Pro)
         const shimmer = Math.sin(performance.now() * 0.009) * 0.5 + 0.5;
-        const cyanR = 0.0, cyanG = 0.9, cyanB = 1.0;
+        const cyanR = hasGoldTrail ? 1.0 : 0.0;
+        const cyanG = hasGoldTrail ? 0.94 : 0.9;
+        const cyanB = hasGoldTrail ? 0.52 : 1.0;
         const goldR = 1.0, goldG = 0.82, goldB = 0.12;
 
         if (isSlideTrick) {
@@ -1124,7 +1785,12 @@ export class SkaterVisuals {
 
       // Dynamically adjust trail mesh opacity
       const trailMat = this.trailMesh.material as THREE.MeshBasicMaterial;
-      const targetOpacity = (isSlideTrick || isSurfZone || isPumpFlash) ? 0.92 : 0.42;
+      const targetOpacity =
+        isSlideTrick || isSurfZone || isPumpFlash
+          ? 0.94
+          : hasGoldTrail
+            ? 0.76
+            : 0.42;
       trailMat.opacity = THREE.MathUtils.lerp(trailMat.opacity, targetOpacity, Math.min(1, 8.0 * dt));
 
       // Shift trail vertices and colors down

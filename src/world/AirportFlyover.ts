@@ -40,12 +40,17 @@ interface FlightCorridor {
 export class AirportFlyover {
   public static readonly INITIAL_DELAY_SEC = 18;
   public static readonly FLYOVER_INTERVAL_SEC = 300; // 5 minutes
+  private static readonly SHADOW_RADIUS = 12;
+  private static readonly JETWASH_PULSE_DURATION = 0.85;
 
   private rootGroup = new THREE.Group();
   private airplaneGroup = new THREE.Group();
   private shadowGroup = new THREE.Group();
   private shadowMesh!: THREE.Mesh;
   private shadowMat!: THREE.MeshBasicMaterial;
+  private jetwashRingMesh!: THREE.Mesh;
+  private jetwashRingMat!: THREE.MeshBasicMaterial;
+  private jetwashPulseTimer = 0;
 
   private fanSpinners: THREE.Object3D[] = [];
   private beaconSprites: THREE.Sprite[] = [];
@@ -159,6 +164,18 @@ export class AirportFlyover {
       const shadowAlpha = THREE.MathUtils.clamp(1.0 - (distFromCenter - 45) / 130, 0.0, 1.0);
       this.shadowMat.opacity = 0.48 * shadowAlpha;
 
+      // Animate optional Jetwash slipstream shimmer pulse
+      if (this.jetwashPulseTimer > 0) {
+        this.jetwashPulseTimer = Math.max(0, this.jetwashPulseTimer - clampedDt);
+        const pulseProgress = 1.0 - this.jetwashPulseTimer / AirportFlyover.JETWASH_PULSE_DURATION;
+        const ease = 1.0 - Math.pow(1.0 - pulseProgress, 2.0);
+        this.jetwashRingMesh.scale.setScalar(0.55 + ease * 1.15);
+        this.jetwashRingMat.opacity = 0.68 * Math.pow(1.0 - pulseProgress, 1.4);
+        if (this.jetwashPulseTimer <= 0) {
+          this.jetwashRingMesh.visible = false;
+        }
+      }
+
       // Animate turbofan blade rotation
       const spinSpeed = 38.0;
       for (const spinner of this.fanSpinners) {
@@ -189,12 +206,41 @@ export class AirportFlyover {
     return this.currentFlyoverActive;
   }
 
+  /**
+   * Returns the live ground shadow position and detection radius for the Jetwash Stunt.
+   * Active whenever the airliner is flying over the park and its ground shadow is visible.
+   */
+  public getShadowInfo(): { active: boolean; x: number; z: number; radius: number } {
+    if (!this.currentFlyoverActive || !this.rootGroup.visible || this.shadowMat.opacity <= 0.02) {
+      return { active: false, x: 0, z: 0, radius: 0 };
+    }
+    return {
+      active: true,
+      x: this.shadowGroup.position.x,
+      z: this.shadowGroup.position.z,
+      radius: AirportFlyover.SHADOW_RADIUS,
+    };
+  }
+
+  /**
+   * Triggers a brief slipstream shimmer pulse on the ground shadow ring when landing a Jetwash Stunt.
+   */
+  public triggerJetwashPulse(): void {
+    if (!this.currentFlyoverActive || !this.rootGroup.visible) return;
+    this.jetwashPulseTimer = AirportFlyover.JETWASH_PULSE_DURATION;
+    this.jetwashRingMesh.visible = true;
+    this.jetwashRingMesh.scale.setScalar(0.55);
+    this.jetwashRingMat.opacity = 0.68;
+  }
+
   private startFlyover(): void {
     this.currentFlyoverActive = true;
     this.rootGroup.visible = true;
     this.flyoverElapsed = 0;
     this.flightTimer = 0;
     this.isFirstFlyover = false;
+    this.jetwashPulseTimer = 0;
+    this.jetwashRingMesh.visible = false;
 
     // Pick next flight corridor
     this.activeCorridor = this.corridors[this.corridorIndex];
@@ -210,6 +256,9 @@ export class AirportFlyover {
       0.04,
       this.activeCorridor.start.z
     );
+    const startDist = Math.hypot(this.activeCorridor.start.x, this.activeCorridor.start.z);
+    const startAlpha = THREE.MathUtils.clamp(1.0 - (startDist - 45) / 130, 0.0, 1.0);
+    this.shadowMat.opacity = 0.48 * startAlpha;
 
     // Play Doppler-shifted jet flyover sound effect
     this.audio.playJetFlyover(this.flyoverDuration);
@@ -220,6 +269,8 @@ export class AirportFlyover {
     this.rootGroup.visible = false;
     this.flyoverElapsed = 0;
     this.flightTimer = 0;
+    this.jetwashPulseTimer = 0;
+    this.jetwashRingMesh.visible = false;
   }
 
   /**
@@ -1535,5 +1586,41 @@ export class AirportFlyover {
     this.shadowMesh = new THREE.Mesh(shadowGeo, this.shadowMat);
     this.shadowMesh.rotation.x = -Math.PI / 2; // Lie flat on ground plane
     this.shadowGroup.add(this.shadowMesh);
+
+    // Subtle additive slipstream shimmer ring for Jetwash Stunt pulse feedback
+    const ringCanvas = document.createElement('canvas');
+    ringCanvas.width = 256;
+    ringCanvas.height = 256;
+    const rCtx = ringCanvas.getContext('2d')!;
+    const ringGrad = rCtx.createRadialGradient(128, 128, 66, 128, 128, 124);
+    ringGrad.addColorStop(0.0, 'rgba(56, 189, 248, 0)');
+    ringGrad.addColorStop(0.45, 'rgba(56, 189, 248, 0.35)');
+    ringGrad.addColorStop(0.68, 'rgba(224, 242, 254, 0.85)');
+    ringGrad.addColorStop(0.84, 'rgba(56, 189, 248, 0.25)');
+    ringGrad.addColorStop(1.0, 'rgba(56, 189, 248, 0)');
+    rCtx.fillStyle = ringGrad;
+    rCtx.fillRect(0, 0, 256, 256);
+
+    const ringTex = new THREE.CanvasTexture(ringCanvas);
+    ringTex.colorSpace = THREE.SRGBColorSpace;
+    ringTex.needsUpdate = true;
+
+    this.jetwashRingMat = new THREE.MeshBasicMaterial({
+      map: ringTex,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+    });
+
+    const ringGeo = new THREE.PlaneGeometry(34, 34);
+    this.jetwashRingMesh = new THREE.Mesh(ringGeo, this.jetwashRingMat);
+    this.jetwashRingMesh.rotation.x = -Math.PI / 2;
+    this.jetwashRingMesh.position.y = 0.02;
+    this.jetwashRingMesh.visible = false;
+    this.shadowGroup.add(this.jetwashRingMesh);
   }
 }
