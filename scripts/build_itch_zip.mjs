@@ -53,8 +53,6 @@ const PRODUCTION_PUBLIC_FILES = [
   'textures/skatepark_multi_tex0.jpg',
 ];
 
-const OPTIONAL_PUBLIC_FILES = ['viewer.html'];
-
 function formatMB(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
@@ -121,12 +119,6 @@ function main() {
       throw new Error(`Missing required production asset in dist/: ${rel}`);
     }
     filesToInclude.add(rel);
-  }
-
-  for (const rel of OPTIONAL_PUBLIC_FILES) {
-    if (fs.existsSync(path.join(DIST_DIR, rel))) {
-      filesToInclude.add(rel);
-    }
   }
 
   const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'srfsk8-itch-'));

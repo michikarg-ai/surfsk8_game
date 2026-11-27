@@ -53,8 +53,6 @@ const EN_TRANSLATIONS = {
     'Tell us on <a href="https://www.instagram.com/surfskate_munich/" target="_blank" rel="noopener noreferrer">@surfskate_munich</a> which <strong>board</strong> you want to see next!',
   'landing.showPhoto': 'Show photo',
   'landing.showBoard': 'Show board icon',
-  'landing.view3d': '🔍 3D VIEW',
-  'landing.view3dTitle': 'Inspect 3D Park',
   'landing.riderLabel': '🏷️ RIDER',
   'landing.riderPlaceholder': 'Rider Name (Leaderboard)',
   'landing.gameMode': 'GAME MODE',
@@ -334,7 +332,6 @@ const EN_TRANSLATIONS = {
   'dock.fullscreen': 'Fullscreen',
   'dock.exitFullscreen': 'Exit Fullscreen',
   'dock.respawn': '↺ Respawn [X]',
-  'dock.viewer': '🔍 3D Photogrammetry Viewer',
   'dock.garage': '🏠 Garage Selector [ESC]',
   'dock.recFlowLine': '🔴 Rec Flow Line [L]',
 
@@ -553,8 +550,6 @@ const DE_TRANSLATIONS: Record<TranslationKey, string> = {
     'Sag uns auf <a href="https://www.instagram.com/surfskate_munich/" target="_blank" rel="noopener noreferrer">@surfskate_munich</a>, welches <strong>Board</strong> du als nächstes willst!',
   'landing.showPhoto': 'Foto anzeigen',
   'landing.showBoard': 'Board-Icon anzeigen',
-  'landing.view3d': '🔍 3D-ANSICHT',
-  'landing.view3dTitle': '3D-Park inspizieren',
   'landing.riderLabel': '🏷️ RIDER',
   'landing.riderPlaceholder': 'Rider-Name (Rangliste)',
   'landing.gameMode': 'SPIELMODUS',
@@ -834,7 +829,6 @@ const DE_TRANSLATIONS: Record<TranslationKey, string> = {
   'dock.fullscreen': 'Vollbild',
   'dock.exitFullscreen': 'Vollbild beenden',
   'dock.respawn': '↺ Neustart [X]',
-  'dock.viewer': '🔍 3D-Photogrammetrie-Viewer',
   'dock.garage': '🏠 Zurück zur Garage [ESC]',
   'dock.recFlowLine': '🔴 Flow Line aufnehmen [L]',
 

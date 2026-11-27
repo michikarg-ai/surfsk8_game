@@ -1805,34 +1805,6 @@
         object-position: center 58%;
         display: block;
       }
-      .landing-park-actions {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        margin-top: 2px;
-      }
-      .landing-inspect-btn {
-        background: rgba(56, 189, 248, 0.16);
-        border: 1px solid rgba(56, 189, 248, 0.55);
-        color: #38bdf8;
-        border-radius: 4px;
-        padding: 2px 8px;
-        font-family: var(--font-hud);
-        font-size: 11px;
-        font-weight: 800;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        transition: all 0.16s ease;
-      }
-      .landing-inspect-btn:hover {
-        background: rgba(56, 189, 248, 0.32);
-        border-color: #38bdf8;
-        box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
-      }
       .board-icon-wrap {
         width: 100%;
         height: 100%;
@@ -2304,13 +2276,6 @@
         }
         .board-icon-svg {
           max-height: 24px;
-        }
-        .landing-park-actions {
-          margin-top: 1px;
-        }
-        .landing-inspect-btn {
-          padding: 1.5px 7px;
-          font-size: 10px;
         }
         .sel-player-name {
           font-size: 15px;
@@ -5952,11 +5917,6 @@
                         <button class="notice-dismiss" id="park-notice-dismiss" title="Show photo" data-i18n-title="landing.showPhoto">&times;</button>
                       </div>
                     </div>
-                    <div class="landing-park-actions">
-                      <button id="landing-park-inspect-btn" type="button" class="landing-inspect-btn" title="Inspect 3D Park" data-i18n="landing.view3d" data-i18n-title="landing.view3dTitle">
-                        🔍 3D VIEW
-                      </button>
-                    </div>
                   </div>
                   <button class="sel-arrow" data-kind="skatepark" data-dir="1" aria-label="Next skatepark">&#10095;</button>
                 </div>
@@ -6736,7 +6696,6 @@
                   <button class="hud-btn" id="btn-reset" data-i18n="dock.respawn">↺ Respawn [X]</button>
                   <button class="hud-btn" id="btn-fullscreen" data-i18n="dock.fullscreen">Fullscreen</button>
                   <button class="hud-btn" id="btn-touch">📱 Touch Controls: AUTO</button>
-                  <a class="hud-btn" id="btn-viewer" href="./viewer.html" target="_blank" style="text-decoration:none;display:flex;align-items:center;justify-content:center;color:inherit;" data-i18n="dock.viewer">🔍 3D Photogrammetry Viewer</a>
                   <button class="hud-btn" id="btn-garage" data-i18n="dock.garage">🏠 Garage Selector [ESC]</button>
                 </div>
               </div>

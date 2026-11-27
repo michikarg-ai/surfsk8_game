@@ -54,7 +54,6 @@ export interface SkateparkLocation {
   modelUrl: string;
   colliderUrl?: string;
   lidarUrl?: string;
-  viewerUrl?: string;
 }
 
 export const SKATER_CHARACTERS: SkaterCharacter[] = [
@@ -80,7 +79,6 @@ export const SKATEPARK_LOCATIONS: SkateparkLocation[] = [
     thumbUrl: 'textures/im_gefilde_thumb.png',
     modelUrl: 'models/skatepark_multi.glb',
     lidarUrl: 'models/im_gefilde_lidar.json',
-    viewerUrl: 'viewer.html?model=models/skatepark_multi.glb',
   },
   {
     id: 'airport_skatepark',
@@ -89,7 +87,6 @@ export const SKATEPARK_LOCATIONS: SkateparkLocation[] = [
     thumbUrl: 'textures/airport_thumb.png?v=2',
     modelUrl: 'models/airport_skatepark_game.glb',
     lidarUrl: 'models/airport_skatepark_lidar.json',
-    viewerUrl: 'viewer.html?model=models/airport_skatepark_game.glb',
   },
 ];
 
@@ -139,7 +136,6 @@ export class LandingPage {
   // In-slot notice views for skatepark & board selection
   private parkSubtitleEl: HTMLElement | null = null;
   private parkThumbImgEl: HTMLImageElement | null = null;
-  private parkInspectBtnEl: HTMLElement | null = null;
   private parkThumbView: HTMLElement | null = null;
   private parkNoticeView: HTMLElement | null = null;
   private boardIconView: HTMLElement | null = null;
@@ -222,7 +218,6 @@ export class LandingPage {
     private onStartGame: () => void,
     private onSelectSkater?: (modelUrl: string, skater?: SkaterCharacter) => void,
     private onSelectPark?: (park: SkateparkLocation) => void,
-    private onInspectPark?: (park: SkateparkLocation) => void,
     private onSelectBoard?: (board: SurfBoardSpec) => void
   ) {
     this.overlayEl = document.getElementById('landing-overlay')!;
@@ -247,7 +242,6 @@ export class LandingPage {
     this.riderNameInputEl = document.getElementById('landing-player-name') as HTMLInputElement | null;
     this.parkSubtitleEl = document.getElementById('landing-park-subtitle') || this.overlayEl.querySelector('#sel-section-skatepark .sel-subtitle');
     this.parkThumbImgEl = document.getElementById('landing-park-thumb') as HTMLImageElement || this.overlayEl.querySelector('.park-thumb');
-    this.parkInspectBtnEl = document.getElementById('landing-park-inspect-btn');
     this.soundBtnEl = document.getElementById('landing-sound-btn');
     this.modeDescEl = document.getElementById('landing-mode-desc');
     this.missionsCountEl = document.getElementById('landing-missions-count');
@@ -862,18 +856,6 @@ export class LandingPage {
       boardDismiss.addEventListener('click', (e) => {
         e.stopPropagation();
         this.revertBoardView();
-      });
-    }
-
-    if (this.parkInspectBtnEl) {
-      this.parkInspectBtnEl.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const park = SKATEPARK_LOCATIONS[this.currentParkIndex];
-        if (this.onInspectPark) {
-          this.onInspectPark(park);
-        } else {
-          window.open(resolveAssetUrl(park.viewerUrl || 'viewer.html'), '_blank');
-        }
       });
     }
 

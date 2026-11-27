@@ -243,9 +243,6 @@ class SurfskateMunichGame {
       (park) => {
         void this.switchPark(park);
       },
-      (park) => {
-        this.inspectPark(park);
-      },
       (board) => {
         this.controller.setBoardSpec(board);
         this.skaterVisuals.setBoardSpec(board);
@@ -908,13 +905,6 @@ class SurfskateMunichGame {
     } catch (e) {
       console.error('Error switching skatepark:', e);
     }
-  }
-
-  public inspectPark(_park?: SkateparkLocation): void {
-    this.landingPage.isVisible = false;
-    document.getElementById('landing-overlay')?.classList.add('hidden');
-    this.setCameraStyle('orbit');
-    this.hud.setDockOpen(true);
   }
 
   public toggleControlMode(): void {
