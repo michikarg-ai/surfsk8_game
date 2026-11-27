@@ -296,12 +296,19 @@ export class FirstRunTutorial {
         Math.abs(analog) > 0.15 ||
         controller.currentSurface.height >= 0.15;
 
-      if (input.compressCrouch && controller.speed >= 0.9 && isCarvingOrWall) {
+      const slopeMag = Math.hypot(
+        controller.currentSurface.slopeX,
+        controller.currentSurface.slopeZ
+      );
+      const isCompressing =
+        input.compressCrouch || (Boolean(input.downSmartBrake) && slopeMag >= 0.14);
+
+      if (isCompressing && controller.speed >= 0.9 && isCarvingOrWall) {
         this.compressHeldWhileCarving += dt;
         if (this.compressHeldWhileCarving >= 0.08) {
           this.compressedDuringStep = true;
         }
-      } else if (!input.compressCrouch && this.compressedDuringStep) {
+      } else if (!isCompressing && this.compressedDuringStep) {
         this.compressReleasedAfterHold = true;
       }
 

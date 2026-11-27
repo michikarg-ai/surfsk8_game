@@ -1257,7 +1257,7 @@ class SurfskateMunichGame {
     const kbSteerLeft = isArrows ? this.keys.has('ArrowLeft') : this.keys.has('KeyA');
     const kbSteerRight = isArrows ? this.keys.has('ArrowRight') : this.keys.has('KeyD');
     const kbPush = isArrows ? this.keys.has('ArrowUp') : this.keys.has('KeyW');
-    const kbBrake = isArrows ? this.keys.has('ArrowDown') : this.keys.has('KeyS');
+    const kbDownBrake = isArrows ? this.keys.has('ArrowDown') : this.keys.has('KeyS');
     const kbCrouch = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
     const kbOllie = this.keys.has('Space');
     const kbSnap = isArrows
@@ -1292,7 +1292,8 @@ class SurfskateMunichGame {
       steerLeft: kbSteerLeft || touch.steerLeft,
       steerRight: kbSteerRight || touch.steerRight,
       forwardPush: kbPush || touch.forwardPush,
-      brake: kbBrake || Boolean(touch.brake),
+      brake: Boolean(touch.brake),
+      downSmartBrake: kbDownBrake,
       compressCrouch: kbCrouch || touch.compressCrouch,
       jumpOllie: kbOllie || touch.jumpOllie,
       grindSlash: false,
@@ -1336,6 +1337,7 @@ class SurfskateMunichGame {
       steerRight: combinedSteer < -0.08,
       forwardPush: this.controller.speed < 0.3,
       brake: false,
+      downSmartBrake: false,
       compressCrouch: compressWave && !inDeepTransition,
       jumpOllie: false,
       grindSlash: false,

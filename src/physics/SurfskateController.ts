@@ -8,6 +8,8 @@ export interface InputState {
   steerRight: boolean;
   forwardPush: boolean;
   brake?: boolean;
+  /** Desktop ArrowDown / S: brakes on flat ground (slopeMag < 0.14), compresses/pumps on walls (slopeMag >= 0.14). */
+  downSmartBrake?: boolean;
   compressCrouch: boolean;
   jumpOllie: boolean;
   grindSlash: boolean;
@@ -658,6 +660,8 @@ export class SurfskateController {
     const slopeMag = Math.hypot(slopeX, slopeZ);
     const h0 = this.currentSurface.height;
     const isOnWall = h0 >= 0.18 || slopeMag >= 0.12;
+    const isBraking = Boolean(input.brake) || (Boolean(input.downSmartBrake) && slopeMag < 0.14);
+    const isCrouching = input.compressCrouch || (Boolean(input.downSmartBrake) && slopeMag >= 0.14);
 
     // Automatic surf-pump body motion on walls (like pumping a wave):
     //  - climbing the face: STRETCH the body tall to fight gravity (no speed gain)
@@ -675,13 +679,13 @@ export class SurfskateController {
     // Visible body pump on flat ground every time a rhythm pump lands
     autoWallCompression = Math.max(autoWallCompression, this.pumpPulse * 0.75);
 
-    const targetCompression = input.compressCrouch
+    const targetCompression = isCrouching
       ? 0.92
       : this.bertSlideActive || this.snapActive || this.indyGrabActive
       ? 0.95
       : this.laybackActive
       ? 0.7
-      : input.brake && this.speed > 0.15
+      : isBraking && this.speed > 0.15
       ? 0.48
       : autoWallCompression;
     const prevCompression = this.compression;
@@ -838,7 +842,6 @@ export class SurfskateController {
         highSpeedExcess > 0
           ? (0.08 + 0.18 * Math.min(1, Math.abs(this.leanAngle) / 0.68)) * highSpeedExcess
           : 0;
-      const isBraking = Boolean(input.brake);
       const totalDrag = effectiveRolling + AIR_DRAG * this.speed * this.speed + carveScrub;
       let aExtra = -totalDrag;
       if (isBraking) aExtra -= BRAKE_DECEL;
@@ -891,7 +894,7 @@ export class SurfskateController {
       const aheadSample = this.park.sample(this.position.x + fx * 0.75, this.position.z + fz * 0.75);
       const aheadSlopeMag = Math.hypot(aheadSample.slopeX, aheadSample.slopeZ);
       const onSlopeTransition = slopeMag > 0.14 || h0 >= 0.22 || aheadSlopeMag > 0.14;
-      const compressReleased = !input.compressCrouch && this.prevCompressInput;
+      const compressReleased = !isCrouching && this.prevCompressInput;
 
       if (
         !isBraking &&
@@ -927,7 +930,7 @@ export class SurfskateController {
         !this.snapActive &&
         !this.reverseActive
       ) {
-        if (input.compressCrouch && this.compression > 0.45 && onSlopeTransition) {
+        if (isCrouching && this.compression > 0.45 && onSlopeTransition) {
           this.wallPumpCue = 'extend';
         } else if (
           this.compression <= 0.45 &&
@@ -952,7 +955,7 @@ export class SurfskateController {
       }
       // Going DOWN: compress into the knees and drive the board down the face → speed!
       if (!isBraking && isOnWall && sinT < -0.05 && !this.bertSlideActive) {
-        const active = input.compressCrouch;
+        const active = isCrouching;
         aExtra +=
           (active ? WALL_PUMP_GAIN_ACTIVE : WALL_PUMP_GAIN) *
           this.pumpScale *
@@ -965,8 +968,8 @@ export class SurfskateController {
 
         // Perfect Pump in transitions:
         // When dropping down a wall (h0 > 0.35, sinT < -0.08) at the optimal moment
-        const compressPressed = input.compressCrouch && !this.prevCompressInput;
-        const apexDropPump = input.compressCrouch && (this.wasClimbingTransition || this.prevSinT >= -0.05) && sinT < -0.08;
+        const compressPressed = isCrouching && !this.prevCompressInput;
+        const apexDropPump = isCrouching && (this.wasClimbingTransition || this.prevSinT >= -0.05) && sinT < -0.08;
         if (
           this.perfectPumpCooldown <= 0 &&
           h0 > 0.35 &&
@@ -1245,7 +1248,7 @@ export class SurfskateController {
     }
 
     // Save previous inputs & slope for next frame
-    this.prevCompressInput = input.compressCrouch;
+    this.prevCompressInput = isCrouching;
     const currentGrade = this.gradeAlongHeading;
     this.prevSinT = currentGrade / Math.sqrt(1 + currentGrade * currentGrade);
   }
