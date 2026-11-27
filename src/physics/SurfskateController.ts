@@ -108,6 +108,15 @@ const WALL_PUMP_GAIN_ACTIVE = 0.60;
 /** Stretching the body on the climb slightly counters gravity (fraction of g·sinθ). */
 const WALL_STRETCH_ASSIST = 0.08;
 
+// ---- Bowl coping & vertical lip containment ----
+/** Minimum steepness (local or climbed wall slopeMag) where coping pocket-carve assist starts. */
+const COPING_SLOPE_ENGAGE = 0.78;
+/** Steepness threshold defining a bowl/quarterpipe coping wall (above interior rollers/spines). */
+const COPING_WALL_MIN_SLOPE = 0.83;
+/** Unintentional coping fly-out requires BOTH near-perpendicular alignment and extreme speed at the lip. */
+const COPING_FLYOUT_SPEED = 6.8;
+const COPING_FLYOUT_ALIGN = 0.90;
+
 // ---- Tricks ----
 const LAYBACK_MIN_SPEED = 3.0;
 const LAYBACK_HOLD_TIME = 0.65;
@@ -308,6 +317,12 @@ export class SurfskateController {
   private maneuverCooldowns: Record<string, number> = {};
   private lastClimbedWallHeight = 0;
   private wasClimbingTransition = false;
+
+  // Bowl coping & vertical lip containment state (prevents accidental coping roll-out without Ollie)
+  private peakClimbedWallSlope = 0;
+  private lastWallSlopeX = 0;
+  private lastWallSlopeZ = 0;
+  private copingRedirectSign = 0;
 
   public currentSurface: SurfaceSample;
 
@@ -739,6 +754,9 @@ export class SurfskateController {
       // ---- 4a2. Layback / Bert slide / FS Reverse 360 (dedicated keys + contextTrick) ----
       this.updateTricks(clampedDt, input, contextPressed, onManeuver);
 
+      const launchingOllie = input.jumpOllie && this.ollieCooldown <= 0;
+      const copingState = this.analyzeBowlCoping(slopeX, slopeZ, slopeMag, h0, grade);
+
       // ---- 4b. Steering (surfskates pivot tightly even at low speed) ----
       if (this.snapActive) {
         // Snap redirection overrides normal carving for a fraction of a second
@@ -795,6 +813,17 @@ export class SurfskateController {
         }
         if (this.bertSlideActive) {
           this.bertSlideAccumulatedYaw += frameYawDelta;
+        }
+
+        // Bowl coping lip catch & pocket-carve redirection torque (when not Ollieing or sliding)
+        if (
+          copingState.isCopingApproach &&
+          !launchingOllie &&
+          !this.laybackActive &&
+          !this.bertSlideActive &&
+          !this.reverseActive
+        ) {
+          this.applyCopingLipRedirection(copingState, rawSteer, grade, clampedDt);
         }
       }
 
@@ -984,7 +1013,7 @@ export class SurfskateController {
 
       this.detectSurfManeuvers(input, grade, onManeuver);
 
-      if (input.jumpOllie && this.ollieCooldown <= 0) {
+      if (launchingOllie) {
         // ---- 4d. Ollie / Air ----
         this.isGrounded = false;
         this.airTime = 0;
@@ -998,6 +1027,8 @@ export class SurfskateController {
         this.smoothedYawRate = 0;
         this.steerHoldTime = 0;
         this.lastSteerDir = 0;
+        this.peakClimbedWallSlope = 0;
+        this.copingRedirectSign = 0;
         this.wallPumpCue = 'none';
         this.prevWallPumpCue = 'none';
         this.availableContextTrick = 'none';
@@ -1036,8 +1067,32 @@ export class SurfskateController {
         const prevX = this.position.x;
         const prevZ = this.position.z;
         const horiz = pathDist * cosT;
-        this.position.x += -Math.sin(this.heading) * horiz;
-        this.position.z += -Math.cos(this.heading) * horiz;
+        const fxPost = -Math.sin(this.heading);
+        const fzPost = -Math.cos(this.heading);
+        let stepX = fxPost * horiz;
+        let stepZ = fzPost * horiz;
+
+        // Bowl coping lip containment: block unintentional roll-out / fly-out over the coping
+        // unless the player presses Ollie or hits the lip dead-straight at extreme speed.
+        let copingContained = false;
+        if (copingState.atLipEdge && copingState.hasWallNormal) {
+          const uphillAlignPost = fxPost * copingState.wallNx + fzPost * copingState.wallNz;
+          const outComp = stepX * copingState.wallNx + stepZ * copingState.wallNz;
+          const allowExtremeFlyOut =
+            uphillAlignPost >= COPING_FLYOUT_ALIGN && v0 >= COPING_FLYOUT_SPEED;
+          if (outComp > 0 && !allowExtremeFlyOut) {
+            stepX -= outComp * copingState.wallNx;
+            stepZ -= outComp * copingState.wallNz;
+            // Subtle pocket hug so the wheels stay engaged on the coping transition instead of creeping onto the flat deck
+            const pocketTug = Math.min(0.05, outComp * 0.22);
+            stepX -= pocketTug * copingState.wallNx;
+            stepZ -= pocketTug * copingState.wallNz;
+            copingContained = true;
+          }
+        }
+
+        this.position.x += stepX;
+        this.position.z += stepZ;
         const hitBounds = this.constrainToParkBounds(clampedDt);
 
         const h1 = this.park.evaluateHeight(this.position.x, this.position.z);
@@ -1057,6 +1112,14 @@ export class SurfskateController {
           this.speed = 0;
         } else {
           this.speed = Math.min(this.maxSpeedLimit, Math.sqrt(Math.max(0, v1Sq)));
+        }
+
+        // Preserve smooth pocket-carve momentum when deflected by coping containment so the skater never stalls at the lip
+        if (copingContained && !isBraking && v0 >= 0.8) {
+          const lipCarveFloor = Math.min(this.maxSpeedLimit, Math.min(v0, Math.max(1.4, v0 * 0.88)));
+          if (this.speed < lipCarveFloor) {
+            this.speed = lipCarveFloor;
+          }
         }
 
         // Stall on a wall: at very low speed gravity pulls the nose down the fall line
@@ -1261,6 +1324,195 @@ export class SurfskateController {
     const hAhead = this.park.evaluateHeight(this.position.x + fx * e, this.position.z + fz * e);
     const hBehind = this.park.evaluateHeight(this.position.x - fx * e, this.position.z - fz * e);
     return Math.max(-4, Math.min(4, (hAhead - hBehind) / (2 * e)));
+  }
+
+  /**
+   * Evaluate proximity to a bowl coping lip or vertical transition wall while climbing uphill.
+   * Works across both parks (`im_gefilde` and `airport_skatepark`) regardless of bowl deck height
+   * while leaving interior rollers, spines, volcanoes, and downhill drop-ins unobstructed.
+   */
+  private analyzeBowlCoping(
+    slopeX: number,
+    slopeZ: number,
+    slopeMag: number,
+    h0: number,
+    grade: number
+  ): {
+    isCopingApproach: boolean;
+    atLipEdge: boolean;
+    hasWallNormal: boolean;
+    wallGradX: number;
+    wallGradZ: number;
+    wallNx: number;
+    wallNz: number;
+    uphillAlign: number;
+    localPeakSlope: number;
+    copingFlag: boolean;
+  } {
+    const fx = -Math.sin(this.heading);
+    const fz = -Math.cos(this.heading);
+    const nearAhead = this.park.sample(this.position.x + fx * 0.42, this.position.z + fz * 0.42);
+    const nearAheadSlopeMag = Math.hypot(nearAhead.slopeX, nearAhead.slopeZ);
+    const ahead = this.park.sample(this.position.x + fx * 0.75, this.position.z + fz * 0.75);
+    const aheadSlopeMag = Math.hypot(ahead.slopeX, ahead.slopeZ);
+
+    if (slopeMag >= 0.45) {
+      this.lastWallSlopeX = slopeX;
+      this.lastWallSlopeZ = slopeZ;
+    } else if (nearAheadSlopeMag >= 0.45 && grade > 0.04) {
+      this.lastWallSlopeX = nearAhead.slopeX;
+      this.lastWallSlopeZ = nearAhead.slopeZ;
+    }
+
+    if (grade > 0.04 && Math.max(slopeMag, nearAheadSlopeMag) >= 0.40) {
+      this.peakClimbedWallSlope = Math.max(this.peakClimbedWallSlope, slopeMag, nearAheadSlopeMag);
+    } else if (grade < -0.06 || (slopeMag < 0.22 && nearAheadSlopeMag < 0.22 && aheadSlopeMag < 0.22)) {
+      this.peakClimbedWallSlope = 0;
+      this.copingRedirectSign = 0;
+    }
+
+    let wallGradX = 0;
+    let wallGradZ = 0;
+    if (nearAheadSlopeMag >= 0.45 && nearAheadSlopeMag > slopeMag * 1.25) {
+      wallGradX = nearAhead.slopeX;
+      wallGradZ = nearAhead.slopeZ;
+    } else if (slopeMag >= 0.30) {
+      wallGradX = slopeX;
+      wallGradZ = slopeZ;
+    } else if (nearAheadSlopeMag >= 0.30) {
+      wallGradX = nearAhead.slopeX;
+      wallGradZ = nearAhead.slopeZ;
+    } else if (aheadSlopeMag >= 0.30) {
+      wallGradX = ahead.slopeX;
+      wallGradZ = ahead.slopeZ;
+    } else {
+      wallGradX = this.lastWallSlopeX;
+      wallGradZ = this.lastWallSlopeZ;
+    }
+
+    const gradLen = Math.hypot(wallGradX, wallGradZ);
+    const hasWallNormal = gradLen >= 0.15;
+    const wallNx = hasWallNormal ? wallGradX / gradLen : 0;
+    const wallNz = hasWallNormal ? wallGradZ / gradLen : 0;
+    const uphillAlign = hasWallNormal ? fx * wallNx + fz * wallNz : 0;
+
+    const copingFlag = this.currentSurface.isNearCoping || nearAhead.isNearCoping;
+    const localPeakSlope = Math.max(slopeMag, nearAheadSlopeMag, this.peakClimbedWallSlope);
+
+    // Filter out low interior rollers/spines (like NW Roller 1) that drop back down into the basin
+    let isInteriorRoller = false;
+    if (hasWallNormal && !copingFlag && localPeakSlope >= COPING_SLOPE_ENGAGE && localPeakSlope < 0.92 && h0 < 1.15) {
+      const mid16 = this.park.evaluateHeight(
+        this.position.x + wallNx * 1.6,
+        this.position.z + wallNz * 1.6
+      );
+      const crestHeight = Math.max(h0, nearAhead.height, ahead.height, mid16);
+      const far28 = this.park.evaluateHeight(
+        this.position.x + wallNx * 2.8,
+        this.position.z + wallNz * 2.8
+      );
+      const far36 = this.park.evaluateHeight(
+        this.position.x + wallNx * 3.6,
+        this.position.z + wallNz * 3.6
+      );
+      if (Math.min(far28, far36) < crestHeight - 0.35) {
+        isInteriorRoller = true;
+      }
+    }
+
+    const climbingOrAlongCoping =
+      grade > 0.12 ||
+      (uphillAlign > -0.18 && (this.peakClimbedWallSlope >= COPING_WALL_MIN_SLOPE || copingFlag));
+    const isCopingApproach =
+      !isInteriorRoller &&
+      hasWallNormal &&
+      climbingOrAlongCoping &&
+      (copingFlag || localPeakSlope >= COPING_SLOPE_ENGAGE);
+
+    const crestLocal = Math.max(h0, nearAhead.height);
+    const backsideDropAhead = ahead.height < crestLocal - 0.12;
+    const deckFlatteningAhead =
+      nearAheadSlopeMag < Math.max(0.55, slopeMag * 0.72) ||
+      aheadSlopeMag < 0.45 ||
+      this.currentSurface.curvature < -0.35 ||
+      nearAhead.curvature < -0.45 ||
+      backsideDropAhead;
+
+    const atLipEdge =
+      !isInteriorRoller &&
+      hasWallNormal &&
+      uphillAlign > 0.02 &&
+      (copingFlag || localPeakSlope >= COPING_WALL_MIN_SLOPE) &&
+      (this.peakClimbedWallSlope >= COPING_WALL_MIN_SLOPE || copingFlag || nearAheadSlopeMag >= 1.15) &&
+      deckFlatteningAhead;
+
+    return {
+      isCopingApproach,
+      atLipEdge,
+      hasWallNormal,
+      wallGradX,
+      wallGradZ,
+      wallNx,
+      wallNz,
+      uphillAlign,
+      localPeakSlope,
+      copingFlag,
+    };
+  }
+
+  /**
+   * Apply smooth coping lip catch / pocket-carve redirection torque so climbing a steep bowl wall
+   * arcs the nose along the coping and drops back down into the pocket instead of shooting onto the deck.
+   */
+  private applyCopingLipRedirection(
+    coping: ReturnType<SurfskateController['analyzeBowlCoping']>,
+    rawSteer: number,
+    grade: number,
+    dt: number
+  ): void {
+    if (!coping.hasWallNormal || coping.uphillAlign <= -0.22) return;
+    if (coping.uphillAlign >= COPING_FLYOUT_ALIGN && this.speed >= COPING_FLYOUT_SPEED) return;
+
+    const downhillHeading = Math.atan2(coping.wallGradX, coping.wallGradZ);
+    const diffToDownhill = this.normalizeAngleDiff(downhillHeading - this.heading);
+
+    // Choose arc side without chatter when approaching nearly straight-on
+    let redirectSign: number;
+    if (Math.abs(diffToDownhill) > 2.45) {
+      if (this.copingRedirectSign === 0) {
+        if (rawSteer !== 0 || Math.abs(this.leanAngle) > 0.08) {
+          this.copingRedirectSign = -Math.sign(rawSteer !== 0 ? rawSteer : this.leanAngle) || 1;
+        } else if (this.lastSteerDir !== 0) {
+          this.copingRedirectSign = -Math.sign(this.lastSteerDir) || 1;
+        } else {
+          this.copingRedirectSign = diffToDownhill >= 0 ? 1 : -1;
+        }
+      }
+      redirectSign = this.copingRedirectSign;
+    } else {
+      redirectSign = diffToDownhill >= 0 ? 1 : -1;
+      this.copingRedirectSign = redirectSign;
+    }
+
+    const steepT = THREE.MathUtils.clamp(
+      (coping.localPeakSlope - COPING_SLOPE_ENGAGE) / (1.15 - COPING_SLOPE_ENGAGE),
+      coping.copingFlag ? 0.5 : 0,
+      1.0
+    );
+    const gradeT = THREE.MathUtils.clamp((Math.max(grade, coping.uphillAlign * 0.8) - 0.12) / 0.55, 0.25, 1.0);
+    const speedT = THREE.MathUtils.clamp(this.speed / 4.2, 0.65, 1.45);
+    const alignFade = THREE.MathUtils.clamp((coping.uphillAlign + 0.22) / 0.37, 0, 1);
+
+    let catchRate = (2.4 + 4.8 * steepT) * gradeT * speedT;
+    if (coping.atLipEdge) {
+      catchRate = Math.max(catchRate, (8.0 + 3.6 * Math.max(0, coping.uphillAlign)) * speedT);
+    }
+
+    const turnDelta = Math.min(Math.abs(diffToDownhill), catchRate * alignFade * dt);
+    this.heading += redirectSign * turnDelta;
+    if (coping.atLipEdge || steepT > 0.45) {
+      this.sprayIntensity = Math.max(this.sprayIntensity, 0.45 * Math.max(steepT, coping.atLipEdge ? 0.8 : 0));
+    }
   }
 
   /** Highest point of the surrounding terrain within ~3.6 m (approximates the local wall top). */
@@ -1699,6 +1951,10 @@ export class SurfskateController {
     this.isSlidingNow = false;
     this.halfCyclePeakLean = 0;
     this.halfCycleCarveTime = 0;
+    this.peakClimbedWallSlope = 0;
+    this.lastWallSlopeX = 0;
+    this.lastWallSlopeZ = 0;
+    this.copingRedirectSign = 0;
   }
 
   /** Return true if (x, z) lies comfortably inside the active park's recovery bounds. */
