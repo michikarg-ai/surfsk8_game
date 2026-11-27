@@ -143,6 +143,7 @@ export class LandingPage {
   private parkThumbView: HTMLElement | null = null;
   private parkNoticeView: HTMLElement | null = null;
   private boardIconView: HTMLElement | null = null;
+  private boardIconWrapEl: HTMLElement | null = null;
   private boardNoticeView: HTMLElement | null = null;
   private boardNameEl: HTMLElement | null = null;
   private boardTaglineEl: HTMLElement | null = null;
@@ -234,6 +235,7 @@ export class LandingPage {
     this.boardTaglineEl = document.getElementById('landing-board-tagline');
     this.boardStatsEl = document.getElementById('landing-board-stats');
     this.boardSlotWrapEl = document.getElementById('board-slot-wrap');
+    this.boardIconWrapEl = document.getElementById('board-icon-wrap');
     this.boardLockBadgeEl = document.getElementById('landing-board-lock');
     this.boardLockTextEl = document.getElementById('landing-board-lock-text');
     this.updateSkaterDisplay();
@@ -471,17 +473,10 @@ export class LandingPage {
       }
     }
 
-    // Recolor inline SVG deck, pinstripe, accent wave & urethane wheels
-    const svg = board.svgColors;
-    for (let i = 0; i < 4; i++) {
-      document.getElementById(`board-svg-wood-${i}`)?.setAttribute('stop-color', svg.woodStops[i]);
-      document.getElementById(`board-svg-wheel-${i}`)?.setAttribute('stop-color', svg.wheelStops[i]);
+    // Render bottom-up surfskate deck showcase SVG with board-specific shape, artwork & wheels
+    if (this.boardIconWrapEl) {
+      this.boardIconWrapEl.innerHTML = this.buildBoardShowcaseSvg(board);
     }
-    document.getElementById('board-svg-deck')?.setAttribute('stroke', svg.deckStroke);
-    document.getElementById('board-svg-pinstripe')?.setAttribute('stroke', svg.pinstripe);
-    document.getElementById('board-svg-accent')?.setAttribute('stroke', svg.accent);
-    document.getElementById('board-svg-wheel-front')?.setAttribute('stroke', svg.wheelStroke);
-    document.getElementById('board-svg-wheel-rear')?.setAttribute('stroke', svg.wheelStroke);
 
     if (this.boardSlotWrapEl) {
       this.boardSlotWrapEl.classList.toggle('is-locked', !unlocked);
@@ -495,6 +490,175 @@ export class LandingPage {
 
     // Live-update 3D board showcase on Landing Page
     this.skaterVisuals.setBoardSpec(board);
+  }
+
+  private buildBoardShowcaseSvg(board: SurfBoardSpec): string {
+    const svg = board.svgColors;
+    const isSwallow = board.id === 'isar_swallowtail';
+    const isCruiser = board.id === 'sunset_cruiser';
+    const isGold = board.id === 'golden_pretzel';
+    const hasGlowWheels = isSwallow || isGold;
+
+    // Deck outline path (horizontal bottom-up view: nose left, tail right)
+    const deckPath = isSwallow
+      ? 'M24 31 C24 14, 46 9.5, 76 10 L176 11.5 C192 12, 201 13.5, 204 16 L183 31 L204 46 C201 48.5, 192 50, 176 50.5 L76 52 C46 52.5, 24 48, 24 31 Z'
+      : isCruiser
+        ? 'M6 31 C16 18, 42 11.5, 82 11.5 L168 12.5 C196 13.5, 214 21, 222 31 C214 41, 196 48.5, 168 49.5 L82 50.5 C42 50.5, 16 44, 6 31 Z'
+        : isGold
+          ? 'M16 31 C16 14.5, 38 10.5, 70 10.5 L176 11 C197 12, 210 17, 212 31 C210 45, 197 50, 176 51 L70 51.5 C38 51.5, 16 47.5, 16 31 Z'
+          : 'M18 31 C18 15, 39 11, 68 11 L172 12 C194 13, 208 18, 210 31 C208 44, 194 49, 172 50 L68 51 C39 51, 18 47, 18 31 Z';
+
+    const frontTruckX = isCruiser ? 54 : isSwallow ? 60 : 56;
+    const rearTruckX = isCruiser ? 174 : isSwallow ? 164 : 170;
+
+    // Build spiral curve points for the_spiral
+    let spiralPoints = '';
+    if (board.id === 'the_spiral') {
+      const pts: string[] = [];
+      for (let a = 0; a <= Math.PI * 6.4; a += 0.28) {
+        const r = 1.0 + a * 0.65;
+        const px = (114 + Math.cos(a) * r).toFixed(1);
+        const py = (31 + Math.sin(a) * r).toFixed(1);
+        pts.push(`${a === 0 ? 'M' : 'L'}${px} ${py}`);
+      }
+      spiralPoints = pts.join(' ');
+    }
+
+    const deckFillDefs = isGold
+      ? `<linearGradient id="bsvg-deck-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+           <stop offset="0%" stop-color="#fef08a"/>
+           <stop offset="28%" stop-color="#f59e0b"/>
+           <stop offset="52%" stop-color="#fef9c3"/>
+           <stop offset="78%" stop-color="#d97706"/>
+           <stop offset="100%" stop-color="#fde047"/>
+         </linearGradient>`
+      : isCruiser
+        ? `<linearGradient id="bsvg-deck-bg" x1="0%" y1="50%" x2="100%" y2="50%">
+             <stop offset="0%" stop-color="#2e1065"/>
+             <stop offset="32%" stop-color="#831843"/>
+             <stop offset="62%" stop-color="#ff3d8a"/>
+             <stop offset="84%" stop-color="#ff7b1c"/>
+             <stop offset="100%" stop-color="#ffd54a"/>
+           </linearGradient>
+           <linearGradient id="bsvg-sun-disc" x1="0%" y1="0%" x2="0%" y2="100%">
+             <stop offset="0%" stop-color="#fef08a"/>
+             <stop offset="55%" stop-color="#ff7b1c"/>
+             <stop offset="100%" stop-color="#ff3d8a"/>
+           </linearGradient>`
+        : isSwallow
+          ? `<linearGradient id="bsvg-deck-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+               <stop offset="0%" stop-color="#ecfeff"/>
+               <stop offset="28%" stop-color="#99f6e4"/>
+               <stop offset="65%" stop-color="#00e5d4"/>
+               <stop offset="100%" stop-color="#0f766e"/>
+             </linearGradient>`
+          : `<linearGradient id="bsvg-deck-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+               <stop offset="0%" stop-color="#f2c48d"/>
+               <stop offset="48%" stop-color="#d28d4b"/>
+               <stop offset="100%" stop-color="#9c5a22"/>
+             </linearGradient>`;
+
+    const deckArt =
+      board.id === 'the_spiral'
+        ? `
+          <g clip-path="url(#bsvg-deck-clip)">
+            <line x1="22" y1="21" x2="206" y2="22" stroke="rgba(72,34,10,0.2)" stroke-width="1"/>
+            <line x1="22" y1="41" x2="206" y2="40" stroke="rgba(72,34,10,0.2)" stroke-width="1"/>
+            <rect x="18" y="28.5" width="192" height="5" fill="#1c1917"/>
+            <rect x="18" y="30" width="192" height="2" fill="#ff6b1a"/>
+            <circle cx="114" cy="31" r="15.5" fill="#181411" stroke="#fef3c7" stroke-width="1.2"/>
+            <path d="${spiralPoints}" fill="none" stroke="#ff6b1a" stroke-width="2" stroke-linecap="round"/>
+          </g>
+        `
+        : board.id === 'isar_swallowtail'
+          ? `
+            <g clip-path="url(#bsvg-deck-clip)">
+              <rect x="24" y="8" width="44" height="46" fill="#ecfeff"/>
+              <polygon points="72,8 92,8 66,54 46,54" fill="#0891b2"/>
+              <polygon points="94,8 103,8 77,54 68,54" fill="#fef3c7"/>
+              <polygon points="146,8 156,8 132,54 122,54" fill="#083344"/>
+              <polygon points="158,8 167,8 143,54 134,54" fill="#ecfeff"/>
+              <circle cx="114" cy="31" r="14.5" fill="#083344" stroke="#99f6e4" stroke-width="1.4"/>
+              <path d="M103 26.5 Q109 22 114 26 Q119 30 125 25" fill="none" stroke="#ecfeff" stroke-width="1.7" stroke-linecap="round"/>
+              <path d="M102 31.5 Q108 27 114 31 Q120 35 126 30" fill="none" stroke="#00e5d4" stroke-width="1.9" stroke-linecap="round"/>
+              <path d="M103 36.5 Q109 32 114 36 Q119 40 125 35" fill="none" stroke="#ecfeff" stroke-width="1.7" stroke-linecap="round"/>
+              <path d="M204 16 L183 31 L204 46" fill="none" stroke="#083344" stroke-width="2.5"/>
+            </g>
+          `
+          : board.id === 'sunset_cruiser'
+            ? `
+              <g clip-path="url(#bsvg-deck-clip)">
+                <rect x="6" y="21.5" width="216" height="1.6" fill="rgba(255,255,255,0.32)"/>
+                <rect x="6" y="38.9" width="216" height="1.6" fill="rgba(255,255,255,0.32)"/>
+                <circle cx="112" cy="31" r="14.5" fill="url(#bsvg-sun-disc)" stroke="#3b0764" stroke-width="1.2"/>
+                <rect x="97" y="32" width="30" height="1.7" fill="#3b0764"/>
+                <rect x="97" y="35.5" width="30" height="1.8" fill="#3b0764"/>
+                <rect x="99" y="39" width="26" height="1.8" fill="#3b0764"/>
+                <path d="M188 22 L196 31 L188 40 M197 23 L204 31 L197 39" fill="none" stroke="#fef08a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </g>
+            `
+            : `
+              <g clip-path="url(#bsvg-deck-clip)">
+                <line x1="18" y1="17" x2="210" y2="17" stroke="rgba(255,255,255,0.28)" stroke-width="1"/>
+                <line x1="18" y1="24" x2="210" y2="24" stroke="rgba(120,53,15,0.16)" stroke-width="1"/>
+                <line x1="18" y1="38" x2="210" y2="38" stroke="rgba(120,53,15,0.16)" stroke-width="1"/>
+                <line x1="18" y1="45" x2="210" y2="45" stroke="rgba(255,255,255,0.28)" stroke-width="1"/>
+                <path d="M32 31 C32 19, 48 14.5, 72 14.5 L174 15 C191 15.5, 202 19.5, 204 31 C202 42.5, 191 46.5, 174 47 L72 47.5 C48 47.5, 32 43, 32 31 Z" fill="none" stroke="#17130d" stroke-width="1.8"/>
+                <circle cx="114" cy="31" r="15.5" fill="#17130d" stroke="#fef08a" stroke-width="1.4"/>
+                <path d="M114 39.5 C102 39.5, 100 28.5, 107 23.5 C111.5 20, 116.5 26.5, 119 33 C121 38, 124.5 37, 125 32 C125.5 27, 121.5 22, 116.5 23 C112.5 24, 110.5 30.5, 108.5 34 C106 38, 109 39.5, 114 39.5 Z" fill="none" stroke="#ffd54a" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="106.5" cy="27.5" r="0.9" fill="#fefce8"/>
+                <circle cx="121.5" cy="27.5" r="0.9" fill="#fefce8"/>
+                <circle cx="114" cy="25" r="0.9" fill="#fefce8"/>
+              </g>
+            `;
+
+    const drawWheel = (cx: number, cy: number) => `
+      ${hasGlowWheels ? `<rect x="${cx - 10.5}" y="${cy - 5.5}" width="21" height="11" rx="4" fill="${svg.accent}" opacity="0.32"/>` : ''}
+      <rect x="${cx - 9}" y="${cy - 4.2}" width="18" height="8.4" rx="2.8" fill="url(#bsvg-wheel)" stroke="${svg.wheelStroke}" stroke-width="0.9"/>
+      <line x1="${cx - 5.5}" y1="${cy - 2.3}" x2="${cx + 5.5}" y2="${cy - 2.3}" stroke="rgba(255,255,255,0.45)" stroke-width="1.1" stroke-linecap="round"/>
+    `;
+
+    const drawTruck = (cx: number, isFront: boolean) => `
+      <rect x="${cx - 5}" y="13" width="10" height="36" rx="2" fill="url(#bsvg-truck)" stroke="#334155" stroke-width="0.6" opacity="0.24"/>
+      <rect x="${cx - 2.3}" y="10" width="4.6" height="42" rx="1.6" fill="url(#bsvg-truck)" stroke="#334155" stroke-width="0.7"/>
+      <rect x="${cx - 6.5}" y="23" width="13" height="16" rx="2.5" fill="#1e293b" stroke="#94a3b8" stroke-width="0.7"/>
+      ${
+        isFront
+          ? `<rect x="${cx - 4}" y="25.5" width="8" height="11" rx="2" fill="url(#bsvg-truck)"/><circle cx="${cx}" cy="31" r="2.3" fill="${svg.accent}"/>`
+          : `<circle cx="${cx}" cy="31" r="3" fill="url(#bsvg-truck)"/><circle cx="${cx}" cy="31" r="1.4" fill="${svg.accent}"/>`
+      }
+    `;
+
+    return `
+      <svg class="board-icon-svg" viewBox="0 0 228 62" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          ${deckFillDefs}
+          <linearGradient id="bsvg-wheel" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="${svg.wheelStops[0]}"/>
+            <stop offset="45%" stop-color="${svg.wheelStops[1]}"/>
+            <stop offset="85%" stop-color="${svg.wheelStops[2]}"/>
+            <stop offset="100%" stop-color="${svg.wheelStops[3]}"/>
+          </linearGradient>
+          <linearGradient id="bsvg-truck" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#94a3b8"/>
+            <stop offset="45%" stop-color="#f8fafc"/>
+            <stop offset="100%" stop-color="#64748b"/>
+          </linearGradient>
+          <clipPath id="bsvg-deck-clip">
+            <path d="${deckPath}"/>
+          </clipPath>
+        </defs>
+        ${drawWheel(frontTruckX, 7.5)}
+        ${drawWheel(frontTruckX, 54.5)}
+        ${drawWheel(rearTruckX, 7.5)}
+        ${drawWheel(rearTruckX, 54.5)}
+        <path d="${deckPath}" fill="url(#bsvg-deck-bg)" stroke="${svg.deckStroke}" stroke-width="1.6"/>
+        ${deckArt}
+        <path d="${deckPath}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="0.7"/>
+        ${drawTruck(frontTruckX, true)}
+        ${drawTruck(rearTruckX, false)}
+      </svg>
+    `;
   }
 
   public getSelectedPark(): SkateparkLocation {

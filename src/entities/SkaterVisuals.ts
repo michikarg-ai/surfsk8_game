@@ -456,6 +456,8 @@ export class SkaterVisuals {
         geo.computeBoundingBox();
         const bb = geo.boundingBox!;
         const halfW = Math.max(0.05, Math.max(Math.abs(bb.min.x), Math.abs(bb.max.x)));
+        const minY = bb.min.y;
+        const lenY = Math.max(0.004, bb.max.y - minY);
         const minZ = bb.min.z;
         const lenZ = Math.max(0.1, bb.max.z - minZ);
         const posAttr = geo.getAttribute('position') as THREE.BufferAttribute;
@@ -471,6 +473,7 @@ export class SkaterVisuals {
           for (let k = 0; k < 3; k++) {
             const idx = i + k;
             const px = posAttr.getX(idx);
+            const py = posAttr.getY(idx);
             const pz = posAttr.getZ(idx);
             const v = THREE.MathUtils.clamp(((pz - minZ) / lenZ) * 0.94 + 0.03, 0.01, 0.99);
             let u: number;
@@ -479,9 +482,9 @@ export class SkaterVisuals {
             } else if (isBottom) {
               u = THREE.MathUtils.clamp(0.76 + (px / halfW) * 0.21, 0.54, 0.98);
             } else {
-              // Rail ply veneer strip [0.484 .. 0.516]
-              const edgeFactor = THREE.MathUtils.clamp(Math.abs(normAttr.getX(idx)), 0, 1);
-              u = 0.485 + edgeFactor * 0.03;
+              // Rail 7-ply veneer strip [0.482 .. 0.518] mapped vertically across deck thickness
+              const railT = THREE.MathUtils.clamp((py - minY) / lenY, 0, 1);
+              u = 0.482 + railT * 0.036;
             }
             uvArray[idx * 2] = u;
             uvArray[idx * 2 + 1] = v;
@@ -577,142 +580,301 @@ export class SkaterVisuals {
     const ctx = canvas.getContext('2d')!;
 
     // -----------------------------------------------------------------------
-    // 1. LEFT HALF [0..491]: TOP DECK (Wood/Metallic Rim + Textured Griptape)
+    // 1. LEFT HALF [0..491]: TOP DECK (Signature Graphic + Split Surfskate Griptape)
     // -----------------------------------------------------------------------
+    const topW = 491;
     const topCx = 245;
-    const topBaseColors: Record<SurfBoardId, [string, string]> = {
-      the_spiral: ['#e6b67e', '#b97a3e'],
-      isar_swallowtail: ['#7de8dc', '#0e9087'],
-      sunset_cruiser: ['#f9a86b', '#b92b6c'],
-      golden_pretzel: ['#ffe484', '#b88214'],
-    };
-    const [topLight, topDark] = topBaseColors[spec.id];
-    const topGrad = ctx.createLinearGradient(0, 0, 491, H);
-    topGrad.addColorStop(0, topLight);
-    topGrad.addColorStop(0.5, topDark);
-    topGrad.addColorStop(1, topLight);
-    ctx.fillStyle = topGrad;
-    ctx.fillRect(0, 0, 491, H);
 
-    // Subtle longitudinal wood / brushed sheen lines on top base
-    ctx.strokeStyle = spec.metallic ? 'rgba(255, 250, 220, 0.24)' : 'rgba(60, 28, 8, 0.14)';
-    ctx.lineWidth = 2;
-    for (let x = 18; x < 480; x += 14) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x + Math.sin(x * 0.13) * 6, H);
-      ctx.stroke();
-    }
-
-    // Center racing reveal graphic underneath the die-cut griptape
+    // 1a. Draw full signature top artwork FIRST so exposed nose, tail, center & rails pop
     if (spec.id === 'the_spiral') {
+      const topGrad = ctx.createLinearGradient(0, 0, topW, H);
+      topGrad.addColorStop(0, '#f0c690');
+      topGrad.addColorStop(0.5, '#c98544');
+      topGrad.addColorStop(1, '#f0c690');
+      ctx.fillStyle = topGrad;
+      ctx.fillRect(0, 0, topW, H);
+
+      ctx.strokeStyle = 'rgba(60, 28, 8, 0.16)';
+      ctx.lineWidth = 2.5;
+      for (let x = 18; x < 480; x += 14) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x + Math.sin(x * 0.13) * 6, H);
+        ctx.stroke();
+      }
+
+      // Bold sunset-orange rail trim + center stringer
       ctx.fillStyle = '#ff6b1a';
-      ctx.fillRect(topCx - 20, 0, 40, H);
-      ctx.fillStyle = '#fef3c7';
+      ctx.fillRect(0, 0, 34, H);
+      ctx.fillRect(topW - 34, 0, 34, H);
+      ctx.fillStyle = '#1c1917';
+      ctx.fillRect(topCx - 14, 0, 28, H);
+      ctx.fillStyle = '#ff6b1a';
       ctx.fillRect(topCx - 6, 0, 12, H);
+
+      // Diagonal racing bands at nose & tail
+      ctx.fillStyle = '#fef3c7';
+      ctx.beginPath();
+      ctx.moveTo(34, 92);
+      ctx.lineTo(topW - 34, 152);
+      ctx.lineTo(topW - 34, 174);
+      ctx.lineTo(34, 114);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(34, H - 174);
+      ctx.lineTo(topW - 34, H - 114);
+      ctx.lineTo(topW - 34, H - 92);
+      ctx.lineTo(34, H - 152);
+      ctx.closePath();
+      ctx.fill();
+
+      // Spiral medallion in exposed center window & nose badge
+      for (const [my, mr] of [
+        [H * 0.5, 62],
+        [106, 36],
+      ] as const) {
+        ctx.save();
+        ctx.translate(topCx, my);
+        ctx.beginPath();
+        ctx.arc(0, 0, mr, 0, Math.PI * 2);
+        ctx.fillStyle = '#181411';
+        ctx.fill();
+        ctx.lineWidth = mr > 45 ? 5 : 3;
+        ctx.strokeStyle = '#ff6b1a';
+        ctx.beginPath();
+        const maxA = Math.PI * 6.2;
+        for (let a = 0; a < maxA; a += 0.15) {
+          const r = (mr * 0.08) + (a / maxA) * (mr * 0.78);
+          const px = Math.cos(a) * r;
+          const py = Math.sin(a) * r;
+          if (a === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
     } else if (spec.id === 'isar_swallowtail') {
-      ctx.fillStyle = '#00e5d4';
-      ctx.fillRect(topCx - 28, 0, 56, H);
+      // Vintage bone-cream & vibrant turquoise-aqua surf top
       ctx.fillStyle = '#ecfeff';
-      ctx.fillRect(topCx - 8, 0, 16, H);
+      ctx.fillRect(0, 0, topW, H);
+
+      const aquaGrad = ctx.createLinearGradient(0, 0, topW, H);
+      aquaGrad.addColorStop(0, '#00e5d4');
+      aquaGrad.addColorStop(0.55, '#0891b2');
+      aquaGrad.addColorStop(1, '#0f766e');
+      ctx.fillStyle = aquaGrad;
+      ctx.fillRect(0, 360, topW, 304);
+
+      // Electric cyan rail trim
+      ctx.fillStyle = '#00e5d4';
+      ctx.fillRect(0, 0, 34, H);
+      ctx.fillRect(topW - 34, 0, 34, H);
+
+      // Sweeping diagonal surf stripes at nose, center & tail
+      ctx.fillStyle = '#0891b2';
+      ctx.beginPath();
+      ctx.moveTo(0, 80);
+      ctx.lineTo(topW, 170);
+      ctx.lineTo(topW, 210);
+      ctx.lineTo(0, 120);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#083344';
+      ctx.beginPath();
+      ctx.moveTo(0, H - 190);
+      ctx.lineTo(topW, H - 90);
+      ctx.lineTo(topW, H - 56);
+      ctx.lineTo(0, H - 156);
+      ctx.closePath();
+      ctx.fill();
+
+      // Center Isar Wave Medallion
+      ctx.save();
+      ctx.translate(topCx, H * 0.5);
+      ctx.beginPath();
+      ctx.arc(0, 0, 60, 0, Math.PI * 2);
+      ctx.fillStyle = '#083344';
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#99f6e4';
+      ctx.stroke();
+      for (let w = -1; w <= 1; w++) {
+        ctx.beginPath();
+        const wy = w * 16;
+        ctx.moveTo(-42, wy + 5);
+        ctx.quadraticCurveTo(-18, wy - 14, 0, wy + 3);
+        ctx.quadraticCurveTo(18, wy + 18, 42, wy - 5);
+        ctx.strokeStyle = w === 0 ? '#00e5d4' : '#ecfeff';
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Swallowtail chevron accent on nose & tail
+      ctx.strokeStyle = '#00e5d4';
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.moveTo(topCx - 95, 58);
+      ctx.lineTo(topCx, 118);
+      ctx.lineTo(topCx + 95, 58);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(topCx - 95, H - 125);
+      ctx.lineTo(topCx, H - 52);
+      ctx.lineTo(topCx + 95, H - 125);
+      ctx.stroke();
     } else if (spec.id === 'sunset_cruiser') {
-      const sGrad = ctx.createLinearGradient(topCx - 36, 0, topCx + 36, 0);
-      sGrad.addColorStop(0, '#ff3d8a');
-      sGrad.addColorStop(0.5, '#ffd54a');
-      sGrad.addColorStop(1, '#ff6b1a');
-      ctx.fillStyle = sGrad;
-      ctx.fillRect(topCx - 34, 0, 68, H);
+      // Vibrant Miami Sunset top gradient
+      const mGrad = ctx.createLinearGradient(0, 0, 0, H);
+      mGrad.addColorStop(0, '#ffd54a');
+      mGrad.addColorStop(0.18, '#ff3d8a');
+      mGrad.addColorStop(0.45, '#581c87');
+      mGrad.addColorStop(0.55, '#831843');
+      mGrad.addColorStop(0.82, '#ff7b1c');
+      mGrad.addColorStop(1, '#ffd54a');
+      ctx.fillStyle = mGrad;
+      ctx.fillRect(0, 0, topW, H);
+
+      // Hot-pink & gold rail trim + twin speed lines
+      ctx.fillStyle = '#ff3d8a';
+      ctx.fillRect(0, 0, 32, H);
+      ctx.fillRect(topW - 32, 0, 32, H);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.34)';
+      ctx.fillRect(topCx - 52, 0, 10, H);
+      ctx.fillRect(topCx + 42, 0, 10, H);
+
+      // Slatted Miami Sun Disc in center window
+      ctx.save();
+      ctx.translate(topCx, H * 0.5);
+      const sunGrad = ctx.createLinearGradient(0, -60, 0, 60);
+      sunGrad.addColorStop(0, '#fef08a');
+      sunGrad.addColorStop(0.55, '#ff7b1c');
+      sunGrad.addColorStop(1, '#ff3d8a');
+      ctx.fillStyle = sunGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, 58, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#3b0764';
+      for (const barY of [8, 22, 34, 46]) {
+        ctx.fillRect(-62, barY, 124, 5.5);
+      }
+      ctx.restore();
+
+      // Sunset gold chevrons on nose & tail
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 8;
+      for (const [cy, dir] of [
+        [105, -1],
+        [H - 105, 1],
+      ] as const) {
+        ctx.beginPath();
+        ctx.moveTo(topCx - 90, cy - 24 * dir);
+        ctx.lineTo(topCx, cy + 16 * dir);
+        ctx.lineTo(topCx + 90, cy - 24 * dir);
+        ctx.stroke();
+      }
     } else {
-      // Golden Pretzel: rich brushed champagne-gold center & dark pretzel mark near nose
-      const gGrad = ctx.createLinearGradient(80, 0, 410, 0);
-      gGrad.addColorStop(0, '#c78c18');
-      gGrad.addColorStop(0.5, '#fff1a6');
-      gGrad.addColorStop(1, '#c78c18');
-      ctx.fillStyle = gGrad;
-      ctx.fillRect(40, 0, 410, H);
+      // GOLDEN PRETZEL PRO: gleaming brushed champagne gold metallic top
+      const gBg = ctx.createLinearGradient(0, 0, topW, H);
+      gBg.addColorStop(0, '#fde047');
+      gBg.addColorStop(0.28, '#f59e0b');
+      gBg.addColorStop(0.55, '#fef9c3');
+      gBg.addColorStop(0.82, '#d97706');
+      gBg.addColorStop(1, '#fde047');
+      ctx.fillStyle = gBg;
+      ctx.fillRect(0, 0, topW, H);
+
+      for (let y = 0; y < H; y += 5) {
+        ctx.fillStyle =
+          y % 10 === 0 ? 'rgba(255, 255, 255, 0.16)' : 'rgba(120, 53, 15, 0.08)';
+        ctx.fillRect(0, y, topW, 2);
+      }
+
+      // Dark obsidian rail pinstripe
+      ctx.strokeStyle = '#17130d';
+      ctx.lineWidth = 10;
+      ctx.strokeRect(24, 34, topW - 48, H - 68);
+
+      // Crisp dark pretzel crests in center, nose & tail
+      this.drawPretzelCrest(ctx, topCx, H * 0.5, 56, '#17130d', '#ffd54a');
+      this.drawPretzelCrest(ctx, topCx, 108, 34, '#17130d', '#ffd54a');
+      this.drawPretzelCrest(ctx, topCx, H - 108, 32, '#17130d', '#ffd54a');
     }
 
-    // Matte black griptape inset (leaving clean deck rim + nose/tail graphic windows)
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(36, 38, 418, H - 76, 95);
-    ctx.clip();
+    // 1b. Stylish Split Surfskate Griptape Pads (Front Foot & Rear Foot only)
+    // Leaves Nose [0..176], Center Graphic Window [418..612], Tail [856..1024] & Side Rails exposed!
+    const drawGripPad = (pathBuilder: () => void) => {
+      ctx.save();
+      pathBuilder();
+      ctx.clip();
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(0, 0, topW, H);
+      for (let i = 0; i < 2400; i++) {
+        const sx = 34 + ((i * 197) % (topW - 68));
+        const sy = 150 + ((i * 523) % (H - 300));
+        ctx.fillStyle = i % 3 === 0 ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.38)';
+        ctx.fillRect(sx, sy, 2, 2);
+      }
+      ctx.restore();
 
-    ctx.fillStyle = '#18181b';
-    ctx.fillRect(36, 38, 418, H - 76);
+      // Subtle bright accent trim along the split-grip cut edge
+      ctx.save();
+      pathBuilder();
+      ctx.strokeStyle = spec.wheelColor;
+      ctx.lineWidth = 3.5;
+      ctx.stroke();
+      ctx.restore();
+    };
 
-    // Grip speckles
-    for (let i = 0; i < 3600; i++) {
-      const sx = 36 + ((i * 197) % 418);
-      const sy = 38 + ((i * 523) % (H - 76));
-      ctx.fillStyle = i % 3 === 0 ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.35)';
-      ctx.fillRect(sx, sy, 2, 2);
-    }
-
-    // Die-cut griptape windows at nose & tail so board personality pops from top camera!
-    ctx.globalCompositeOperation = 'destination-out';
-    if (spec.id === 'the_spiral') {
-      // Curved diagonal wood/orange racing stripe gap near nose & tail
+    // Front foot pad [y ≈ 178..415]
+    drawGripPad(() => {
       ctx.beginPath();
-      ctx.moveTo(topCx - 55, 86);
-      ctx.lineTo(topCx + 55, 118);
-      ctx.lineTo(topCx + 55, 146);
-      ctx.lineTo(topCx - 55, 114);
+      if (spec.id === 'isar_swallowtail') {
+        ctx.moveTo(42, 184);
+        ctx.lineTo(topCx, 218);
+        ctx.lineTo(topW - 42, 184);
+        ctx.lineTo(topW - 42, 396);
+        ctx.lineTo(topCx, 424);
+        ctx.lineTo(42, 396);
+      } else if (spec.id === 'sunset_cruiser') {
+        ctx.moveTo(44, 198);
+        ctx.quadraticCurveTo(topCx, 168, topW - 44, 198);
+        ctx.lineTo(topW - 44, 404);
+        ctx.quadraticCurveTo(topCx, 428, 44, 404);
+      } else {
+        ctx.moveTo(42, 180);
+        ctx.lineTo(topW - 42, 208);
+        ctx.lineTo(topW - 42, 412);
+        ctx.lineTo(42, 384);
+      }
       ctx.closePath();
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(topCx - 55, H - 146);
-      ctx.lineTo(topCx + 55, H - 114);
-      ctx.lineTo(topCx + 55, H - 86);
-      ctx.lineTo(topCx - 55, H - 118);
-      ctx.closePath();
-      ctx.fill();
-    } else if (spec.id === 'isar_swallowtail') {
-      // Aqua swallowtail chevron cutouts
-      ctx.beginPath();
-      ctx.moveTo(topCx - 90, 92);
-      ctx.lineTo(topCx, 140);
-      ctx.lineTo(topCx + 90, 92);
-      ctx.lineTo(topCx + 90, 122);
-      ctx.lineTo(topCx, 170);
-      ctx.lineTo(topCx - 90, 122);
-      ctx.closePath();
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(topCx - 85, H - 90);
-      ctx.lineTo(topCx, H - 148);
-      ctx.lineTo(topCx + 85, H - 90);
-      ctx.lineTo(topCx + 85, H - 62);
-      ctx.lineTo(topCx, H - 118);
-      ctx.lineTo(topCx - 85, H - 62);
-      ctx.closePath();
-      ctx.fill();
-    } else if (spec.id === 'sunset_cruiser') {
-      // Miami sunset centerline racing stripe cutout
-      ctx.fillRect(topCx - 22, 40, 44, 130);
-      ctx.fillRect(topCx - 22, H - 170, 44, 130);
-    } else {
-      // Golden Pretzel: exposed gold nose, tail & center emblem window
-      ctx.fillRect(0, 0, 491, 148);
-      ctx.fillRect(0, H - 148, 491, 148);
-      ctx.beginPath();
-      ctx.arc(topCx, H * 0.5, 68, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
+    });
 
-    // Redraw clean top background underneath transparent destination-out cutouts
-    ctx.save();
-    ctx.globalCompositeOperation = 'destination-over';
-    ctx.fillStyle = topGrad;
-    ctx.fillRect(0, 0, 491, H);
-    ctx.restore();
-
-    // For Golden Pretzel top, stamp crisp dark pretzel crest in the center window
-    if (spec.id === 'golden_pretzel') {
-      this.drawPretzelCrest(ctx, topCx, H * 0.5, 48, '#17130d', '#ffd54a');
-      this.drawPretzelCrest(ctx, topCx, 95, 26, '#17130d', '#ffd54a');
-    }
+    // Rear foot pad [y ≈ 615..858]
+    drawGripPad(() => {
+      ctx.beginPath();
+      if (spec.id === 'isar_swallowtail') {
+        ctx.moveTo(42, 628);
+        ctx.lineTo(topCx, 600);
+        ctx.lineTo(topW - 42, 628);
+        ctx.lineTo(topW - 42, 846);
+        ctx.lineTo(topCx, 814);
+        ctx.lineTo(42, 846);
+      } else if (spec.id === 'sunset_cruiser') {
+        ctx.moveTo(44, 620);
+        ctx.quadraticCurveTo(topCx, 596, topW - 44, 620);
+        ctx.lineTo(topW - 44, 836);
+        ctx.quadraticCurveTo(topCx, 864, 44, 836);
+      } else {
+        ctx.moveTo(42, 640);
+        ctx.lineTo(topW - 42, 612);
+        ctx.lineTo(topW - 42, 848);
+        ctx.lineTo(42, 820);
+      }
+      ctx.closePath();
+    });
 
     // 8 Truck Mounting Bolts on Top Deck (front y ≈ 224, rear y ≈ 794)
     const boltColor = spec.wheelColor;
@@ -732,11 +894,15 @@ export class SkaterVisuals {
     }
 
     // -----------------------------------------------------------------------
-    // 2. CENTER STRIP [491..533]: 7-PLY RAIL VENEER
+    // 2. CENTER STRIP [491..533]: BOLD 7-PLY RAIL VENEER
     // -----------------------------------------------------------------------
-    const plyColors = spec.metallic
-      ? ['#92610d', '#ffd54a', '#1c1917', '#ffe885', '#1c1917', '#ffd54a', '#92610d']
-      : ['#e8c391', '#9c632b', '#e8c391', spec.wheelColor, '#e8c391', '#9c632b', '#e8c391'];
+    const plyColorsByBoard: Record<SurfBoardId, string[]> = {
+      the_spiral: ['#78350f', '#e8c391', '#ff6b1a', '#ff6b1a', '#ff6b1a', '#e8c391', '#78350f'],
+      isar_swallowtail: ['#083344', '#ecfeff', '#00e5d4', '#00e5d4', '#00e5d4', '#ecfeff', '#083344'],
+      sunset_cruiser: ['#3b0764', '#ffd54a', '#ff3d8a', '#ff3d8a', '#ff7b1c', '#ffd54a', '#3b0764'],
+      golden_pretzel: ['#17130d', '#ffd54a', '#fef9c3', '#ffd54a', '#fef9c3', '#ffd54a', '#17130d'],
+    };
+    const plyColors = plyColorsByBoard[spec.id];
     const plyW = 42 / plyColors.length;
     for (let p = 0; p < plyColors.length; p++) {
       ctx.fillStyle = plyColors[p];

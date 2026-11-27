@@ -1729,8 +1729,8 @@
         color: #fde68a;
       }
       .board-slot-wrap.is-locked #board-icon-view {
-        opacity: 0.42;
-        filter: saturate(0.42);
+        opacity: 0.6;
+        filter: saturate(0.68) brightness(0.84);
       }
       .board-lock-badge {
         position: absolute;
@@ -1746,8 +1746,8 @@
         display: none;
       }
       .board-lock-pill {
-        background: rgba(12, 12, 16, 0.88);
-        border: 1px solid rgba(251, 191, 36, 0.75);
+        background: rgba(10, 10, 14, 0.9);
+        border: 1px solid rgba(251, 191, 36, 0.85);
         color: #fde68a;
         font-family: var(--font-hud);
         font-size: 9.5px;
@@ -1755,7 +1755,7 @@
         letter-spacing: 0.04em;
         padding: 2px 7px;
         border-radius: 999px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.72);
         white-space: nowrap;
       }
       .board-stats {
@@ -1778,7 +1778,7 @@
         width: 100%;
         max-width: 165px;
         height: 44px;
-        background: radial-gradient(ellipse 80% 65% at 50% 45%, #524b42 0%, #302b26 55%, #181614 100%);
+        background: radial-gradient(ellipse 85% 75% at 50% 50%, #2d2a26 0%, #1a1816 68%, #100f0e 100%);
       }
       .slot-view {
         position: absolute;
@@ -1839,14 +1839,14 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 2px 6px;
+        padding: 2px 4px;
       }
       .board-icon-svg {
         width: 100%;
-        max-width: 160px;
-        height: auto;
-        max-height: 44px;
-        filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.5));
+        max-width: 156px;
+        height: 100%;
+        max-height: 40px;
+        filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.6));
       }
       .slot-notice-view {
         background: linear-gradient(135deg, #151412 0%, #1e1d1a 60%, #26211c 100%);
@@ -2161,7 +2161,7 @@
           height: 36px;
         }
         .board-icon-svg {
-          max-height: 30px;
+          max-height: 32px;
         }
         .mode-pill-btn {
           padding: 4px 2px;
@@ -5972,83 +5972,14 @@
                     <div class="board-tagline" id="landing-board-tagline" data-i18n="board.the_spiral.tagline">Balanced Allrounder • Smooth Wood Flow</div>
                     <div class="slot-display-wrap board-slot-wrap" id="board-slot-wrap">
                       <div class="slot-view slot-thumb-view active" id="board-icon-view">
-                        <div class="board-icon-wrap">
-                          <svg class="board-icon-svg" viewBox="0 0 200 58" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <defs>
-                              <linearGradient id="wood-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop id="board-svg-wood-0" offset="0%" stop-color="#f6d3ab" />
-                                <stop id="board-svg-wood-1" offset="25%" stop-color="#e2ab70" />
-                                <stop id="board-svg-wood-2" offset="70%" stop-color="#c68a4b" />
-                                <stop id="board-svg-wood-3" offset="100%" stop-color="#996024" />
-                              </linearGradient>
-                              <linearGradient id="grip-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stop-color="#2a2826" />
-                                <stop offset="35%" stop-color="#3c3935" />
-                                <stop offset="70%" stop-color="#2e2c29" />
-                                <stop offset="100%" stop-color="#201f1e" />
-                              </linearGradient>
-                              <linearGradient id="truck-metal" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" stop-color="#ffffff" />
-                                <stop offset="22%" stop-color="#e2e8f0" />
-                                <stop offset="65%" stop-color="#94a3b8" />
-                                <stop offset="100%" stop-color="#475569" />
-                              </linearGradient>
-                              <radialGradient id="wheel-urethane" cx="35%" cy="32%" r="68%">
-                                <stop id="board-svg-wheel-0" offset="0%" stop-color="#ff9e58" />
-                                <stop id="board-svg-wheel-1" offset="50%" stop-color="#ff6b1a" />
-                                <stop id="board-svg-wheel-2" offset="85%" stop-color="#c2410c" />
-                                <stop id="board-svg-wheel-3" offset="100%" stop-color="#7c2d12" />
-                              </radialGradient>
-                              <linearGradient id="rim-highlight" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" stop-color="rgba(255,255,255,0.75)" />
-                                <stop offset="100%" stop-color="rgba(0,0,0,0.4)" />
-                              </linearGradient>
-                              <radialGradient id="shadow-radial" cx="50%" cy="50%" r="50%">
-                                <stop offset="0%" stop-color="rgba(0,0,0,0.58)" />
-                                <stop offset="55%" stop-color="rgba(0,0,0,0.22)" />
-                                <stop offset="100%" stop-color="rgba(0,0,0,0)" />
-                              </radialGradient>
-                            </defs>
-                            <ellipse cx="100" cy="53" rx="84" ry="3.2" fill="url(#shadow-radial)" />
-                            <ellipse cx="50" cy="52" rx="17" ry="3.6" fill="url(#shadow-radial)" />
-                            <ellipse cx="148" cy="52" rx="17" ry="3.6" fill="url(#shadow-radial)" />
-                            <g class="truck-front">
-                              <polygon points="42,22 62,22 59,27 45,27" fill="#1e293b" />
-                              <path d="M46,27 L58,27 L54,38 L43,38 Z" fill="url(#truck-metal)" />
-                              <rect x="44" y="31" width="11" height="6" rx="2" fill="#64748b" />
-                              <line x1="45" y1="33" x2="54" y2="33" stroke="#f1f5f9" stroke-width="0.8" />
-                              <line x1="45" y1="35" x2="54" y2="35" stroke="#f1f5f9" stroke-width="0.8" />
-                              <rect x="39" y="37" width="22" height="4.5" rx="1.5" fill="url(#truck-metal)" />
-                            </g>
-                            <g class="truck-rear">
-                              <polygon points="140,22 158,22 155,27 143,27" fill="#1e293b" />
-                              <path d="M143,27 L155,27 L152,38 L144,38 Z" fill="url(#truck-metal)" />
-                              <circle cx="149" cy="33" r="3.5" fill="#475569" />
-                              <rect x="137" y="37" width="22" height="4.5" rx="1.5" fill="url(#truck-metal)" />
-                            </g>
-                            <g class="wheel-front">
-                              <circle id="board-svg-wheel-front" cx="50" cy="42" r="9.5" fill="url(#wheel-urethane)" stroke="#9a3412" stroke-width="0.6" />
-                              <circle cx="50" cy="42" r="9.5" fill="none" stroke="url(#rim-highlight)" stroke-width="1.0" opacity="0.6" />
-                              <circle cx="50" cy="42" r="4.4" fill="#1c1917" />
-                              <circle cx="50" cy="42" r="3.4" fill="url(#truck-metal)" />
-                              <circle cx="50" cy="42" r="1.4" fill="#0f172a" />
-                            </g>
-                            <g class="wheel-rear">
-                              <circle id="board-svg-wheel-rear" cx="148" cy="42" r="9.5" fill="url(#wheel-urethane)" stroke="#9a3412" stroke-width="0.6" />
-                              <circle cx="148" cy="42" r="9.5" fill="none" stroke="url(#rim-highlight)" stroke-width="1.0" opacity="0.6" />
-                              <circle cx="148" cy="42" r="4.4" fill="#1c1917" />
-                              <circle cx="148" cy="42" r="3.4" fill="url(#truck-metal)" />
-                              <circle cx="148" cy="42" r="1.4" fill="#0f172a" />
-                            </g>
-                            <path id="board-svg-deck" d="M12 12.5 C24 17.5, 42 19, 100 19 C154 19, 172 17.5, 186 11.5 C188.5 10.5, 190.5 12.8, 188 15 C174 23, 154 24, 100 24 C40 24, 22 22.5, 10 16 C7.5 14.5, 9.5 11.5, 12 12.5 Z"
-                                  fill="url(#wood-grad)" stroke="#78350f" stroke-width="0.6" />
-                            <path d="M12.5 12.6 C24.5 17.4, 42 18.8, 100 18.8 C154 18.8, 171.5 17.4, 185.5 11.7 C187 11.2, 188 12.5, 186.5 13.6 C173.5 19.8, 154 20.8, 100 20.8 C41 20.8, 23 19.6, 11 14.8 C9.5 14, 10.5 12.2, 12.5 12.6 Z"
-                                  fill="url(#grip-grad)" />
-                            <path id="board-svg-pinstripe" d="M11 15.5 C23 21, 41 22.2, 100 22.2 C154 22.2, 172 21, 186.5 14.5"
-                                  stroke="#fef08a" stroke-width="1.1" stroke-opacity="0.9" fill="none" />
-                            <path d="M14 13.8 C26 17.8, 44 19.2, 100 19.2 C154 19.2, 170 17.8, 184 12.8"
-                                  stroke="rgba(255,255,255,0.22)" stroke-width="0.8" fill="none" />
-                            <path id="board-svg-accent" d="M88 20.6 Q95 21.6 102 20.6 Q109 19.6 116 20.6" stroke="#ff6b1a" stroke-width="1.3" fill="none" stroke-linecap="round" />
+                        <div class="board-icon-wrap" id="board-icon-wrap">
+                          <svg class="board-icon-svg" viewBox="0 0 228 62" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <rect x="44" y="4" width="18" height="9" rx="3" fill="#ff6b1a" />
+                            <rect x="44" y="49" width="18" height="9" rx="3" fill="#ff6b1a" />
+                            <rect x="166" y="4" width="18" height="9" rx="3" fill="#ff6b1a" />
+                            <rect x="166" y="49" width="18" height="9" rx="3" fill="#ff6b1a" />
+                            <path d="M20 31 C20 17, 36 12, 62 12 L170 13 C192 14, 206 18, 208 31 C206 44, 192 48, 170 49 L62 50 C36 50, 20 45, 20 31 Z" fill="#d99a5b" stroke="#78350f" stroke-width="1.4" />
+                            <circle cx="114" cy="31" r="14" fill="#181411" stroke="#ff6b1a" stroke-width="1.5" />
                           </svg>
                         </div>
                       </div>
