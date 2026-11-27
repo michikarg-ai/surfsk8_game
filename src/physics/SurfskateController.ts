@@ -64,15 +64,15 @@ const GRAVITY = 9.81;
 /** Rolling resistance of urethane wheels on concrete (m/s²). */
 const ROLLING_RESISTANCE = 0.30;
 /** Aerodynamic drag coefficient (per metre). */
-const AIR_DRAG = 0.015;
+const AIR_DRAG = 0.012;
 /** Hard speed cap (m/s, simulation speed). */
 const MAX_SPEED = 9.5;
 /** Speed given by the initial push-off from a standstill (~9.5 km/h). */
 const PUSH_OFF_SPEED = 2.65;
 /** Below this speed the skater counts as standing still (full kick-push allowed). */
 const STANDSTILL_SPEED = 0.4;
-/** Startup push-boost ceiling: extra pushes / holding push cap cleanly around ~2.95 m/s (~10.6 km/h). */
-const PUSH_STARTUP_SPEED = 2.95;
+/** Startup push-boost ceiling: extra pushes / holding push cap cleanly around ~3.15 m/s (~11.3 km/h). */
+const PUSH_STARTUP_SPEED = 3.15;
 /** Tangential push acceleration while holding forwardPush below PUSH_STARTUP_SPEED (m/s²). */
 const PUSH_ACCEL = 2.6;
 /** Grounded foot-brake deceleration (m/s²). */
@@ -88,13 +88,13 @@ const PUMP_WINDOW_MAX = 1.45;
 const PUMP_PERFECT_MIN = 0.42;
 const PUMP_PERFECT_MAX = 0.95;
 /** Minimum meaningful rail lean (radians) built during the half-cycle before switching. */
-const PUMP_MIN_LEAN = 0.30;
+const PUMP_MIN_LEAN = 0.26;
 /** Minimum carve hold duration (real seconds) per half-cycle to prevent micro-wiggle speed spam. */
-const PUMP_MIN_CARVE_TIME = 0.14;
-/** Speed threshold (m/s) above which flat-ground pumping experiences diminishing returns (~16 km/h). */
-const FLAT_PUMP_SOFT_START = 4.4;
-/** Flat-ground rail-to-rail pumping tops out around ~18 km/h (5.0 m/s). */
-const FLAT_PUMP_CAP = 5.0;
+const PUMP_MIN_CARVE_TIME = 0.11;
+/** Speed threshold (m/s) above which flat-ground pumping experiences diminishing returns (~17.3 km/h). */
+const FLAT_PUMP_SOFT_START = 4.8;
+/** Flat-ground rail-to-rail pumping tops out around ~20 km/h (5.55 m/s). */
+const FLAT_PUMP_CAP = 5.55;
 /** Bowl / transition pumping accelerates up to ~24 km/h (6.67 m/s). */
 const MAX_PUMP_SPEED = 6.67;
 
@@ -837,10 +837,10 @@ export class SurfskateController {
 
       // Non-gravitational tangential acceleration (pump, friction, slides)
       const effectiveRolling = ROLLING_RESISTANCE / this.boardSpeedScale;
-      const highSpeedExcess = Math.max(0, this.speed - 4.5);
+      const highSpeedExcess = Math.max(0, this.speed - 4.8);
       const carveScrub =
         highSpeedExcess > 0
-          ? (0.08 + 0.18 * Math.min(1, Math.abs(this.leanAngle) / 0.68)) * highSpeedExcess
+          ? (0.05 + 0.13 * Math.min(1, Math.abs(this.leanAngle) / 0.68)) * highSpeedExcess
           : 0;
       const totalDrag = effectiveRolling + AIR_DRAG * this.speed * this.speed + carveScrub;
       let aExtra = -totalDrag;
@@ -849,7 +849,7 @@ export class SurfskateController {
       if (this.laybackActive) aExtra -= 1.8;
       if (this.reverseActive) aExtra -= 2.0;
 
-      // ---- Push-off: snappy surfskate kick-start capped around ~2.95 m/s (~10.6 km/h), then pump! ----
+      // ---- Push-off: snappy surfskate kick-start capped around ~3.15 m/s (~11.3 km/h), then pump! ----
       // Gate pushing by local slope/grade (not absolute elevation h0) so elevated flat
       // decks, street boxes, and bowl plateaus remain pushable while steep walls still require pumping.
       const canPush = slopeMag < 0.28 && grade < 0.18;
@@ -871,7 +871,7 @@ export class SurfskateController {
             this.coachHint = t('ctrl.coachPumpNow');
             this.coachHintTimer = 3.0;
           }
-          // Smooth startup acceleration capped cleanly at effectivePushStartup (~2.95 m/s)
+          // Smooth startup acceleration capped cleanly at effectivePushStartup (~3.15 m/s)
           const maxAccelToCap = Math.max(
             0,
             (effectivePushStartup - this.speed) / Math.max(0.012, simDt) + totalDrag
@@ -909,7 +909,7 @@ export class SurfskateController {
       ) {
         const compressQuality = THREE.MathUtils.clamp((this.compression - 0.35) / 0.55, 0.55, 1.0);
         const normQuality = (compressQuality - 0.55) / 0.45;
-        const wallSurge = THREE.MathUtils.lerp(0.62, 0.85, normQuality) * this.pumpScale;
+        const wallSurge = THREE.MathUtils.lerp(0.82, 1.08, normQuality) * this.pumpScale;
         this.wallPumpCooldown = 1.05;
         this.perfectPumpCooldown = Math.max(this.perfectPumpCooldown, 1.2);
         this.wallPumpCue = 'none';
@@ -978,7 +978,7 @@ export class SurfskateController {
         ) {
           this.perfectPumpCooldown = 2.5;
           this.wallPumpCooldown = Math.max(this.wallPumpCooldown, 1.0);
-          this.triggerWallPumpBoost(0.68 * this.pumpScale, 0.9, '⚡ PERFECT PUMP!', 150, onManeuver);
+          this.triggerWallPumpBoost(0.80 * this.pumpScale, 0.9, '⚡ PERFECT PUMP!', 150, onManeuver);
         }
       }
 
@@ -1492,7 +1492,7 @@ export class SurfskateController {
   /**
    * Flat-ground pumping (Carver C7 / YOW Meraki rail-to-rail whip).
    * Switching rails at ~0.32s - 1.45s after building meaningful lean delivers a
-   * realistic forward speed surge right at the rail-switch apex (topping out around ~17-18 km/h on flat).
+   * realistic forward speed surge right at the rail-switch apex (topping out around ~20 km/h on flat).
    */
   private updateRhythmPump(rawSteer: number, _onManeuver: (ev: ManeuverEvent) => void): void {
     // Only detect a pump switch when steering direction actually reverses between Left and Right.
@@ -1556,7 +1556,7 @@ export class SurfskateController {
       if (this.speed < flatPumpCap) {
         this.speed = Math.min(
           this.maxSpeedLimit,
-          Math.min(flatPumpCap, this.speed + 0.08 * this.pumpScale * highSpeedTaper)
+          Math.min(flatPumpCap, this.speed + 0.13 * this.pumpScale * highSpeedTaper)
         );
       }
       this.pumpPulse = Math.max(this.pumpPulse, 0.35);
@@ -1579,7 +1579,7 @@ export class SurfskateController {
     const leanQuality = THREE.MathUtils.clamp((prevPeakLean - 0.24) / (0.65 - 0.24), 0.25, 1.0);
     const combinedQuality = THREE.MathUtils.clamp(rhythmQuality * (0.65 + 0.35 * leanQuality), 0, 1);
 
-    const rawSurge = THREE.MathUtils.lerp(0.22, 0.46, combinedQuality) * this.pumpScale;
+    const rawSurge = THREE.MathUtils.lerp(0.34, 0.68, combinedQuality) * this.pumpScale;
 
     if (this.speed < flatPumpCap) {
       this.speed = Math.min(

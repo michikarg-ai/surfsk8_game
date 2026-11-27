@@ -117,8 +117,10 @@ const EN_TRANSLATIONS = {
     '<strong>Carve &amp; Pump:</strong> Carve rhythmically left ↔ right to build top speed without holding ↑/W',
   'help.kbPushKey': '↑ or W',
   'help.kbPush': '<strong>Push-Off:</strong> Push off from a standstill &amp; build initial speed',
-  'help.kbBrakeKey': '↓ or S / Shift',
-  'help.kbBrake': '<strong>Compress &amp; Brake:</strong> Crouch into transitions for speed / brake',
+  'help.kbBrakeKey': '↓ or S',
+  'help.kbBrake': '<strong>Brake / Stop:</strong> Slow down &amp; control your speed',
+  'help.kbCompressKey': 'SHIFT',
+  'help.kbCompress': '<strong>Compress / Wall-Pump:</strong> Crouch into transitions &amp; bowl walls for speed',
   'help.kbOllie': '<strong>Ollie &amp; Grab:</strong> Pop off the coping lip / hold in air for Indy Grab',
   'help.kbTricksKey': 'C (or Q/W/A/S)',
   'help.kbTricks':
@@ -144,7 +146,7 @@ const EN_TRANSLATIONS = {
 
   'tutorial.s3.promptDesktop': 'PUMP FOR SPEED {keys}',
   'tutorial.s3.promptTouch': 'PUMP IN RHYTHM: {carve} OR {compress}',
-  'tutorial.s3.hintDesktop': 'Carve left ↔ right with the beat (no ↑ needed!) — climb 10 → 16+ km/h',
+  'tutorial.s3.hintDesktop': 'Carve left ↔ right with the beat (or hold SHIFT on walls) — climb 10 → 16+ km/h',
   'tutorial.s3.hintTouch': 'Carve ◀ ↔ ▶ in rhythm (or COMPRESS on walls) to climb 10 → 16+ km/h!',
 
   'tutorial.s4.promptDesktop': 'CARVE HARD + PRESS {keys}',
@@ -293,6 +295,7 @@ const EN_TRANSLATIONS = {
   'dock.mobCompress': 'crouch before transition',
   'dock.kbPush': 'one push-off from a standstill',
   'dock.kbCarve': 'carve in rhythm to pump & build top speed',
+  'dock.kbBrake': 'brake &amp; slow down',
   'dock.kbCompress': 'compress on a wall drop = stronger pump',
   'dock.kbOllie': 'ollie',
   'dock.kbCam': 'camera positions & 3D orbit',
@@ -614,8 +617,10 @@ const DE_TRANSLATIONS: Record<TranslationKey, string> = {
     '<strong>Carve &amp; Pump:</strong> Rhythmisch links ↔ rechts carven, um ohne ↑/W auf Top-Speed zu pumpen',
   'help.kbPushKey': '↑ oder W',
   'help.kbPush': '<strong>Push-Off:</strong> Aus dem Stand anrollen &amp; Schwung holen',
-  'help.kbBrakeKey': '↓ oder S / Shift',
-  'help.kbBrake': '<strong>Compress &amp; Brake:</strong> Kniebeuge für Speed in der Transition / Abbremsen',
+  'help.kbBrakeKey': '↓ oder S',
+  'help.kbBrake': '<strong>Bremsen / Anhalten:</strong> Tempo drosseln &amp; sauber abbremsen',
+  'help.kbCompressKey': 'SHIFT',
+  'help.kbCompress': '<strong>Compress / Wall-Pump:</strong> In Transitions &amp; Bowl-Wänden ducken für Speed',
   'help.kbOllie': '<strong>Ollie &amp; Grab:</strong> Abspringen an der Coping-Kante / Halten für Indy Grab',
   'help.kbTricksKey': 'C (oder Q/W/A/S)',
   'help.kbTricks':
@@ -641,7 +646,7 @@ const DE_TRANSLATIONS: Record<TranslationKey, string> = {
 
   'tutorial.s3.promptDesktop': 'PUMP FÜR SPEED {keys}',
   'tutorial.s3.promptTouch': 'PUMP IM RHYTHMUS: {carve} ODER {compress}',
-  'tutorial.s3.hintDesktop': 'Carve links ↔ rechts im Takt (ohne ↑!) — von 10 → 16+ km/h',
+  'tutorial.s3.hintDesktop': 'Carve links ↔ rechts im Takt (oder SHIFT an Walls halten) — von 10 → 16+ km/h',
   'tutorial.s3.hintTouch': 'Carve ◀ ↔ ▶ im Takt (oder COMPRESS an Walls) für 10 → 16+ km/h!',
 
   'tutorial.s4.promptDesktop': 'HART CARVEN + {keys} DRÜCKEN',
@@ -790,6 +795,7 @@ const DE_TRANSLATIONS: Record<TranslationKey, string> = {
   'dock.mobCompress': 'Kniebeuge vor Transition',
   'dock.kbPush': 'einmal pushen aus dem Stand',
   'dock.kbCarve': 'im Rhythmus carven & pumpen für Top-Speed',
+  'dock.kbBrake': 'bremsen &amp; anhalten',
   'dock.kbCompress': 'in der Wall-Abfahrt ducken = stärkerer Pump',
   'dock.kbOllie': 'Ollie',
   'dock.kbCam': 'Kamerapositionen & 3D-Orbit',

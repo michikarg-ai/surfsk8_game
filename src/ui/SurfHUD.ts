@@ -538,10 +538,9 @@ export class SurfHUD {
             : t('hud.wallCueExtendDesktop');
           this.wallCueEl.className = 'hud-action-pill visible extend';
         } else {
-          const compressKey = this.controlMode === 'arrows' ? 'SHIFT / ↓' : 'SHIFT / S';
           this.wallCueEl.textContent = isTouch
             ? t('hud.wallCueCompressTouch')
-            : t('hud.wallCueCompressDesktop', { key: compressKey });
+            : t('hud.wallCueCompressDesktop', { key: 'SHIFT' });
           this.wallCueEl.className = 'hud-action-pill visible compress';
         }
       } else {
@@ -1344,7 +1343,8 @@ export class SurfHUD {
           ? `
           <div class="ctrl-row"><span class="key">↑</span> ${t('dock.kbPush')}</div>
           <div class="ctrl-row"><span class="key">←</span><span class="key">→</span> ${t('dock.kbCarve')}</div>
-          <div class="ctrl-row"><span class="key">↓</span><span class="key">⇧</span> ${t('dock.kbCompress')}</div>
+          <div class="ctrl-row"><span class="key">↓</span> ${t('dock.kbBrake')}</div>
+          <div class="ctrl-row"><span class="key">SHIFT</span> ${t('dock.kbCompress')}</div>
           <div class="ctrl-row"><span class="key">␣</span> ${t('dock.kbOllie')}</div>
           <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4/O</span> ${t('dock.kbCam')}</div>
           <div class="ctrl-row"><span class="key">Tab</span> ${t('dock.kbSwitchWasd')}</div>
@@ -1353,7 +1353,8 @@ export class SurfHUD {
           : `
           <div class="ctrl-row"><span class="key">W</span> ${t('dock.kbPush')}</div>
           <div class="ctrl-row"><span class="key">A</span><span class="key">D</span> ${t('dock.kbCarve')}</div>
-          <div class="ctrl-row"><span class="key">S</span><span class="key">⇧</span> ${t('dock.kbCompress')}</div>
+          <div class="ctrl-row"><span class="key">S</span> ${t('dock.kbBrake')}</div>
+          <div class="ctrl-row"><span class="key">SHIFT</span> ${t('dock.kbCompress')}</div>
           <div class="ctrl-row"><span class="key">␣</span> ${t('dock.kbOllie')}</div>
           <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4/O</span> ${t('dock.kbCam')}</div>
           <div class="ctrl-row"><span class="key">Tab</span> ${t('dock.kbSwitchArrows')}</div>

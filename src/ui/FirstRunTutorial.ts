@@ -520,7 +520,7 @@ export class FirstRunTutorial {
     } else if (step === 2) {
       const carveKeys =
         ctrlMode === 'wasd' ? `${this.kbd('A')} ${this.kbd('D')}` : `${this.kbd('←')} ${this.kbd('→')}`;
-      const pumpKeys = `${carveKeys} / ${this.kbd('Shift')}`;
+      const pumpKeys = `${carveKeys} / ${this.kbd('SHIFT')}`;
       this.promptEl.innerHTML = isTouch
         ? t('tutorial.s3.promptTouch', {
             compress: this.pill('COMPRESS'),
