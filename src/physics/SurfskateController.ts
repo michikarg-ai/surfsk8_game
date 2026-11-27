@@ -7,6 +7,7 @@ export interface InputState {
   steerLeft: boolean;
   steerRight: boolean;
   forwardPush: boolean;
+  brake?: boolean;
   compressCrouch: boolean;
   jumpOllie: boolean;
   grindSlash: boolean;
@@ -59,32 +60,40 @@ const TIME_SCALE = 0.75;
 /** Real gravity. Combined with energy conservation, max climb height = v² / (2g). */
 const GRAVITY = 9.81;
 /** Rolling resistance of urethane wheels on concrete (m/s²). */
-const ROLLING_RESISTANCE = 0.28;
+const ROLLING_RESISTANCE = 0.30;
 /** Aerodynamic drag coefficient (per metre). */
-const AIR_DRAG = 0.010;
+const AIR_DRAG = 0.015;
 /** Hard speed cap (m/s, simulation speed). */
 const MAX_SPEED = 9.5;
 /** Speed given by the initial push-off from a standstill (~9.5 km/h). */
 const PUSH_OFF_SPEED = 2.65;
 /** Below this speed the skater counts as standing still (full kick-push allowed). */
 const STANDSTILL_SPEED = 0.4;
-/** Startup push-boost ceiling: extra pushes / holding push cap cleanly around ~3.2 m/s (~11.5 km/h). */
-const PUSH_STARTUP_SPEED = 3.2;
+/** Startup push-boost ceiling: extra pushes / holding push cap cleanly around ~2.95 m/s (~10.6 km/h). */
+const PUSH_STARTUP_SPEED = 2.95;
 /** Tangential push acceleration while holding forwardPush below PUSH_STARTUP_SPEED (m/s²). */
 const PUSH_ACCEL = 2.6;
+/** Grounded foot-brake deceleration (m/s²). */
+const BRAKE_DECEL = 7.5;
 
 // ---- Flat-ground pumping (Carver C7 / YOW Meraki rail-to-rail whip) ----
 /** Below this interval (real seconds), frantic wiggling scrubs speed. */
 const PUMP_MIN_INTERVAL = 0.16;
-/** Valid half-cycle surfskate rail-switch rhythm window (~0.35s – 1.45s). */
+/** Valid half-cycle surfskate rail-switch rhythm window (~0.32s – 1.45s). */
 const PUMP_WINDOW_MIN = 0.32;
 const PUMP_WINDOW_MAX = 1.45;
 /** Sweet spot of the rail-to-rail whip rhythm (~0.42s – 0.95s). */
 const PUMP_PERFECT_MIN = 0.42;
 const PUMP_PERFECT_MAX = 0.95;
 /** Minimum meaningful rail lean (radians) built during the half-cycle before switching. */
-const PUMP_MIN_LEAN = 0.24;
-/** Pumping on flat ground accelerates smoothly up to ~24 km/h (6.67 m/s). */
+const PUMP_MIN_LEAN = 0.30;
+/** Minimum carve hold duration (real seconds) per half-cycle to prevent micro-wiggle speed spam. */
+const PUMP_MIN_CARVE_TIME = 0.14;
+/** Speed threshold (m/s) above which flat-ground pumping experiences diminishing returns (~16 km/h). */
+const FLAT_PUMP_SOFT_START = 4.4;
+/** Flat-ground rail-to-rail pumping tops out around ~18 km/h (5.0 m/s). */
+const FLAT_PUMP_CAP = 5.0;
+/** Bowl / transition pumping accelerates up to ~24 km/h (6.67 m/s). */
 const MAX_PUMP_SPEED = 6.67;
 
 // ---- Wall pumping (stretch on the way up, compress on the way down) ----
@@ -672,6 +681,8 @@ export class SurfskateController {
       ? 0.95
       : this.laybackActive
       ? 0.7
+      : input.brake && this.speed > 0.15
+      ? 0.48
       : autoWallCompression;
     const prevCompression = this.compression;
     this.compression += (targetCompression - this.compression) * Math.min(1, 11.5 * clampedDt);
@@ -822,12 +833,20 @@ export class SurfskateController {
 
       // Non-gravitational tangential acceleration (pump, friction, slides)
       const effectiveRolling = ROLLING_RESISTANCE / this.boardSpeedScale;
-      let aExtra = -effectiveRolling - AIR_DRAG * this.speed * this.speed;
+      const highSpeedExcess = Math.max(0, this.speed - 4.5);
+      const carveScrub =
+        highSpeedExcess > 0
+          ? (0.08 + 0.18 * Math.min(1, Math.abs(this.leanAngle) / 0.68)) * highSpeedExcess
+          : 0;
+      const isBraking = Boolean(input.brake);
+      const totalDrag = effectiveRolling + AIR_DRAG * this.speed * this.speed + carveScrub;
+      let aExtra = -totalDrag;
+      if (isBraking) aExtra -= BRAKE_DECEL;
       if (this.bertSlideActive) aExtra -= 2.2;
       if (this.laybackActive) aExtra -= 1.8;
       if (this.reverseActive) aExtra -= 2.0;
 
-      // ---- Push-off: snappy surfskate kick-start capped around ~3.2 m/s (~11.5 km/h), then pump! ----
+      // ---- Push-off: snappy surfskate kick-start capped around ~2.95 m/s (~10.6 km/h), then pump! ----
       // Gate pushing by local slope/grade (not absolute elevation h0) so elevated flat
       // decks, street boxes, and bowl plateaus remain pushable while steep walls still require pumping.
       const canPush = slopeMag < 0.28 && grade < 0.18;
@@ -835,7 +854,7 @@ export class SurfskateController {
       this.prevPushInput = input.forwardPush;
       const effectivePushOff = PUSH_OFF_SPEED * this.boardSpeedScale;
       const effectivePushStartup = PUSH_STARTUP_SPEED * this.boardSpeedScale;
-      if (input.forwardPush) {
+      if (input.forwardPush && !isBraking) {
         if (canPush && this.speed < effectivePushStartup) {
           if (pushPressed) {
             if (this.speed < STANDSTILL_SPEED) {
@@ -849,12 +868,10 @@ export class SurfskateController {
             this.coachHint = t('ctrl.coachPumpNow');
             this.coachHintTimer = 3.0;
           }
-          // Smooth startup acceleration capped cleanly at effectivePushStartup (~3.2 m/s)
+          // Smooth startup acceleration capped cleanly at effectivePushStartup (~2.95 m/s)
           const maxAccelToCap = Math.max(
             0,
-            (effectivePushStartup - this.speed) / Math.max(0.012, simDt) +
-              effectiveRolling +
-              AIR_DRAG * this.speed * this.speed
+            (effectivePushStartup - this.speed) / Math.max(0.012, simDt) + totalDrag
           );
           aExtra += Math.min(PUSH_ACCEL * this.boardSpeedScale, maxAccelToCap);
         } else if (this.speed >= effectivePushStartup) {
@@ -864,7 +881,9 @@ export class SurfskateController {
       }
 
       // ---- Flat-ground pumping: rail-to-rail Carver C7 / YOW Meraki whip ----
-      this.updateRhythmPump(rawSteer, onManeuver);
+      if (!isBraking) {
+        this.updateRhythmPump(rawSteer, onManeuver);
+      }
 
       // ---- Bowl Wall Compress -> Extend Cue & Release Pump ----
       const fx = -Math.sin(this.heading);
@@ -875,6 +894,7 @@ export class SurfskateController {
       const compressReleased = !input.compressCrouch && this.prevCompressInput;
 
       if (
+        !isBraking &&
         compressReleased &&
         (this.prevWallPumpCue === 'extend' || (this.compression > 0.45 && onSlopeTransition)) &&
         this.wallPumpCooldown <= 0 &&
@@ -885,7 +905,8 @@ export class SurfskateController {
         !this.reverseActive
       ) {
         const compressQuality = THREE.MathUtils.clamp((this.compression - 0.35) / 0.55, 0.55, 1.0);
-        const wallSurge = (0.95 + 0.40 * compressQuality) * this.pumpScale;
+        const normQuality = (compressQuality - 0.55) / 0.45;
+        const wallSurge = THREE.MathUtils.lerp(0.62, 0.85, normQuality) * this.pumpScale;
         this.wallPumpCooldown = 1.05;
         this.perfectPumpCooldown = Math.max(this.perfectPumpCooldown, 1.2);
         this.wallPumpCue = 'none';
@@ -898,6 +919,7 @@ export class SurfskateController {
           onManeuver
         );
       } else if (
+        !isBraking &&
         this.wallPumpCooldown <= 0 &&
         this.speed >= 1.1 &&
         !this.bertSlideActive &&
@@ -925,11 +947,11 @@ export class SurfskateController {
       // ---- Wall pumping (like pumping a wave) ----
       // Going UP: the body stretches tall — barely any speed is lost to the stretch itself,
       // but gravity still slows you towards the apex (no free climbing!).
-      if (isOnWall && sinT > 0.05) {
+      if (!isBraking && isOnWall && sinT > 0.05) {
         aExtra += WALL_STRETCH_ASSIST * GRAVITY * sinT;
       }
       // Going DOWN: compress into the knees and drive the board down the face → speed!
-      if (isOnWall && sinT < -0.05 && !this.bertSlideActive) {
+      if (!isBraking && isOnWall && sinT < -0.05 && !this.bertSlideActive) {
         const active = input.compressCrouch;
         aExtra +=
           (active ? WALL_PUMP_GAIN_ACTIVE : WALL_PUMP_GAIN) *
@@ -953,7 +975,7 @@ export class SurfskateController {
         ) {
           this.perfectPumpCooldown = 2.5;
           this.wallPumpCooldown = Math.max(this.wallPumpCooldown, 1.0);
-          this.triggerWallPumpBoost(0.85 * this.pumpScale, 0.9, '⚡ PERFECT PUMP!', 150, onManeuver);
+          this.triggerWallPumpBoost(0.68 * this.pumpScale, 0.9, '⚡ PERFECT PUMP!', 150, onManeuver);
         }
       }
 
@@ -1021,19 +1043,25 @@ export class SurfskateController {
         // v1² = v0² + 2·a_extra·s − 2·g·Δh   (exact energy balance → no free climbing)
         const v1Sq = v0 * v0 + 2 * aExtra * pathDist - 2 * GRAVITY * dh;
 
-        if (v1Sq <= 0.0025 && dh > 0) {
-          // Out of energy: we cannot make this height. Stay put and let gravity swing us around.
-          this.position.x = prevX;
-          this.position.z = prevZ;
+        if (v1Sq <= 0.0025 && (dh > 0 || isBraking)) {
+          // Out of energy uphill, or braked cleanly to a stop
+          if (dh > 0) {
+            this.position.x = prevX;
+            this.position.z = prevZ;
+          }
+          this.speed = 0;
+        } else if (isBraking && vPred <= 0) {
           this.speed = 0;
         } else {
           this.speed = Math.min(this.maxSpeedLimit, Math.sqrt(Math.max(0, v1Sq)));
         }
 
         // Stall on a wall: at very low speed gravity pulls the nose down the fall line
+        // (hold cleanly at 0 when foot-braking on flat or gentle slopes)
         if (
           !hitBounds &&
           slopeMag > 0.12 &&
+          (!isBraking || slopeMag > 0.35) &&
           this.speed < 0.9 &&
           !this.snapActive &&
           !this.laybackActive &&
@@ -1386,7 +1414,7 @@ export class SurfskateController {
     });
   }
 
-  /** Apply a juicy bowl-wall pump speed surge and update HUD/audio event signals. */
+  /** Apply a juicy bowl-wall pump speed surge (with diminishing returns near MAX_PUMP_SPEED) and update HUD/audio event signals. */
   private triggerWallPumpBoost(
     surge: number,
     surgeStrength: number,
@@ -1394,7 +1422,16 @@ export class SurfskateController {
     points: number,
     onManeuver: (ev: ManeuverEvent) => void
   ): void {
-    this.speed = Math.min(this.maxSpeedLimit, this.speed + surge);
+    const pumpCap = MAX_PUMP_SPEED * this.boardSpeedScale;
+    const taperStart = 5.0 * this.boardSpeedScale;
+    const highSpeedTaper = THREE.MathUtils.clamp(
+      1 - (Math.max(0, this.speed - taperStart) / Math.max(0.5, pumpCap - taperStart)) * 0.65,
+      0.35,
+      1.0
+    );
+    if (this.speed < pumpCap) {
+      this.speed = Math.min(this.maxSpeedLimit, Math.min(pumpCap, this.speed + surge * highSpeedTaper));
+    }
     this.flowMeter = Math.min(100, this.flowMeter + 12 * this.flowScale);
     this.perfectPumpFlashTimer = 0.45;
     this.pumpSyncQuality = 'PERFECT PUMP!';
@@ -1451,8 +1488,8 @@ export class SurfskateController {
 
   /**
    * Flat-ground pumping (Carver C7 / YOW Meraki rail-to-rail whip).
-   * Switching rails at ~0.35s - 1.45s after building meaningful lean delivers a
-   * crisp forward speed surge right at the rail-switch apex (accelerating cleanly up to 15-24 km/h).
+   * Switching rails at ~0.32s - 1.45s after building meaningful lean delivers a
+   * realistic forward speed surge right at the rail-switch apex (topping out around ~17-18 km/h on flat).
    */
   private updateRhythmPump(rawSteer: number, _onManeuver: (ev: ManeuverEvent) => void): void {
     // Only detect a pump switch when steering direction actually reverses between Left and Right.
@@ -1498,16 +1535,26 @@ export class SurfskateController {
       return;
     }
 
-    const hasMeaningfulLean = prevPeakLean >= PUMP_MIN_LEAN && prevCarveTime >= 0.09;
+    const hasMeaningfulLean = prevPeakLean >= PUMP_MIN_LEAN && prevCarveTime >= PUMP_MIN_CARVE_TIME;
     if (!hasMeaningfulLean) {
       return;
     }
 
+    const flatPumpCap = FLAT_PUMP_CAP * this.boardSpeedScale;
+    const flatSoftStart = FLAT_PUMP_SOFT_START * this.boardSpeedScale;
+    const highSpeedTaper = THREE.MathUtils.clamp(
+      1 - (Math.max(0, this.speed - flatSoftStart) / Math.max(0.4, flatPumpCap - flatSoftStart)) * 0.50,
+      0.50,
+      1.0
+    );
+
     if (interval < PUMP_WINDOW_MIN) {
       // Slightly rushed switch: slight glide without full pump surge / whoosh spam
-      const pumpCap = MAX_PUMP_SPEED * this.boardSpeedScale;
-      if (this.speed < pumpCap) {
-        this.speed = Math.min(this.maxSpeedLimit, Math.min(pumpCap, this.speed + 0.18 * this.pumpScale));
+      if (this.speed < flatPumpCap) {
+        this.speed = Math.min(
+          this.maxSpeedLimit,
+          Math.min(flatPumpCap, this.speed + 0.08 * this.pumpScale * highSpeedTaper)
+        );
       }
       this.pumpPulse = Math.max(this.pumpPulse, 0.35);
       return;
@@ -1526,19 +1573,16 @@ export class SurfskateController {
         0.80 - 0.35 * ((interval - PUMP_PERFECT_MAX) / Math.max(0.01, PUMP_WINDOW_MAX - PUMP_PERFECT_MAX));
     }
 
-    const leanQuality = THREE.MathUtils.clamp((prevPeakLean - 0.20) / (0.65 - 0.20), 0.35, 1.0);
+    const leanQuality = THREE.MathUtils.clamp((prevPeakLean - 0.24) / (0.65 - 0.24), 0.25, 1.0);
     const combinedQuality = THREE.MathUtils.clamp(rhythmQuality * (0.65 + 0.35 * leanQuality), 0, 1);
 
-    const pumpCap = MAX_PUMP_SPEED * this.boardSpeedScale;
-    const rawSurge = THREE.MathUtils.lerp(0.55, 1.05, combinedQuality) * this.pumpScale;
-    const highSpeedTaper = THREE.MathUtils.clamp(
-      1 - (Math.max(0, this.speed - 5.2) / Math.max(0.5, pumpCap - 5.2)) * 0.45,
-      0.55,
-      1.0
-    );
+    const rawSurge = THREE.MathUtils.lerp(0.22, 0.46, combinedQuality) * this.pumpScale;
 
-    if (this.speed < pumpCap) {
-      this.speed = Math.min(this.maxSpeedLimit, Math.min(pumpCap, this.speed + rawSurge * highSpeedTaper));
+    if (this.speed < flatPumpCap) {
+      this.speed = Math.min(
+        this.maxSpeedLimit,
+        Math.min(flatPumpCap, this.speed + rawSurge * highSpeedTaper)
+      );
     }
 
     this.pumpSyncQuality = isPerfect ? 'PERFECT PUMP!' : 'FLOW PUMP';

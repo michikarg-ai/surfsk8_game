@@ -33,13 +33,14 @@ export class TouchControls {
   private activeRockerPointerId: number | null = null;
   private activeCrouchPointerId: number | null = null;
   private currentSteerDir: -1 | 0 | 1 = 0;
-  private isRockerCrouching = false;
+  private isRockerBraking = false;
   private isButtonCrouching = false;
 
   private state: InputState = {
     steerLeft: false,
     steerRight: false,
     forwardPush: false,
+    brake: false,
     compressCrouch: false,
     jumpOllie: false,
     grindSlash: false,
@@ -173,6 +174,7 @@ export class TouchControls {
     this.state.steerLeft = false;
     this.state.steerRight = false;
     this.state.forwardPush = false;
+    this.state.brake = false;
     this.state.compressCrouch = false;
     this.state.jumpOllie = false;
     this.state.grindSlash = false;
@@ -186,7 +188,7 @@ export class TouchControls {
     this.activeRockerPointerId = null;
     this.activeCrouchPointerId = null;
     this.currentSteerDir = 0;
-    this.isRockerCrouching = false;
+    this.isRockerBraking = false;
     this.isButtonCrouching = false;
     this.carveRocker?.classList.remove('crouching');
     this.paddleLeft?.classList.remove('active');
@@ -224,21 +226,20 @@ export class TouchControls {
     }
   }
 
-  private setCrouchFromRocker(active: boolean): void {
-    if (this.isRockerCrouching === active) return;
-    this.isRockerCrouching = active;
-    this.updateCrouchState();
+  private setBrakeFromRocker(active: boolean): void {
+    if (this.isRockerBraking === active) return;
+    this.isRockerBraking = active;
+    this.state.brake = active;
     this.brakeBtn?.classList.toggle('active', active);
+    this.carveRocker?.classList.toggle('crouching', active);
     if (active) {
       this.triggerHaptic(14);
     }
   }
 
   private updateCrouchState(): void {
-    const isCrouching = this.isRockerCrouching || this.isButtonCrouching;
-    this.state.compressCrouch = isCrouching;
-    this.crouchBtn.classList.toggle('active', isCrouching);
-    this.carveRocker.classList.toggle('crouching', this.isRockerCrouching);
+    this.state.compressCrouch = this.isButtonCrouching;
+    this.crouchBtn.classList.toggle('active', this.isButtonCrouching);
   }
 
   private bindEvents(): void {
@@ -253,7 +254,10 @@ export class TouchControls {
     const updateZonePointer = (clientX: number, clientY: number) => {
       const rockerRect = this.carveRocker.getBoundingClientRect();
       const midX = rockerRect.left + rockerRect.width * 0.5;
-      const deadzone = rockerRect.width * 0.04;
+      const pumpThreshold = rockerRect.top - 2;
+      const brakeThreshold = rockerRect.bottom + 2;
+      const isBrakeRegion = clientY > brakeThreshold;
+      const deadzone = isBrakeRegion ? rockerRect.width * 0.32 : rockerRect.width * 0.04;
 
       // 1. Horizontal Steer Tracking (generous hit-slop / slide support):
       const deltaX = clientX - midX;
@@ -266,13 +270,14 @@ export class TouchControls {
       }
 
       // Smooth analog steer [-1.0 .. 1.0]
-      const halfWidth = rockerRect.width * 0.45;
-      this.state.analogSteer = Math.max(-1, Math.min(1, deltaX / Math.max(1, halfWidth)));
+      if (isBrakeRegion && Math.abs(deltaX) <= deadzone) {
+        this.state.analogSteer = 0;
+      } else {
+        const halfWidth = rockerRect.width * 0.45;
+        this.state.analogSteer = Math.max(-1, Math.min(1, deltaX / Math.max(1, halfWidth)));
+      }
 
       // 2. Vertical Slide & Hit-Slop (▲ PUMP on top, ▼ BRAKE on bottom):
-      const pumpThreshold = rockerRect.top - 2;
-      const brakeThreshold = rockerRect.bottom + 2;
-
       if (clientY < pumpThreshold) {
         // Upper region: ▲ PUMP active
         if (!this.state.forwardPush) {
@@ -280,19 +285,17 @@ export class TouchControls {
           this.pushBtn.classList.add('active');
           this.triggerHaptic(16);
         }
-        if (this.isRockerCrouching) {
-          this.setCrouchFromRocker(false);
-          this.brakeBtn?.classList.remove('active');
+        if (this.isRockerBraking) {
+          this.setBrakeFromRocker(false);
         }
-      } else if (clientY > brakeThreshold) {
+      } else if (isBrakeRegion) {
         // Lower region: ▼ BRAKE active
         if (this.state.forwardPush) {
           this.state.forwardPush = false;
           this.pushBtn.classList.remove('active');
         }
-        if (!this.isRockerCrouching) {
-          this.setCrouchFromRocker(true);
-          this.brakeBtn?.classList.add('active');
+        if (!this.isRockerBraking) {
+          this.setBrakeFromRocker(true);
         }
       } else {
         // Middle rocker region: Carving only (neither pump nor brake active)
@@ -300,9 +303,8 @@ export class TouchControls {
           this.state.forwardPush = false;
           this.pushBtn.classList.remove('active');
         }
-        if (this.isRockerCrouching) {
-          this.setCrouchFromRocker(false);
-          this.brakeBtn?.classList.remove('active');
+        if (this.isRockerBraking) {
+          this.setBrakeFromRocker(false);
         }
       }
     };
@@ -333,8 +335,7 @@ export class TouchControls {
       this.setSteerDirection(0);
       this.state.forwardPush = false;
       this.pushBtn.classList.remove('active');
-      this.setCrouchFromRocker(false);
-      this.brakeBtn?.classList.remove('active');
+      this.setBrakeFromRocker(false);
     };
 
     this.carveZone.addEventListener('pointerdown', handleZonePointerDown, { passive: false });

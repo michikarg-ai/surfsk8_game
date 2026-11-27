@@ -1239,6 +1239,7 @@ class SurfskateMunichGame {
       touch.steerLeft ||
       touch.steerRight ||
       touch.forwardPush ||
+      touch.brake ||
       touch.jumpOllie ||
       (touch.analogSteer && Math.abs(touch.analogSteer) > 0.15)
     ) {
@@ -1256,9 +1257,8 @@ class SurfskateMunichGame {
     const kbSteerLeft = isArrows ? this.keys.has('ArrowLeft') : this.keys.has('KeyA');
     const kbSteerRight = isArrows ? this.keys.has('ArrowRight') : this.keys.has('KeyD');
     const kbPush = isArrows ? this.keys.has('ArrowUp') : this.keys.has('KeyW');
-    const kbCrouch = isArrows
-      ? this.keys.has('ArrowDown') || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')
-      : this.keys.has('KeyS') || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
+    const kbBrake = isArrows ? this.keys.has('ArrowDown') : this.keys.has('KeyS');
+    const kbCrouch = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
     const kbOllie = this.keys.has('Space');
     const kbSnap = isArrows
       ? this.keys.has('KeyQ') || this.keys.has('KeyF')
@@ -1292,6 +1292,7 @@ class SurfskateMunichGame {
       steerLeft: kbSteerLeft || touch.steerLeft,
       steerRight: kbSteerRight || touch.steerRight,
       forwardPush: kbPush || touch.forwardPush,
+      brake: kbBrake || Boolean(touch.brake),
       compressCrouch: kbCrouch || touch.compressCrouch,
       jumpOllie: kbOllie || touch.jumpOllie,
       grindSlash: false,
@@ -1334,6 +1335,7 @@ class SurfskateMunichGame {
       steerLeft: combinedSteer > 0.08,
       steerRight: combinedSteer < -0.08,
       forwardPush: this.controller.speed < 0.3,
+      brake: false,
       compressCrouch: compressWave && !inDeepTransition,
       jumpOllie: false,
       grindSlash: false,
