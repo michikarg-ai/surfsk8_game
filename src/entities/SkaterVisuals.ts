@@ -106,6 +106,7 @@ export class SkaterVisuals {
   };
   private smoothCompression = 0.15;
   private smoothLean = 0;
+  private visualFrontTruckYaw = 0;
 
   // Dynamic hair wind, flutter & inertia simulation (female skater Sophie)
   private hairUniforms: HairWindUniforms | null = null;
@@ -124,7 +125,7 @@ export class SkaterVisuals {
   private particleSize: Float32Array;
   private particleAlpha: Float32Array;
   private particleBaseAlpha: Float32Array;
-  /** 0 = spray droplet, 1 = mist puff, 2 = coping spark */
+  /** 0 = spray droplet, 1 = mist puff, 2 = coping spark, 3 = rear drift wisp, 4 = rear drift micro-spark */
   private particleKind: Uint8Array;
   private nextParticleIdx = 0;
   private readonly maxParticles = 700;
@@ -1458,7 +1459,26 @@ export class SkaterVisuals {
 
     // 3. Dual-Axis Front Surf-Adapter Truck (`FrontTruckPivot`) & Rear Truck (`RearTruckPivot`)
     if (this.frontTruckPivot) {
-      this.frontTruckPivot.rotation.set(0, ctrl.isGrounded ? -ctrl.frontTruckYaw : 0, groundedLean * 0.35);
+      if (ctrl.isGrounded) {
+        // Exaggerated Carver C7 / YOW Meraki surf-truck swing (~1.35x articulation + quick spring lead-in)
+        const leadIn = THREE.MathUtils.clamp((ctrl.leanRate || 0) * 0.042, -0.26, 0.26);
+        const pumpKick =
+          (ctrl.lastPumpSurge || 0) > 0.05
+            ? Math.sign(ctrl.frontTruckYaw || ctrl.leanAngle || ctrl.leanRate || 0) *
+              (ctrl.lastPumpSurge || 0) *
+              0.12
+            : 0;
+        const targetFrontYaw = THREE.MathUtils.clamp(
+          ctrl.frontTruckYaw * 1.35 + leadIn + pumpKick,
+          -1.28,
+          1.28
+        );
+        this.visualFrontTruckYaw +=
+          (targetFrontYaw - this.visualFrontTruckYaw) * Math.min(1, dt * 28.0);
+      } else {
+        this.visualFrontTruckYaw += (0 - this.visualFrontTruckYaw) * Math.min(1, dt * 18.0);
+      }
+      this.frontTruckPivot.rotation.set(0, -this.visualFrontTruckYaw, groundedLean * 0.42);
     }
     if (this.rearTruckPivot) {
       this.rearTruckPivot.rotation.set(0, ctrl.isGrounded ? -ctrl.rearTruckYaw : 0, groundedLean * 0.2);
@@ -1527,7 +1547,7 @@ export class SkaterVisuals {
 
   /** Spawn one particle of the given kind at the board's rail / tail / wheels. */
   private emitParticle(
-    kind: 0 | 1 | 2,
+    kind: 0 | 1 | 2 | 3 | 4,
     ctrl: SurfskateController,
     fwd: THREE.Vector3,
     right: THREE.Vector3,
@@ -1540,17 +1560,20 @@ export class SkaterVisuals {
     const r = Math.random;
 
     const isPumpFlash = kind === 2 && ctrl.perfectPumpFlashTimer > 0;
+    const isRearDrift = kind === 3 || kind === 4;
 
-    // Origin: along the outside rail, biased toward the tail, or near wheels during pump flash
-    const along = isPumpFlash
+    // Origin: along the outside rail, biased toward the tail, or directly at rear/front wheels
+    const along = isRearDrift
+      ? -0.25 + (r() - 0.5) * 0.06
+      : isPumpFlash
       ? (r() < 0.5 ? 0.24 : -0.24) + (r() - 0.5) * 0.08
       : -0.32 + r() * 0.42;
-    const wheelTrack = isPumpFlash ? 0.10 : 0.12;
+    const wheelTrack = isRearDrift ? 0.105 : isPumpFlash ? 0.10 : 0.12;
     const p = ctrl.position
       .clone()
       .addScaledVector(fwd, along)
-      .addScaledVector(right, side * (wheelTrack + r() * 0.05))
-      .addScaledVector(up, (isPumpFlash ? 0.035 : 0.05) + r() * 0.04);
+      .addScaledVector(right, side * (wheelTrack + r() * (isRearDrift ? 0.03 : 0.05)))
+      .addScaledVector(up, (isRearDrift ? 0.028 : isPumpFlash ? 0.035 : 0.05) + r() * (isRearDrift ? 0.02 : 0.04));
     this.particlePositions[i3] = p.x;
     this.particlePositions[i3 + 1] = p.y;
     this.particlePositions[i3 + 2] = p.z;
@@ -1558,7 +1581,11 @@ export class SkaterVisuals {
     // Velocity: a curved fan thrown outward + up, trailing behind the board
     const speedCarry = Math.min(1.5, ctrl.speed * 0.15);
     let out: number, lift: number, back: number, jitter: number;
-    if (kind === 2) {
+    if (kind === 4) {
+      out = 1.0 + r() * 1.8; lift = 0.5 + r() * 1.1; back = 0.9 + r() * 1.5 + speedCarry * 0.6; jitter = 0.45;
+    } else if (kind === 3) {
+      out = 0.55 + r() * 0.9; lift = 0.25 + r() * 0.45; back = 0.5 + r() * 0.9 + speedCarry * 0.4; jitter = 0.28;
+    } else if (kind === 2) {
       out = (r() - 0.5) * 3;
       lift = (isPumpFlash ? 1.2 : 0.8) + r() * 2.2;
       back = (isPumpFlash ? 1.0 : 1.5) + r() * 2.5 + speedCarry;
@@ -1578,7 +1605,25 @@ export class SkaterVisuals {
     this.particleVelocities[i3 + 2] = v.z;
 
     let cr: number, cg: number, cb: number, size: number, life: number, alpha: number;
-    if (kind === 2) {
+    if (kind === 4) {
+      // Subtle rear-wheel urethane micro-spark on edge of Bert slide
+      cr = 1.0;
+      cg = 0.62 + r() * 0.24;
+      cb = 0.20 + r() * 0.12;
+      size = 0.020 + r() * 0.018;
+      life = 0.14 + r() * 0.12;
+      alpha = 0.68 + r() * 0.24;
+    } else if (kind === 3) {
+      // Subtle pale warm urethane drift wisp from rear wheels
+      if (this.activeBoardSpec.goldTrail) {
+        cr = 1.0; cg = 0.85; cb = 0.45;
+      } else {
+        cr = 0.95; cg = 0.72 + r() * 0.16; cb = 0.48 + r() * 0.14;
+      }
+      size = 0.085 + r() * 0.085;
+      life = 0.26 + r() * 0.20;
+      alpha = 0.16 + r() * 0.10;
+    } else if (kind === 2) {
       // Hot golden-orange coping / perfect-pump sparks
       cr = 1.0;
       cg = isPumpFlash ? 0.82 + r() * 0.18 : 0.55 + r() * 0.35;
@@ -1641,6 +1686,23 @@ export class SkaterVisuals {
     }
     this.prevSpray = spray;
 
+    // Subtle urethane drift wisps & micro-sparks from the rear wheels during hard carves on the edge of traction
+    if (
+      ctrl.isGrounded &&
+      !ctrl.isGrinding &&
+      !ctrl.isSlidingNow &&
+      ctrl.railDriftIntensity > 0.65
+    ) {
+      const driftExcess = THREE.MathUtils.clamp((ctrl.railDriftIntensity - 0.65) / 0.35, 0.15, 1.0);
+      const qScale = this.currentQuality === 'low' ? 0.35 : this.currentQuality === 'medium' ? 0.65 : 1.0;
+      if (Math.random() < (0.45 + 0.55 * driftExcess) * qScale) {
+        this.emitParticle(3, ctrl, fwd, right, up, side);
+      }
+      if (Math.random() < (0.28 + 0.55 * driftExcess) * qScale) {
+        this.emitParticle(4, ctrl, fwd, right, up, side);
+      }
+    }
+
     // Golden sparks & glow burst at the wheels during Perfect Pump flash!
     if (ctrl.perfectPumpFlashTimer > 0) {
       const flashCount = this.currentQuality === 'low' ? 2 : 4;
@@ -1662,8 +1724,8 @@ export class SkaterVisuals {
       const kind = this.particleKind[i];
       const t = Math.max(0, this.particleLife[i] / this.particleMaxLife[i]); // 1 -> 0
       const i3 = i * 3;
-      const gravity = kind === 1 ? 0.6 : kind === 2 ? 6.0 : 7.5;
-      const drag = kind === 1 ? 2.6 : kind === 2 ? 0.6 : 1.1;
+      const gravity = kind === 1 ? 0.6 : kind === 3 ? 0.4 : kind === 4 ? 5.5 : kind === 2 ? 6.0 : 7.5;
+      const drag = kind === 1 ? 2.6 : kind === 3 ? 3.2 : kind === 4 ? 1.2 : kind === 2 ? 0.6 : 1.1;
       const dk = Math.exp(-drag * dt);
       this.particleVelocities[i3] *= dk;
       this.particleVelocities[i3 + 2] *= dk;
@@ -1676,8 +1738,12 @@ export class SkaterVisuals {
         // Mist puffs swell and fade softly
         this.particleSize[i] = this.particleBaseSize[i] * (1 + (1 - t) * 2.2);
         this.particleAlpha[i] = this.particleBaseAlpha[i] * Math.sin(Math.PI * Math.min(1, (1 - t) * 1.4 + 0.15)) * t;
-      } else if (kind === 2) {
-        // Sparks flicker and shrink
+      } else if (kind === 3) {
+        // Rear urethane drift wisps expand gently and dissipate
+        this.particleSize[i] = this.particleBaseSize[i] * (1 + (1 - t) * 1.35);
+        this.particleAlpha[i] = this.particleBaseAlpha[i] * Math.sin(Math.PI * Math.min(1, (1 - t) * 1.3 + 0.15)) * t;
+      } else if (kind === 2 || kind === 4) {
+        // Sparks & micro-sparks flicker and shrink
         this.particleSize[i] = this.particleBaseSize[i] * (0.4 + 0.6 * t);
         this.particleAlpha[i] = this.particleBaseAlpha[i] * t * (0.7 + 0.3 * Math.random());
       } else {
@@ -1706,6 +1772,10 @@ export class SkaterVisuals {
       const isSlideTrick = isBertOrLayback || isSnapOrReverse;
       const isSurfZone = ctrl.isSurfZoneActive;
       const isPumpFlash = ctrl.perfectPumpFlashTimer > 0;
+      const isEdgeDrift = !isSlideTrick && ctrl.railDriftIntensity > 0.65;
+      const driftBlend = isEdgeDrift
+        ? THREE.MathUtils.clamp((ctrl.railDriftIntensity - 0.65) / 0.35, 0, 1) * 0.55
+        : 0;
 
       // Base: subtle dark urethane track on concrete (or exclusive golden-amber Thaneline for Golden Pretzel Pro)
       const hasGoldTrail = this.activeBoardSpec.goldTrail;
@@ -1720,6 +1790,13 @@ export class SkaterVisuals {
         rR = 1.0;
         rG = THREE.MathUtils.lerp(0.88, 0.68, goldPulse);
         rB = THREE.MathUtils.lerp(0.34, 0.12, goldPulse);
+      } else if (driftBlend > 0) {
+        lR = THREE.MathUtils.lerp(lR, 0.85, driftBlend);
+        lG = THREE.MathUtils.lerp(lG, 0.36, driftBlend);
+        lB = THREE.MathUtils.lerp(lB, 0.12, driftBlend);
+        rR = THREE.MathUtils.lerp(rR, 0.85, driftBlend);
+        rG = THREE.MathUtils.lerp(rG, 0.36, driftBlend);
+        rB = THREE.MathUtils.lerp(rB, 0.12, driftBlend);
       }
 
       if (isBertOrLayback) {
@@ -1790,7 +1867,7 @@ export class SkaterVisuals {
           ? 0.94
           : hasGoldTrail
             ? 0.76
-            : 0.42;
+            : 0.42 + 0.20 * driftBlend;
       trailMat.opacity = THREE.MathUtils.lerp(trailMat.opacity, targetOpacity, Math.min(1, 8.0 * dt));
 
       // Shift trail vertices and colors down

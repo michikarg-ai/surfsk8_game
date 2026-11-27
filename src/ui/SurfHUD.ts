@@ -55,6 +55,10 @@ export class SurfHUD {
   private sessionLabelEl: HTMLElement | null = null;
   private speedEl: HTMLElement;
   private speedoEl: HTMLElement;
+  private pumpSurgeTagEl: HTMLElement | null = null;
+  private pumpPulseTimeout: number | null = null;
+  private wallCueEl: HTMLElement | null = null;
+  private contextTrickEl: HTMLElement | null = null;
   private dockEl: HTMLElement;
   private static readonly SPEEDO_MAX_KMH = 40;
   private flowCardEl: HTMLElement | null = null;
@@ -173,6 +177,9 @@ export class SurfHUD {
     this.sessionLabelEl = document.getElementById('hud-session-label');
     this.speedEl = document.getElementById('hud-speed')!;
     this.speedoEl = document.getElementById('hud-speedo')!;
+    this.pumpSurgeTagEl = document.getElementById('hud-pump-surge-tag');
+    this.wallCueEl = document.getElementById('hud-wall-cue');
+    this.contextTrickEl = document.getElementById('hud-context-trick');
     this.flowCardEl = document.getElementById('hud-flow-card');
     this.flowTitleEl = document.getElementById('hud-flow-title');
     this.hotSpotPillEl = document.getElementById('hud-hotspot-pill');
@@ -510,10 +517,69 @@ export class SurfHUD {
       this.snapHintEl.className = '';
     }
 
-    // 5. Coaching hints: push-off from standstill, then how to pump
-    // Never show coaching hints while landing overlay is open
+    // 5. Coaching hints, Wall Compress->Extend Cue & Live Context Trick Prompt
+    // Never show coaching/action cues while landing overlay is open
     const landingOverlay = document.getElementById('landing-overlay');
-    if (landingOverlay && !landingOverlay.classList.contains('hidden')) {
+    const isLandingOpen = Boolean(landingOverlay && !landingOverlay.classList.contains('hidden'));
+    const isTouch =
+      Boolean(this.lastTouchEnabled) || document.body.classList.contains('has-touch-controls');
+
+    if (this.wallCueEl) {
+      if (
+        !isLandingOpen &&
+        !this.tutorialActive &&
+        !ctrl.isBailing &&
+        !this.sessionEnded &&
+        ctrl.wallPumpCue !== 'none'
+      ) {
+        if (ctrl.wallPumpCue === 'extend') {
+          this.wallCueEl.textContent = isTouch
+            ? t('hud.wallCueExtendTouch')
+            : t('hud.wallCueExtendDesktop');
+          this.wallCueEl.className = 'hud-action-pill visible extend';
+        } else {
+          const compressKey = this.controlMode === 'arrows' ? 'SHIFT / ↓' : 'SHIFT / S';
+          this.wallCueEl.textContent = isTouch
+            ? t('hud.wallCueCompressTouch')
+            : t('hud.wallCueCompressDesktop', { key: compressKey });
+          this.wallCueEl.className = 'hud-action-pill visible compress';
+        }
+      } else {
+        this.wallCueEl.className = 'hud-action-pill';
+      }
+    }
+
+    if (this.contextTrickEl) {
+      const inTrickOrBail =
+        ctrl.isBailing ||
+        ctrl.snapActive ||
+        ctrl.bertSlideActive ||
+        ctrl.laybackActive ||
+        ctrl.reverseActive ||
+        ctrl.indyGrabActive;
+      if (
+        !isLandingOpen &&
+        !this.sessionEnded &&
+        !inTrickOrBail &&
+        ctrl.availableContextTrick !== 'none'
+      ) {
+        const keyMap: Record<
+          Exclude<typeof ctrl.availableContextTrick, 'none'>,
+          'hud.ctxTrickBertTouch' | 'hud.ctxTrickBertDesktop' | 'hud.ctxTrickLaybackTouch' | 'hud.ctxTrickLaybackDesktop' | 'hud.ctxTrickSnapTouch' | 'hud.ctxTrickSnapDesktop' | 'hud.ctxTrickReverseTouch' | 'hud.ctxTrickReverseDesktop'
+        > = {
+          bert: isTouch ? 'hud.ctxTrickBertTouch' : 'hud.ctxTrickBertDesktop',
+          layback: isTouch ? 'hud.ctxTrickLaybackTouch' : 'hud.ctxTrickLaybackDesktop',
+          snap: isTouch ? 'hud.ctxTrickSnapTouch' : 'hud.ctxTrickSnapDesktop',
+          reverse360: isTouch ? 'hud.ctxTrickReverseTouch' : 'hud.ctxTrickReverseDesktop',
+        };
+        this.contextTrickEl.textContent = t(keyMap[ctrl.availableContextTrick]);
+        this.contextTrickEl.className = `hud-action-pill visible is-${ctrl.availableContextTrick}`;
+      } else {
+        this.contextTrickEl.className = 'hud-action-pill';
+      }
+    }
+
+    if (isLandingOpen) {
       this.coachHintEl.className = '';
       return;
     }
@@ -670,7 +736,7 @@ export class SurfHUD {
       #hud-coach-hint.idle { color: #f5f5f5; }
       #hud-coach-hint.bail { color: #ff4d4d; border: 1px solid rgba(255, 77, 77, 0.45); }
       #hud-snap-hint {
-        position: absolute; left: 50%; bottom: 20%; transform: translateX(-50%) skewX(-11deg);
+        position: absolute; left: 50%; bottom: max(180px, 23%); transform: translateX(-50%) skewX(-11deg);
         font: 800 16px 'Barlow Condensed', sans-serif; letter-spacing: 0.08em; text-transform: uppercase;
         pointer-events: none; z-index: 55;
         background: rgba(20, 18, 16, 0.82); padding: 5px 16px;
@@ -730,6 +796,36 @@ export class SurfHUD {
     const frac = Math.min(1, Math.max(0, kmh / SurfHUD.SPEEDO_MAX_KMH));
     this.speedEl.textContent = String(Math.round(kmh));
     this.speedoEl.classList.toggle('redline', frac > 0.75);
+  }
+
+  /** Briefly flashes a cyan/gold glow & micro-tag next to the speedometer on pump hit. */
+  public triggerPumpPulse(type: 'rail' | 'wall' | 'none'): void {
+    if (type === 'none') return;
+    if (this.pumpPulseTimeout !== null) {
+      window.clearTimeout(this.pumpPulseTimeout);
+      this.pumpPulseTimeout = null;
+    }
+    this.speedoEl.classList.remove('pump-rail', 'pump-wall');
+    const cls = type === 'wall' ? 'pump-wall' : 'pump-rail';
+    this.speedoEl.classList.add(cls);
+    if (this.pumpSurgeTagEl) {
+      this.pumpSurgeTagEl.textContent = t(
+        type === 'wall' ? 'hud.pumpSurgeWall' : 'hud.pumpSurgeRail'
+      );
+      this.pumpSurgeTagEl.animate(
+        [
+          { opacity: 0, transform: 'skewX(-12deg) translate3d(0, 6px, 0) scale(0.8)', offset: 0 },
+          { opacity: 1, transform: 'skewX(-12deg) translate3d(0, 0, 0) scale(1.08)', offset: 0.2 },
+          { opacity: 1, transform: 'skewX(-12deg) translate3d(0, 0, 0) scale(1)', offset: 0.75 },
+          { opacity: 0, transform: 'skewX(-12deg) translate3d(0, -4px, 0) scale(0.95)', offset: 1 },
+        ],
+        { duration: 520, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1)' }
+      );
+    }
+    this.pumpPulseTimeout = window.setTimeout(() => {
+      this.speedoEl.classList.remove('pump-rail', 'pump-wall');
+      this.pumpPulseTimeout = null;
+    }, 520);
   }
 
   public addBonusScore(points: number): void {
@@ -792,6 +888,13 @@ export class SurfHUD {
     this.timerEl.classList.remove('urgent', 'overtime');
     this.sessionBlockEl?.classList.remove('overtime');
     this.comboContainerEl.classList.remove('active');
+    this.speedoEl.classList.remove('pump-rail', 'pump-wall');
+    if (this.pumpPulseTimeout !== null) {
+      window.clearTimeout(this.pumpPulseTimeout);
+      this.pumpPulseTimeout = null;
+    }
+    if (this.wallCueEl) this.wallCueEl.className = 'hud-action-pill';
+    if (this.contextTrickEl) this.contextTrickEl.className = 'hud-action-pill';
     this.updatePretzelCount(0, 5);
     this.updateHotSpotStatus(null, 0, false);
     this.updateCrewInteract(false, 'sepp', false);
@@ -1204,6 +1307,7 @@ export class SurfHUD {
       const kbHtml =
         this.controlMode === 'arrows'
           ? `
+          <div class="trick-row"><span class="key">C</span><span class="trick-name">Smart Surf Trick</span><span class="trick-how">${t('dock.trickSmart')}</span></div>
           <div class="trick-row"><span class="key">Q</span><span class="trick-name">Snap</span><span class="trick-how">${t('dock.trickSnap')}</span></div>
           <div class="trick-row"><span class="key">W</span><span class="trick-name">Layback</span><span class="trick-how">${t('dock.trickLayback')}</span></div>
           <div class="trick-row"><span class="key">A</span><span class="trick-name">Bertslide</span><span class="trick-how">${t('dock.trickBert')}</span></div>
@@ -1211,6 +1315,7 @@ export class SurfHUD {
           <div class="trick-row"><span class="key">␣</span> / <span class="key">I</span><span class="trick-name">Indy Grab</span><span class="trick-how">${t('dock.trickIndy')}</span></div>
         `.trim()
           : `
+          <div class="trick-row"><span class="key">C</span><span class="trick-name">Smart Surf Trick</span><span class="trick-how">${t('dock.trickSmart')}</span></div>
           <div class="trick-row"><span class="key">O</span><span class="trick-name">Snap</span><span class="trick-how">${t('dock.trickSnap')}</span></div>
           <div class="trick-row"><span class="key">P</span><span class="trick-name">Layback</span><span class="trick-how">${t('dock.trickLayback')}</span></div>
           <div class="trick-row"><span class="key">K</span><span class="trick-name">Bertslide</span><span class="trick-how">${t('dock.trickBert')}</span></div>

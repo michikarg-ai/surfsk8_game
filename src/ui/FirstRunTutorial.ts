@@ -32,6 +32,7 @@ export class FirstRunTutorial {
   private skipBtn: HTMLButtonElement | null;
   private promptEl: HTMLElement | null;
   private hintEl: HTMLElement | null;
+  private metronomeEl: HTMLElement | null;
   private barFillEl: HTMLElement | null;
 
   private active = false;
@@ -65,6 +66,7 @@ export class FirstRunTutorial {
     this.skipBtn = document.getElementById('tutorial-skip-btn') as HTMLButtonElement | null;
     this.promptEl = document.getElementById('tutorial-prompt');
     this.hintEl = document.getElementById('tutorial-hint');
+    this.metronomeEl = document.getElementById('tutorial-metronome');
     this.barFillEl = document.getElementById('tutorial-bar-fill');
 
     const dotsContainer = document.getElementById('tutorial-dots');
@@ -182,6 +184,7 @@ export class FirstRunTutorial {
     this.celebrateTimer = 0;
     this.stepFlashTimer = 0;
     this.hudEl?.classList.add('hidden');
+    this.metronomeEl?.classList.add('hidden');
     this.cardEl?.classList.remove('is-step-done', 'is-celebrating');
     this.doneBadgeEl?.classList.add('hidden');
   }
@@ -413,7 +416,8 @@ export class FirstRunTutorial {
 
   private setStep4Hint(mode: 'default' | 'hold' | 'faster'): void {
     if (!this.hintEl) return;
-    const sig = `s4:${mode}`;
+    const isTouch = this.isTouchView();
+    const sig = `s4:${mode}:${isTouch ? 1 : 0}`;
     if (sig === this.lastHintSignature) return;
     this.lastHintSignature = sig;
     const key =
@@ -421,11 +425,14 @@ export class FirstRunTutorial {
         ? 'tutorial.s4.hintHold'
         : mode === 'faster'
           ? 'tutorial.s4.hintFaster'
-          : 'tutorial.s4.hint';
+          : isTouch
+            ? 'tutorial.s4.hintTouch'
+            : 'tutorial.s4.hint';
     this.hintEl.textContent = t(key);
   }
 
   private renderCelebration(): void {
+    this.metronomeEl?.classList.add('hidden');
     this.cardEl?.classList.remove('is-step-done');
     this.cardEl?.classList.add('is-celebrating');
     if (this.doneBadgeEl) {
@@ -483,6 +490,8 @@ export class FirstRunTutorial {
 
     if (!this.promptEl || !this.hintEl) return;
 
+    this.metronomeEl?.classList.toggle('hidden', step !== 2);
+
     if (step === 0) {
       const pushKey = ctrlMode === 'wasd' ? this.kbd('W') : this.kbd('↑');
       this.promptEl.innerHTML = isTouch
@@ -504,7 +513,7 @@ export class FirstRunTutorial {
     } else if (step === 2) {
       const carveKeys =
         ctrlMode === 'wasd' ? `${this.kbd('A')} ${this.kbd('D')}` : `${this.kbd('←')} ${this.kbd('→')}`;
-      const pumpKeys = `${this.kbd('Shift')} / ${carveKeys}`;
+      const pumpKeys = `${carveKeys} / ${this.kbd('Shift')}`;
       this.promptEl.innerHTML = isTouch
         ? t('tutorial.s3.promptTouch', {
             compress: this.pill('COMPRESS'),
@@ -516,13 +525,9 @@ export class FirstRunTutorial {
         : t('tutorial.s3.hintDesktop');
       this.setProgressBar(0);
     } else if (step === 3) {
-      const trickKeys =
-        ctrlMode === 'wasd'
-          ? `${this.kbd('F')} ${this.kbd('V')} ${this.kbd('G')} ${this.kbd('B')}`
-          : `${this.kbd('Q')} ${this.kbd('A')} ${this.kbd('W')} ${this.kbd('S')}`;
       this.promptEl.innerHTML = isTouch
         ? t('tutorial.s4.promptTouch', { pill: this.pill('TRICK') })
-        : t('tutorial.s4.promptDesktop', { keys: trickKeys });
+        : t('tutorial.s4.promptDesktop', { keys: this.kbd('C') });
       this.lastHintSignature = '';
       this.setStep4Hint('default');
       this.setProgressBar(0);

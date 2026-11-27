@@ -16,7 +16,15 @@ export interface InputState {
   reverseTrick: boolean; // B for the FS Reverse 360
   indyGrabTrick: boolean; // Space (while in air) or I for Indy Grab
   analogSteer?: number; // Optional analog steer [-1.0..1.0] for smooth mobile touch carving
+  contextTrick?: boolean; // Optional smart 1-button surf trick (e.g. C)
 }
+
+/** Alias for Wave 2 / HUD input wiring */
+export type SurfskateInput = InputState;
+
+export type PumpType = 'rail' | 'wall' | 'none';
+export type WallPumpCue = 'none' | 'compress' | 'extend';
+export type ContextTrickKind = 'none' | 'snap' | 'bert' | 'layback' | 'reverse360';
 
 /** The scoring tricks. Only these give points. */
 export type TrickId = 'SNAP' | 'LAYBACK' | 'BERTSLIDE' | 'REVERSE360' | 'INDYGRAB';
@@ -56,26 +64,28 @@ const ROLLING_RESISTANCE = 0.28;
 const AIR_DRAG = 0.010;
 /** Hard speed cap (m/s, simulation speed). */
 const MAX_SPEED = 9.5;
-/** Speed given by the initial push-off from a standstill (+80% crisper startup). */
-const PUSH_OFF_SPEED = 3.6;
+/** Speed given by the initial push-off from a standstill (~9.5 km/h). */
+const PUSH_OFF_SPEED = 2.65;
 /** Below this speed the skater counts as standing still (full kick-push allowed). */
 const STANDSTILL_SPEED = 0.4;
-/** Startup push-boost ceiling: extra pushes / holding push work up to this cruising speed. */
-const PUSH_STARTUP_SPEED = 4.2;
+/** Startup push-boost ceiling: extra pushes / holding push cap cleanly around ~3.2 m/s (~11.5 km/h). */
+const PUSH_STARTUP_SPEED = 3.2;
 /** Tangential push acceleration while holding forwardPush below PUSH_STARTUP_SPEED (m/s²). */
-const PUSH_ACCEL = 3.6;
+const PUSH_ACCEL = 2.6;
 
-// ---- Flat-ground pumping (alternating ← → carves with the right rhythm) ----
-/** Time between two direction switches (real seconds) that still counts as a pump. */
-const PUMP_MIN_INTERVAL = 0.15;
-const PUMP_MAX_INTERVAL = 1.15;
-/** Sweet spot of the rhythm: ~1 full left-right cycle per second. */
-const PUMP_PERFECT_MIN = 0.25;
-const PUMP_PERFECT_MAX = 0.70;
-const PUMP_GAIN_PERFECT = 1.25;
-const PUMP_GAIN_GOOD = 0.70;
-/** Pumping on flat ground tapers off towards this speed. */
-const MAX_PUMP_SPEED = 5.4;
+// ---- Flat-ground pumping (Carver C7 / YOW Meraki rail-to-rail whip) ----
+/** Below this interval (real seconds), frantic wiggling scrubs speed. */
+const PUMP_MIN_INTERVAL = 0.16;
+/** Valid half-cycle surfskate rail-switch rhythm window (~0.35s – 1.45s). */
+const PUMP_WINDOW_MIN = 0.32;
+const PUMP_WINDOW_MAX = 1.45;
+/** Sweet spot of the rail-to-rail whip rhythm (~0.42s – 0.95s). */
+const PUMP_PERFECT_MIN = 0.42;
+const PUMP_PERFECT_MAX = 0.95;
+/** Minimum meaningful rail lean (radians) built during the half-cycle before switching. */
+const PUMP_MIN_LEAN = 0.24;
+/** Pumping on flat ground accelerates smoothly up to ~24 km/h (6.67 m/s). */
+const MAX_PUMP_SPEED = 6.67;
 
 // ---- Wall pumping (stretch on the way up, compress on the way down) ----
 /**
@@ -88,9 +98,9 @@ const WALL_PUMP_GAIN_ACTIVE = 0.60;
 const WALL_STRETCH_ASSIST = 0.08;
 
 // ---- Tricks ----
-const LAYBACK_MIN_SPEED = 3.7;
+const LAYBACK_MIN_SPEED = 3.0;
 const LAYBACK_HOLD_TIME = 0.65;
-const BERT_MIN_SPEED = 3.5;
+const BERT_MIN_SPEED = 2.8;
 const BERT_HOLD_TIME = 0.55;
 const REVERSE_MIN_SPEED = 3.6;
 /** Duration (seconds) of the full 360° tail spin of the FS Reverse. */
@@ -205,14 +215,35 @@ export class SurfskateController {
   public coachHint = '';
   public coachHintTimer = 0;
 
-  // Flat-ground pump rhythm tracking
+  // Flat-ground & bowl-wall surfskate pump tracking
   private lastPumpDir = 0;
   private timeSincePumpSwitch = 99;
+  private halfCyclePeakLean = 0;
+  private halfCycleCarveTime = 0;
   private prevPushInput = false;
   /** 0..1 pulse that drives a visible body pump when a pump lands. */
   public pumpPulse = 0;
   /** Cumulative count of landed rhythm/wall pumps in the current session. */
   public pumpCount = 0;
+  /** 0..1 surge magnitude on pump hit (decays smoothly to 0). */
+  public lastPumpSurge = 0;
+  /** Monotonic sequence counter incremented on every rail or wall pump hit. */
+  public pumpEventSeq = 0;
+  /** Type of the most recent pump hit ('rail' | 'wall' | 'none'). */
+  public lastPumpType: PumpType = 'none';
+  /** Bowl wall compress -> extend timing cue for HUD & pump release trigger. */
+  public wallPumpCue: WallPumpCue = 'none';
+  private prevWallPumpCue: WallPumpCue = 'none';
+  private wallPumpCooldown = 0;
+
+  // Smart 1-button context trick & rail-drift state
+  public availableContextTrick: ContextTrickKind = 'none';
+  private prevContextTrick = false;
+  private contextStartedSlide = false;
+  /** 0..1 edge-of-traction drift intensity during hard carves or active slides. */
+  public railDriftIntensity = 0;
+  /** True whenever an active slide/snap/reverse trick is running on the ground. */
+  public isSlidingNow = false;
 
   // Layback
   public laybackActive = false;
@@ -236,6 +267,7 @@ export class SurfskateController {
   // FS Reverse 360
   public reverseActive = false;
   private reverseTimer = 0;
+  private reverseSpinDir = 1;
   private prevReverseInput = false;
 
   // Indy Grab (airborne trick)
@@ -354,7 +386,19 @@ export class SurfskateController {
     this.bailRecoveryHeading = this.heading;
     this.lastPumpDir = 0;
     this.timeSincePumpSwitch = 99;
+    this.halfCyclePeakLean = 0;
+    this.halfCycleCarveTime = 0;
     this.pumpCount = 0;
+    this.lastPumpSurge = 0;
+    this.lastPumpType = 'none';
+    this.wallPumpCue = 'none';
+    this.prevWallPumpCue = 'none';
+    this.wallPumpCooldown = 0;
+    this.availableContextTrick = 'none';
+    this.prevContextTrick = false;
+    this.contextStartedSlide = false;
+    this.railDriftIntensity = 0;
+    this.isSlidingNow = false;
 
     // Reset session timer, overtime, Surf-Zone & Perfect Pump state
     this.sessionTimer = 120.0;
@@ -392,6 +436,12 @@ export class SurfskateController {
       this.boardYawOffset = 0;
       this.indyGrabActive = false;
       this.indyGrabAmount = 0;
+      this.wallPumpCue = 'none';
+      this.prevWallPumpCue = 'none';
+      this.availableContextTrick = 'none';
+      this.isSlidingNow = false;
+      this.railDriftIntensity = 0;
+      this.lastPumpSurge = 0;
       this.sprayIntensity = Math.max(0, this.sprayIntensity - clampedDt * 2.5);
 
       const p = 1.0 - Math.max(0, this.bailTimer / Math.max(0.01, this.bailDuration));
@@ -458,6 +508,9 @@ export class SurfskateController {
     if (this.perfectPumpCooldown > 0) {
       this.perfectPumpCooldown = Math.max(0, this.perfectPumpCooldown - clampedDt);
     }
+    if (this.wallPumpCooldown > 0) {
+      this.wallPumpCooldown = Math.max(0, this.wallPumpCooldown - clampedDt);
+    }
     if (this.perfectPumpFlashTimer > 0) {
       this.perfectPumpFlashTimer = Math.max(0, this.perfectPumpFlashTimer - clampedDt);
     }
@@ -512,6 +565,7 @@ export class SurfskateController {
       if (this.coachHintTimer === 0) this.coachHint = '';
     }
     this.pumpPulse = Math.max(0, this.pumpPulse - clampedDt * 3.2);
+    this.lastPumpSurge = Math.max(0, this.lastPumpSurge - clampedDt * 2.4);
     this.timeSincePumpSwitch += clampedDt;
 
     this.currentSurface = this.park.sample(this.position.x, this.position.z);
@@ -554,6 +608,18 @@ export class SurfskateController {
       }
       this.leanRate = (this.leanAngle - prevLean) / Math.max(0.001, clampedDt);
 
+      // Track meaningful lean built during the active carve half-cycle for rail-to-rail pumping
+      if (
+        !this.isGrinding &&
+        Math.abs(this.leanAngle) >= 0.18 &&
+        (this.lastPumpDir === 0 || Math.sign(this.leanAngle) === this.lastPumpDir)
+      ) {
+        this.halfCyclePeakLean = Math.max(this.halfCyclePeakLean, Math.abs(this.leanAngle));
+        this.halfCycleCarveTime += clampedDt;
+      } else if (rawSteer === 0 && Math.abs(this.leanAngle) < 0.12) {
+        this.halfCyclePeakLean = Math.max(0, this.halfCyclePeakLean - clampedDt * 0.55);
+      }
+
       this.frontTruckYaw = this.leanAngle * 1.55;
       this.rearTruckYaw = -this.leanAngle * 0.42;
 
@@ -565,6 +631,8 @@ export class SurfskateController {
       this.leanRate = 0;
       this.frontTruckYaw = 0;
       this.rearTruckYaw = 0;
+      this.halfCyclePeakLean = 0;
+      this.halfCycleCarveTime = 0;
       if (!this.isGrounded) {
         this.pitchAngle = 0;
       }
@@ -613,11 +681,23 @@ export class SurfskateController {
     // 3. Coping Grind / Lip Slash Mode
     // -------------------------------------------------------------------------
     if (this.isGrinding) {
+      this.wallPumpCue = 'none';
+      this.prevWallPumpCue = 'none';
+      this.availableContextTrick = 'none';
+      this.isSlidingNow = false;
+      this.railDriftIntensity = 0;
+      this.prevContextTrick = Boolean(input.contextTrick);
       this.updateCopingGrind(simDt, input, onManeuver);
       return;
     }
 
     if (input.grindSlash && this.tryEnterCopingGrind(onManeuver)) {
+      this.wallPumpCue = 'none';
+      this.prevWallPumpCue = 'none';
+      this.availableContextTrick = 'none';
+      this.isSlidingNow = false;
+      this.railDriftIntensity = 0;
+      this.prevContextTrick = Boolean(input.contextTrick);
       return;
     }
 
@@ -628,16 +708,21 @@ export class SurfskateController {
       const presetGain =
         this.truckPreset === 'smooth' ? 0.78 : this.truckPreset === 'balanced' ? 1.0 : 1.28;
 
-      // ---- 4a. SNAP trick (Q at the top of a wall within the right speed window) ----
+      // ---- 4a. SNAP trick (F at the top of a wall) & Smart 1-Button Context Trick (C) ----
       this.updateSnapWindow(h0, grade, slopeMag);
+      this.updateAvailableContextTrick(slopeMag);
+      const contextPressed = Boolean(input.contextTrick) && !this.prevContextTrick;
+      this.prevContextTrick = Boolean(input.contextTrick);
+
       const snapPressed = input.snapTrick && !this.prevSnapInput;
       this.prevSnapInput = input.snapTrick;
-      if (snapPressed && !this.snapActive) {
-        this.attemptSnap(rawSteer, slopeX, slopeZ, onManeuver);
+      if ((snapPressed || (contextPressed && this.availableContextTrick === 'snap')) && !this.snapActive) {
+        const forceLipSnap = contextPressed && this.availableContextTrick === 'snap';
+        this.attemptSnap(rawSteer, slopeX, slopeZ, onManeuver, forceLipSnap);
       }
 
-      // ---- 4a2. Layback / Bert slide / FS Reverse 360 ----
-      this.updateTricks(clampedDt, input, onManeuver);
+      // ---- 4a2. Layback / Bert slide / FS Reverse 360 (dedicated keys + contextTrick) ----
+      this.updateTricks(clampedDt, input, contextPressed, onManeuver);
 
       // ---- 4b. Steering (surfskates pivot tightly even at low speed) ----
       if (this.snapActive) {
@@ -698,6 +783,26 @@ export class SurfskateController {
         }
       }
 
+      // ---- Slide & edge-of-traction drift state ----
+      this.isSlidingNow =
+        this.bertSlideActive || this.laybackActive || this.snapActive || this.reverseActive;
+      if (this.bertSlideActive || this.laybackActive || this.snapActive) {
+        this.railDriftIntensity = 1.0;
+      } else {
+        let targetDrift = 0;
+        if (this.speed > 3.2 && Math.abs(this.leanAngle) > 0.48) {
+          const leanFactor = THREE.MathUtils.clamp((Math.abs(this.leanAngle) - 0.48) / (0.68 - 0.48), 0, 1);
+          const speedFactor = THREE.MathUtils.clamp((this.speed - 3.2) / 2.0, 0.38, 1);
+          targetDrift = THREE.MathUtils.clamp(0.45 + 0.55 * leanFactor * speedFactor, 0, 1);
+        }
+        const driftRate = targetDrift > this.railDriftIntensity ? 7.5 : 6.0;
+        this.railDriftIntensity = THREE.MathUtils.clamp(
+          this.railDriftIntensity + (targetDrift - this.railDriftIntensity) * Math.min(1, driftRate * clampedDt),
+          0,
+          1
+        );
+      }
+
       // Track continuous carve angle for Roundhouse Cutback detection (NO speed gain on flat ground!)
       const carveSign = Math.sign(rawSteer || this.leanAngle);
       if (Math.abs(this.leanAngle) > 0.05 && carveSign !== 0) {
@@ -722,7 +827,7 @@ export class SurfskateController {
       if (this.laybackActive) aExtra -= 1.8;
       if (this.reverseActive) aExtra -= 2.0;
 
-      // ---- Push-off: snappy surfskate kick-start up to cruising speed, then pump! ----
+      // ---- Push-off: snappy surfskate kick-start capped around ~3.2 m/s (~11.5 km/h), then pump! ----
       // Gate pushing by local slope/grade (not absolute elevation h0) so elevated flat
       // decks, street boxes, and bowl plateaus remain pushable while steep walls still require pumping.
       const canPush = slopeMag < 0.28 && grade < 0.18;
@@ -734,9 +839,9 @@ export class SurfskateController {
         if (canPush && this.speed < effectivePushStartup) {
           if (pushPressed) {
             if (this.speed < STANDSTILL_SPEED) {
-              this.speed = effectivePushOff; // immediate punchy kick-push from standstill
+              this.speed = effectivePushOff; // immediate punchy kick-push from standstill (~9.5 km/h)
             } else {
-              this.speed = Math.min(effectivePushStartup, Math.max(effectivePushOff, this.speed + 1.4));
+              this.speed = Math.min(effectivePushStartup, Math.max(effectivePushOff, this.speed + 0.75));
             }
             this.pumpPulse = Math.max(this.pumpPulse, 0.7);
             this.pumpSyncQuality = 'FLOW PUMP';
@@ -744,16 +849,78 @@ export class SurfskateController {
             this.coachHint = t('ctrl.coachPumpNow');
             this.coachHintTimer = 3.0;
           }
-          // Smooth startup acceleration while holding push below cruising speed
-          aExtra += PUSH_ACCEL * this.boardSpeedScale;
+          // Smooth startup acceleration capped cleanly at effectivePushStartup (~3.2 m/s)
+          const maxAccelToCap = Math.max(
+            0,
+            (effectivePushStartup - this.speed) / Math.max(0.012, simDt) +
+              effectiveRolling +
+              AIR_DRAG * this.speed * this.speed
+          );
+          aExtra += Math.min(PUSH_ACCEL * this.boardSpeedScale, maxAccelToCap);
         } else if (this.speed >= effectivePushStartup) {
           this.coachHint = t('ctrl.coachPumpCruise');
           this.coachHintTimer = 2.5;
         }
       }
 
-      // ---- Flat-ground pumping: alternate left/right carves with the right timing ----
+      // ---- Flat-ground pumping: rail-to-rail Carver C7 / YOW Meraki whip ----
       this.updateRhythmPump(rawSteer, onManeuver);
+
+      // ---- Bowl Wall Compress -> Extend Cue & Release Pump ----
+      const fx = -Math.sin(this.heading);
+      const fz = -Math.cos(this.heading);
+      const aheadSample = this.park.sample(this.position.x + fx * 0.75, this.position.z + fz * 0.75);
+      const aheadSlopeMag = Math.hypot(aheadSample.slopeX, aheadSample.slopeZ);
+      const onSlopeTransition = slopeMag > 0.14 || h0 >= 0.22 || aheadSlopeMag > 0.14;
+      const compressReleased = !input.compressCrouch && this.prevCompressInput;
+
+      if (
+        compressReleased &&
+        (this.prevWallPumpCue === 'extend' || (this.compression > 0.45 && onSlopeTransition)) &&
+        this.wallPumpCooldown <= 0 &&
+        this.speed >= 1.1 &&
+        !this.bertSlideActive &&
+        !this.laybackActive &&
+        !this.snapActive &&
+        !this.reverseActive
+      ) {
+        const compressQuality = THREE.MathUtils.clamp((this.compression - 0.35) / 0.55, 0.55, 1.0);
+        const wallSurge = (0.95 + 0.40 * compressQuality) * this.pumpScale;
+        this.wallPumpCooldown = 1.05;
+        this.perfectPumpCooldown = Math.max(this.perfectPumpCooldown, 1.2);
+        this.wallPumpCue = 'none';
+        this.prevWallPumpCue = 'none';
+        this.triggerWallPumpBoost(
+          wallSurge,
+          0.8 + 0.2 * compressQuality,
+          '⚡ WALL PUMP!',
+          180,
+          onManeuver
+        );
+      } else if (
+        this.wallPumpCooldown <= 0 &&
+        this.speed >= 1.1 &&
+        !this.bertSlideActive &&
+        !this.laybackActive &&
+        !this.snapActive &&
+        !this.reverseActive
+      ) {
+        if (input.compressCrouch && this.compression > 0.45 && onSlopeTransition) {
+          this.wallPumpCue = 'extend';
+        } else if (
+          this.compression <= 0.45 &&
+          ((slopeMag > 0.14 && grade >= -0.05) ||
+            (aheadSlopeMag > 0.14 && aheadSample.height > h0 + 0.05))
+        ) {
+          this.wallPumpCue = 'compress';
+        } else {
+          this.wallPumpCue = 'none';
+        }
+        this.prevWallPumpCue = this.wallPumpCue;
+      } else {
+        this.wallPumpCue = 'none';
+        this.prevWallPumpCue = 'none';
+      }
 
       // ---- Wall pumping (like pumping a wave) ----
       // Going UP: the body stretches tall — barely any speed is lost to the stretch itself,
@@ -785,19 +952,8 @@ export class SurfskateController {
           (compressPressed || apexDropPump)
         ) {
           this.perfectPumpCooldown = 2.5;
-          this.speed = Math.min(this.maxSpeedLimit, this.speed + 0.85);
-          this.flowMeter = Math.min(100, this.flowMeter + 12);
-          this.perfectPumpFlashTimer = 0.45;
-          this.pumpSyncQuality = 'PERFECT PUMP!';
-          this.pumpQualityTimer = 0.8;
-          this.pumpPulse = 1.0;
-          this.pumpCount += 1;
-          onManeuver({
-            name: '⚡ PERFECT PUMP!',
-            points: this.applyScoreMultipliers(150),
-            zone: this.currentSurface.zoneName,
-            quality: 'PERFECT',
-          });
+          this.wallPumpCooldown = Math.max(this.wallPumpCooldown, 1.0);
+          this.triggerWallPumpBoost(0.85 * this.pumpScale, 0.9, '⚡ PERFECT PUMP!', 150, onManeuver);
         }
       }
 
@@ -817,6 +973,11 @@ export class SurfskateController {
         this.smoothedYawRate = 0;
         this.steerHoldTime = 0;
         this.lastSteerDir = 0;
+        this.wallPumpCue = 'none';
+        this.prevWallPumpCue = 'none';
+        this.availableContextTrick = 'none';
+        this.isSlidingNow = false;
+        this.railDriftIntensity = 0;
         this.cancelGroundTricks();
         this.airLaunchedFromWall = isOnWall;
         this.airLaunchHeight = h0;
@@ -900,7 +1061,13 @@ export class SurfskateController {
       // 5. Airborne Physics (Alley-Oops & Lip Launches)
       // -------------------------------------------------------------------------
       this.prevSnapInput = input.snapTrick;
+      this.prevContextTrick = Boolean(input.contextTrick);
       this.snapWindow = 'NONE';
+      this.wallPumpCue = 'none';
+      this.prevWallPumpCue = 'none';
+      this.availableContextTrick = 'none';
+      this.isSlidingNow = false;
+      this.railDriftIntensity = 0;
       this.cancelGroundTricks();
       this.airTime += simDt;
       this.velocity.y -= GRAVITY * simDt;
@@ -1081,12 +1248,13 @@ export class SurfskateController {
 
   /** Is the skater near the top of a wall? Returns the snap window state. */
   private updateSnapWindow(h: number, grade: number, slopeMag: number): void {
-    if (h < 0.55 || slopeMag < 0.18 || grade < -0.25) {
+    const atLip = this.currentSurface.isNearCoping && h >= 0.55 && grade >= -0.25;
+    if (!atLip && (h < 0.55 || slopeMag < 0.18 || grade < -0.25)) {
       this.snapWindow = 'NONE';
       return;
     }
     const top = this.estimateLocalWallTop();
-    const inTopZone = h >= top * 0.6 || top - h < 0.5;
+    const inTopZone = atLip || h >= top * 0.6 || top - h < 0.5;
     if (!inTopZone) {
       this.snapWindow = 'NONE';
       return;
@@ -1096,33 +1264,99 @@ export class SurfskateController {
     else this.snapWindow = 'READY';
   }
 
+  /** Compute the contextual 1-button surf trick currently available while grounded. */
+  private updateAvailableContextTrick(slopeMag: number): void {
+    if (
+      !this.isGrounded ||
+      this.isGrinding ||
+      this.isBailing ||
+      this.snapActive ||
+      this.bertSlideActive ||
+      this.laybackActive ||
+      this.reverseActive
+    ) {
+      this.availableContextTrick = 'none';
+      return;
+    }
+
+    const nearLipForSnap =
+      this.snapWindow === 'READY' ||
+      (this.currentSurface.isNearCoping &&
+        this.gradeAlongHeading >= -0.25 &&
+        this.speed >= SNAP_MIN_SPEED &&
+        this.speed <= SNAP_MAX_SPEED);
+    if (nearLipForSnap) {
+      this.availableContextTrick = 'snap';
+      return;
+    }
+
+    if (this.slideTrickCooldown > 0) {
+      this.availableContextTrick = 'none';
+      return;
+    }
+
+    const lean = this.leanAngle;
+    if (lean >= 0.14) {
+      // Frontside carve: high-speed whip / flat blast -> Reverse 360; otherwise Bert Slide
+      if (
+        this.speed >= 5.2 &&
+        (slopeMag < 0.24 || Math.abs(this.leanRate) > 1.2 || this.lastPumpSurge > 0.25)
+      ) {
+        this.availableContextTrick = 'reverse360';
+      } else if (this.speed >= 2.8) {
+        this.availableContextTrick = 'bert';
+      } else {
+        this.availableContextTrick = 'none';
+      }
+      return;
+    }
+
+    if (lean <= -0.14) {
+      // Backside carve: bias toward Layback at >= 3.0 m/s, Bert Slide down to 2.8 m/s
+      if (this.speed >= 3.0) {
+        this.availableContextTrick = 'layback';
+      } else if (this.speed >= 2.8) {
+        this.availableContextTrick = 'bert';
+      } else {
+        this.availableContextTrick = 'none';
+      }
+      return;
+    }
+
+    this.availableContextTrick = 'none';
+  }
+
   private attemptSnap(
     rawSteer: number,
     slopeX: number,
     slopeZ: number,
-    onManeuver: (ev: ManeuverEvent) => void
+    onManeuver: (ev: ManeuverEvent) => void,
+    forceLipSnap = false
   ): void {
-    if (this.snapWindow === 'NONE') {
-      this.snapFeedback = t('ctrl.snapTopOfWall');
-      this.snapFeedbackTimer = 1.1;
-      return;
-    }
-    if (this.snapWindow === 'TOO_SLOW') {
-      // Bogged the snap: lose the little speed that was left
-      this.snapFeedback = t('ctrl.snapFeedbackSlow');
-      this.snapFeedbackTimer = 1.1;
-      this.speed *= 0.5;
-      return;
-    }
-    if (this.snapWindow === 'TOO_FAST') {
-      this.snapFeedback = t('ctrl.snapFeedbackFast');
-      this.snapFeedbackTimer = 1.1;
-      this.speed *= 0.85;
-      return;
+    if (!forceLipSnap) {
+      if (this.snapWindow === 'NONE') {
+        this.snapFeedback = t('ctrl.snapTopOfWall');
+        this.snapFeedbackTimer = 1.1;
+        return;
+      }
+      if (this.snapWindow === 'TOO_SLOW') {
+        // Bogged the snap: lose the little speed that was left
+        this.snapFeedback = t('ctrl.snapFeedbackSlow');
+        this.snapFeedbackTimer = 1.1;
+        this.speed *= 0.5;
+        return;
+      }
+      if (this.snapWindow === 'TOO_FAST') {
+        this.snapFeedback = t('ctrl.snapFeedbackFast');
+        this.snapFeedbackTimer = 1.1;
+        this.speed *= 0.85;
+        return;
+      }
     }
 
     // Successful SNAP: whip the board back down the face of the wall
-    const downhillHeading = Math.atan2(slopeX, slopeZ);
+    const hasSlope = Math.hypot(slopeX, slopeZ) >= 0.05;
+    const downhillHeading = hasSlope ? Math.atan2(slopeX, slopeZ) : this.heading + Math.PI;
     let diff = downhillHeading - this.heading;
     while (diff > Math.PI) diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
@@ -1149,6 +1383,32 @@ export class SurfskateController {
       isSnap: true,
       trick: 'SNAP',
       quality: perfect ? 'PERFECT' : 'STYLISH',
+    });
+  }
+
+  /** Apply a juicy bowl-wall pump speed surge and update HUD/audio event signals. */
+  private triggerWallPumpBoost(
+    surge: number,
+    surgeStrength: number,
+    label: string,
+    points: number,
+    onManeuver: (ev: ManeuverEvent) => void
+  ): void {
+    this.speed = Math.min(this.maxSpeedLimit, this.speed + surge);
+    this.flowMeter = Math.min(100, this.flowMeter + 12 * this.flowScale);
+    this.perfectPumpFlashTimer = 0.45;
+    this.pumpSyncQuality = 'PERFECT PUMP!';
+    this.pumpQualityTimer = 0.85;
+    this.pumpPulse = 1.0;
+    this.pumpCount += 1;
+    this.lastPumpSurge = THREE.MathUtils.clamp(surgeStrength, 0.6, 1.0);
+    this.pumpEventSeq += 1;
+    this.lastPumpType = 'wall';
+    onManeuver({
+      name: label,
+      points: this.applyScoreMultipliers(points),
+      zone: this.currentSurface.zoneName,
+      quality: 'PERFECT',
     });
   }
 
@@ -1190,9 +1450,9 @@ export class SurfskateController {
   }
 
   /**
-   * Flat-ground pumping (Surfskate Maneuver #1). Every switch between a left and a right
-   * carve is one pump. The interval between switches decides how much speed it gives:
-   * too hectic scrubs speed, too lazy gives nothing, the right rhythm accelerates.
+   * Flat-ground pumping (Carver C7 / YOW Meraki rail-to-rail whip).
+   * Switching rails at ~0.35s - 1.45s after building meaningful lean delivers a
+   * crisp forward speed surge right at the rail-switch apex (accelerating cleanly up to 15-24 km/h).
    */
   private updateRhythmPump(rawSteer: number, _onManeuver: (ev: ManeuverEvent) => void): void {
     // Only detect a pump switch when steering direction actually reverses between Left and Right.
@@ -1203,8 +1463,12 @@ export class SurfskateController {
 
     const interval = this.timeSincePumpSwitch;
     const firstSwitch = this.lastPumpDir === 0;
+    const prevPeakLean = this.halfCyclePeakLean;
+    const prevCarveTime = this.halfCycleCarveTime;
     this.lastPumpDir = currentDir;
     this.timeSincePumpSwitch = 0;
+    this.halfCyclePeakLean = Math.abs(this.leanAngle);
+    this.halfCycleCarveTime = 0;
     if (firstSwitch) return;
 
     if (this.speed < STANDSTILL_SPEED) {
@@ -1213,10 +1477,7 @@ export class SurfskateController {
       return;
     }
     // Pumping only works while the wheels are on the ground and not mid-trick
-    if (this.bertSlideActive || this.reverseActive || this.snapActive) return;
-
-    // Pumping gets harder the faster you already go
-    const taper = Math.max(0, 1 - this.speed / (MAX_PUMP_SPEED * this.boardSpeedScale));
+    if (this.bertSlideActive || this.reverseActive || this.snapActive || this.laybackActive) return;
 
     if (interval < PUMP_MIN_INTERVAL) {
       // Wiggling hectically just scrubs speed
@@ -1225,27 +1486,69 @@ export class SurfskateController {
       this.pumpQualityTimer = 0.6;
       this.coachHint = t('ctrl.coachTooHectic');
       this.coachHintTimer = 1.6;
-    } else if (interval > PUMP_MAX_INTERVAL) {
+      return;
+    }
+
+    if (interval > PUMP_WINDOW_MAX) {
       // Too lazy: just a carve, no pump
       if (this.speed < 2.0) {
         this.coachHint = t('ctrl.coachFasterRhythm');
         this.coachHintTimer = 1.8;
       }
-    } else if (interval >= PUMP_PERFECT_MIN && interval <= PUMP_PERFECT_MAX) {
-      this.speed = Math.min(this.maxSpeedLimit, this.speed + PUMP_GAIN_PERFECT * taper * this.pumpScale);
-      this.pumpSyncQuality = 'PERFECT PUMP!';
-      this.pumpQualityTimer = 0.7;
-      this.pumpPulse = 1;
-      this.pumpCount += 1;
-      this.flowMeter = Math.min(100, this.flowMeter + 4 * this.flowScale);
-    } else {
-      this.speed = Math.min(this.maxSpeedLimit, this.speed + PUMP_GAIN_GOOD * taper * this.pumpScale);
-      this.pumpSyncQuality = 'FLOW PUMP';
-      this.pumpQualityTimer = 0.6;
-      this.pumpPulse = 0.7;
-      this.pumpCount += 1;
-      this.flowMeter = Math.min(100, this.flowMeter + 2 * this.flowScale);
+      return;
     }
+
+    const hasMeaningfulLean = prevPeakLean >= PUMP_MIN_LEAN && prevCarveTime >= 0.09;
+    if (!hasMeaningfulLean) {
+      return;
+    }
+
+    if (interval < PUMP_WINDOW_MIN) {
+      // Slightly rushed switch: slight glide without full pump surge / whoosh spam
+      const pumpCap = MAX_PUMP_SPEED * this.boardSpeedScale;
+      if (this.speed < pumpCap) {
+        this.speed = Math.min(this.maxSpeedLimit, Math.min(pumpCap, this.speed + 0.18 * this.pumpScale));
+      }
+      this.pumpPulse = Math.max(this.pumpPulse, 0.35);
+      return;
+    }
+
+    const isPerfect = interval >= PUMP_PERFECT_MIN && interval <= PUMP_PERFECT_MAX;
+    let rhythmQuality: number;
+    if (isPerfect) {
+      const centerDist = Math.abs(interval - 0.68) / 0.27;
+      rhythmQuality = 1.0 - 0.18 * Math.min(1, centerDist);
+    } else if (interval < PUMP_PERFECT_MIN) {
+      rhythmQuality =
+        0.55 + 0.25 * ((interval - PUMP_WINDOW_MIN) / Math.max(0.01, PUMP_PERFECT_MIN - PUMP_WINDOW_MIN));
+    } else {
+      rhythmQuality =
+        0.80 - 0.35 * ((interval - PUMP_PERFECT_MAX) / Math.max(0.01, PUMP_WINDOW_MAX - PUMP_PERFECT_MAX));
+    }
+
+    const leanQuality = THREE.MathUtils.clamp((prevPeakLean - 0.20) / (0.65 - 0.20), 0.35, 1.0);
+    const combinedQuality = THREE.MathUtils.clamp(rhythmQuality * (0.65 + 0.35 * leanQuality), 0, 1);
+
+    const pumpCap = MAX_PUMP_SPEED * this.boardSpeedScale;
+    const rawSurge = THREE.MathUtils.lerp(0.55, 1.05, combinedQuality) * this.pumpScale;
+    const highSpeedTaper = THREE.MathUtils.clamp(
+      1 - (Math.max(0, this.speed - 5.2) / Math.max(0.5, pumpCap - 5.2)) * 0.45,
+      0.55,
+      1.0
+    );
+
+    if (this.speed < pumpCap) {
+      this.speed = Math.min(this.maxSpeedLimit, Math.min(pumpCap, this.speed + rawSurge * highSpeedTaper));
+    }
+
+    this.pumpSyncQuality = isPerfect ? 'PERFECT PUMP!' : 'FLOW PUMP';
+    this.pumpQualityTimer = isPerfect ? 0.75 : 0.6;
+    this.pumpPulse = isPerfect ? 1.0 : 0.75;
+    this.pumpCount += 1;
+    this.lastPumpSurge = THREE.MathUtils.clamp(0.60 + 0.40 * combinedQuality, 0.6, 1.0);
+    this.pumpEventSeq += 1;
+    this.lastPumpType = 'rail';
+    this.flowMeter = Math.min(100, this.flowMeter + (isPerfect ? 5.5 : 3.0) * this.flowScale);
   }
 
   /** Abort all ground tricks (e.g. when going airborne). */
@@ -1263,6 +1566,7 @@ export class SurfskateController {
     this.bertSlideAccumulatedYaw = 0;
     this.reverseActive = false;
     this.boardYawOffset = 0;
+    this.contextStartedSlide = false;
   }
 
   /** Wrap an angle difference into [-PI, PI]. */
@@ -1338,6 +1642,16 @@ export class SurfskateController {
     this.prevLaybackInput = input ? input.laybackTrick : false;
     this.prevBertInput = input ? input.snapSlide : false;
     this.prevReverseInput = input ? input.reverseTrick : false;
+    this.prevContextTrick = input ? Boolean(input.contextTrick) : false;
+    this.contextStartedSlide = false;
+    this.availableContextTrick = 'none';
+    this.wallPumpCue = 'none';
+    this.prevWallPumpCue = 'none';
+    this.lastPumpSurge = 0;
+    this.railDriftIntensity = 0;
+    this.isSlidingNow = false;
+    this.halfCyclePeakLean = 0;
+    this.halfCycleCarveTime = 0;
   }
 
   /** Return true if (x, z) lies comfortably inside the active park's recovery bounds. */
@@ -1679,8 +1993,54 @@ export class SurfskateController {
     });
   }
 
-  /** Layback, Bert slide and FS Reverse 360. */
-  private updateTricks(dt: number, input: InputState, onManeuver: (ev: ManeuverEvent) => void): void {
+  /** Layback, Bert slide and FS Reverse 360 (dedicated keys + smart contextTrick). */
+  private updateTricks(
+    dt: number,
+    input: InputState,
+    contextPressed: boolean,
+    onManeuver: (ev: ManeuverEvent) => void
+  ): void {
+    if (
+      contextPressed &&
+      !this.snapActive &&
+      !this.reverseActive &&
+      !this.bertSlideActive &&
+      !this.laybackActive
+    ) {
+      if (this.availableContextTrick === 'reverse360') {
+        this.reverseActive = true;
+        this.reverseTimer = 0;
+        this.reverseSpinDir = Math.sign(this.leanAngle) || 1;
+        this.laybackActive = false;
+        this.bertSlideActive = false;
+        this.contextStartedSlide = false;
+      } else if (this.availableContextTrick === 'bert') {
+        this.bertSlideActive = true;
+        this.bertHold = 0;
+        this.bertScored = false;
+        this.bertSlideAccumulatedYaw = 0;
+        this.bertSlideHandSide = Math.sign(this.leanAngle) || 1;
+        this.laybackActive = false;
+        this.contextStartedSlide = true;
+        this.bertKeyReleased = false;
+      } else if (this.availableContextTrick === 'layback') {
+        this.laybackActive = true;
+        this.laybackHold = 0;
+        this.laybackScored = false;
+        this.laybackAccumulatedYaw = 0;
+        this.contextStartedSlide = true;
+        this.laybackKeyReleased = false;
+      } else if (this.availableContextTrick === 'none') {
+        if (this.slideTrickCooldown > 0) {
+          this.trickFail('SURF TRICK: reset line before next slide!');
+        } else if (this.speed < BERT_MIN_SPEED) {
+          this.trickFail(`SURF TRICK: pump faster (${BERT_MIN_SPEED.toFixed(1)}+ m/s) or approach a wall lip!`);
+        } else {
+          this.trickFail('SURF TRICK: carve (← or →) or hit a wall lip, then press [C]!');
+        }
+      }
+    }
+
     // ---------------- FS REVERSE 360 (B) ----------------
     // Carve into a turn, whip the tail around a full 360°, ride out forward.
     const reversePressed = input.reverseTrick && !this.prevReverseInput;
@@ -1697,8 +2057,10 @@ export class SurfskateController {
       } else {
         this.reverseActive = true;
         this.reverseTimer = 0;
+        this.reverseSpinDir = Math.sign(this.leanAngle) || 1;
         this.laybackActive = false;
         this.bertSlideActive = false;
+        this.contextStartedSlide = false;
       }
     }
     if (this.reverseActive) {
@@ -1707,7 +2069,7 @@ export class SurfskateController {
       this.speed = Math.max(2.4, this.speed);
       const t = Math.min(1, this.reverseTimer / REVERSE_DURATION);
       // Ease-in-out spin; rotation follows carve direction
-      const spinDir = Math.sign(this.leanAngle) || 1;
+      const spinDir = this.reverseSpinDir || Math.sign(this.leanAngle) || 1;
       const eased = t * t * (3 - 2 * t);
       this.boardYawOffset = -spinDir * eased * Math.PI * 2;
       this.sprayIntensity = 1.0;
@@ -1727,11 +2089,12 @@ export class SurfskateController {
     const bertPressed = input.snapSlide && !this.prevBertInput;
     this.prevBertInput = input.snapSlide;
 
-    if (!input.snapSlide) {
+    if (!input.snapSlide && !input.contextTrick) {
       this.bertKeyReleased = true;
     }
 
-    if (input.snapSlide && !this.laybackActive) {
+    const bertHoldActive = input.snapSlide || (this.bertSlideActive && this.contextStartedSlide);
+    if (bertHoldActive && !this.laybackActive) {
       if (!this.bertSlideActive) {
         if (bertPressed && this.slideTrickCooldown > 0) {
           this.trickFail('BERT SLIDE: reset line before next slide!');
@@ -1748,12 +2111,14 @@ export class SurfskateController {
           this.bertSlideAccumulatedYaw = 0;
           this.bertSlideHandSide = Math.sign(this.leanAngle) || 1;
           this.laybackActive = false;
+          this.contextStartedSlide = false;
           this.bertKeyReleased = false;
         }
       }
     } else {
       if (this.bertSlideActive) {
         this.slideTrickCooldown = 1.5;
+        this.contextStartedSlide = false;
         if (this.bertHold >= 0.50 || this.bertSlideAccumulatedYaw >= 2.0) {
           if (!this.bertScored) {
             this.bertScored = true;
@@ -1778,6 +2143,7 @@ export class SurfskateController {
       if (this.bertSlideAccumulatedYaw >= 3.05 || this.bertHold >= 0.85) {
         // Turn completed: maximum 180° rotation (no doughnuts!) or hold limit reached
         this.bertSlideActive = false;
+        this.contextStartedSlide = false;
         this.slideTrickCooldown = 1.5;
         this.speed = Math.max(2.6, this.speed * 0.82);
         if (!this.bertScored) {
@@ -1807,11 +2173,12 @@ export class SurfskateController {
     const laybackPressed = input.laybackTrick && !this.prevLaybackInput;
     this.prevLaybackInput = input.laybackTrick;
 
-    if (!input.laybackTrick) {
+    if (!input.laybackTrick && !input.contextTrick) {
       this.laybackKeyReleased = true;
     }
 
-    if (input.laybackTrick && !this.bertSlideActive) {
+    const laybackHoldActive = input.laybackTrick || (this.laybackActive && this.contextStartedSlide);
+    if (laybackHoldActive && !this.bertSlideActive) {
       if (!this.laybackActive) {
         if (laybackPressed && this.slideTrickCooldown > 0) {
           this.trickFail('LAYBACK: reset line before next slide!');
@@ -1826,12 +2193,14 @@ export class SurfskateController {
           this.laybackHold = 0;
           this.laybackScored = false;
           this.laybackAccumulatedYaw = 0;
+          this.contextStartedSlide = false;
           this.laybackKeyReleased = false;
         }
       }
     } else {
       if (this.laybackActive) {
         this.slideTrickCooldown = 1.5;
+        this.contextStartedSlide = false;
         if (this.laybackHold >= 0.50 || this.laybackAccumulatedYaw >= 2.0) {
           if (!this.laybackScored) {
             this.laybackScored = true;
@@ -1851,7 +2220,7 @@ export class SurfskateController {
       this.speed = Math.max(2.4, this.speed);
       this.sprayIntensity = Math.max(this.sprayIntensity, 0.75);
 
-      if (this.leanAngle > -0.15) {
+      if (!this.contextStartedSlide && this.leanAngle > -0.15) {
         // Skater stopped carving backside
         this.laybackActive = false;
         this.slideTrickCooldown = 1.5;
@@ -1859,6 +2228,7 @@ export class SurfskateController {
       } else if (this.laybackAccumulatedYaw >= 3.05 || this.laybackHold >= 0.85) {
         // Turn completed: maximum 180° rotation (no doughnuts!) or hold limit reached
         this.laybackActive = false;
+        this.contextStartedSlide = false;
         this.slideTrickCooldown = 1.5;
         this.speed = Math.max(2.6, this.speed * 0.82);
         if (!this.laybackScored) {
@@ -2120,7 +2490,7 @@ export class SurfskateController {
 
     const slopeMag = Math.hypot(this.currentSurface.slopeX, this.currentSurface.slopeZ);
     const hasTransition = slopeMag >= 0.08 || this.currentSurface.height >= 0.18;
-    if (!hasTransition) return false;
+    if (!hasTransition && this.leanAngle > -0.28) return false;
 
     // When on a bank or transition, ensure the wall is ahead or to the heel-side (left)
     // so the back hand actually drops toward the concrete wall/face

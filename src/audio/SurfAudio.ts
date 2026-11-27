@@ -13,6 +13,20 @@ export class SurfAudio {
   private rollFilter: BiquadFilterNode | null = null;
   private slideGain: GainNode | null = null;
   private whiteNoise: AudioBuffer | null = null;
+  private brownNoise: AudioBuffer | null = null;
+
+  // 3-layer procedural surfskate physics audio nodes (roll hum, rail carve, urethane slide)
+  private surfRollFilter: BiquadFilterNode | null = null;
+  private surfRollGain: GainNode | null = null;
+  private surfCarveFilter: BiquadFilterNode | null = null;
+  private surfCarveGain: GainNode | null = null;
+  private surfSlideFilter: BiquadFilterNode | null = null;
+  private surfSlideGritOsc: OscillatorNode | null = null;
+  private surfSlideGritFilter: BiquadFilterNode | null = null;
+  private surfSlideGritGain: GainNode | null = null;
+  private surfSlideGain: GainNode | null = null;
+  private surfNodesReady = false;
+
   private isMuted = false;
   private isPaused = true;
 
@@ -105,6 +119,7 @@ export class SurfAudio {
         lastOut = out[i];
         out[i] *= 2.5;
       }
+      this.brownNoise = noiseBuffer;
 
       // 1. Concrete Rolling Loop
       const rollSource = this.ctx.createBufferSource();
@@ -141,6 +156,8 @@ export class SurfAudio {
       slideFilter.connect(this.slideGain);
       this.slideGain.connect(this.masterGain);
       slideSource.start();
+
+      this.ensureSurfskateNodes();
     } catch {
       // Web Audio not available or blocked
     }
@@ -157,6 +174,7 @@ export class SurfAudio {
     }
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
+    this.rampSurfskateLayersToZero(now, 0.015);
     if (this.rollGain) {
       this.rollGain.gain.cancelScheduledValues(now);
       this.rollGain.gain.setValueAtTime(0, now);
@@ -249,6 +267,271 @@ export class SurfAudio {
 
     const slideIntensity = ctrl.isGrinding ? 0.22 : ctrl.sprayIntensity * 0.18;
     this.slideGain.gain.setTargetAtTime(slideIntensity, now, 0.04);
+  }
+
+  private ensureSurfskateNodes(): boolean {
+    if (this.surfNodesReady) return true;
+    if (!this.ctx || !this.masterGain) return false;
+
+    const ctx = this.ctx;
+    if (!this.whiteNoise) {
+      this.whiteNoise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+      const wn = this.whiteNoise.getChannelData(0);
+      for (let i = 0; i < wn.length; i++) wn[i] = Math.random() * 2 - 1;
+    }
+    if (!this.brownNoise) {
+      const bufferSize = ctx.sampleRate * 2;
+      this.brownNoise = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const out = this.brownNoise.getChannelData(0);
+      let lastOut = 0.0;
+      for (let i = 0; i < bufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        out[i] = (lastOut + 0.04 * white) / 1.04;
+        lastOut = out[i];
+        out[i] *= 2.5;
+      }
+    }
+
+    // 1. Subtle Concrete Roll Hum (lowpass-filtered brown/pink noise bed)
+    const rollSource = ctx.createBufferSource();
+    rollSource.buffer = this.brownNoise;
+    rollSource.loop = true;
+
+    this.surfRollFilter = ctx.createBiquadFilter();
+    this.surfRollFilter.type = 'lowpass';
+    this.surfRollFilter.frequency.value = 110;
+    this.surfRollFilter.Q.value = 0.75;
+
+    this.surfRollGain = ctx.createGain();
+    this.surfRollGain.gain.value = 0.0;
+
+    rollSource.connect(this.surfRollFilter);
+    this.surfRollFilter.connect(this.surfRollGain);
+    this.surfRollGain.connect(this.masterGain);
+    rollSource.start(0, 0.13);
+
+    // 2. Urethane Rail-Grip Carve Sound (~450-1100 Hz bandpass)
+    const carveSource = ctx.createBufferSource();
+    carveSource.buffer = this.whiteNoise;
+    carveSource.loop = true;
+
+    this.surfCarveFilter = ctx.createBiquadFilter();
+    this.surfCarveFilter.type = 'bandpass';
+    this.surfCarveFilter.frequency.value = 480;
+    this.surfCarveFilter.Q.value = 2.1;
+
+    this.surfCarveGain = ctx.createGain();
+    this.surfCarveGain.gain.value = 0.0;
+
+    carveSource.connect(this.surfCarveFilter);
+    this.surfCarveFilter.connect(this.surfCarveGain);
+    this.surfCarveGain.connect(this.masterGain);
+    carveSource.start(0, 0.37);
+
+    // 3. Urethane Slide Screech (~1200-2400 Hz resonant bandpass + gritty harmonic texture)
+    const slideSource = ctx.createBufferSource();
+    slideSource.buffer = this.whiteNoise;
+    slideSource.loop = true;
+
+    this.surfSlideFilter = ctx.createBiquadFilter();
+    this.surfSlideFilter.type = 'bandpass';
+    this.surfSlideFilter.frequency.value = 1450;
+    this.surfSlideFilter.Q.value = 4.2;
+
+    this.surfSlideGain = ctx.createGain();
+    this.surfSlideGain.gain.value = 0.0;
+
+    slideSource.connect(this.surfSlideFilter);
+    this.surfSlideFilter.connect(this.surfSlideGain);
+    this.surfSlideGain.connect(this.masterGain);
+    slideSource.start(0, 0.91);
+
+    this.surfSlideGritOsc = ctx.createOscillator();
+    this.surfSlideGritOsc.type = 'sawtooth';
+    this.surfSlideGritOsc.frequency.value = 240;
+
+    this.surfSlideGritFilter = ctx.createBiquadFilter();
+    this.surfSlideGritFilter.type = 'bandpass';
+    this.surfSlideGritFilter.frequency.value = 1550;
+    this.surfSlideGritFilter.Q.value = 3.0;
+
+    this.surfSlideGritGain = ctx.createGain();
+    this.surfSlideGritGain.gain.value = 0.18;
+
+    this.surfSlideGritOsc.connect(this.surfSlideGritFilter);
+    this.surfSlideGritFilter.connect(this.surfSlideGritGain);
+    this.surfSlideGritGain.connect(this.surfSlideGain);
+    this.surfSlideGritOsc.start();
+
+    this.surfNodesReady = true;
+    return true;
+  }
+
+  private rampSurfskateLayersToZero(now: number, timeConstant: number): void {
+    if (this.surfRollGain) {
+      this.surfRollGain.gain.setTargetAtTime(0, now, timeConstant);
+    }
+    if (this.surfCarveGain) {
+      this.surfCarveGain.gain.setTargetAtTime(0, now, timeConstant);
+    }
+    if (this.surfSlideGain) {
+      this.surfSlideGain.gain.setTargetAtTime(0, now, timeConstant);
+    }
+  }
+
+  /**
+   * Continuous 3-layer procedural WebAudio surfskate physics soundscape:
+   *  1. Subtle warm lowpass concrete roll hum
+   *  2. Urethane rail-grip carve hiss (~450-1100 Hz)
+   *  3. Resonant urethane slide screech (~1200-2400 Hz + harmonic grit)
+   */
+  public updateSurfskateAudio(
+    speed: number,
+    leanAbs: number,
+    isGrounded: boolean,
+    isSliding: boolean,
+    railDrift: number
+  ): void {
+    if (!this.ctx || !this.masterGain) return;
+    if (!this.ensureSurfskateNodes()) return;
+
+    const now = this.ctx.currentTime;
+
+    if (this.isMuted || this.isPaused) {
+      this.rampSurfskateLayersToZero(now, 0.02);
+      return;
+    }
+
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+    if (this.masterGain.gain.value < 0.5) {
+      this.masterGain.gain.setTargetAtTime(1.0, now, 0.02);
+    }
+
+    const safeSpeed = Number.isFinite(speed) ? Math.max(0, speed) : 0;
+    const safeLean = Number.isFinite(leanAbs) ? Math.max(0, leanAbs) : 0;
+    const safeDrift = Number.isFinite(railDrift) ? Math.max(0, railDrift) : 0;
+
+    if (!isGrounded || safeSpeed < 0.3) {
+      this.rampSurfskateLayersToZero(now, 0.025);
+      return;
+    }
+
+    const speedNorm = Math.min(1, Math.max(0, (safeSpeed - 0.3) / 9.2));
+    const leanNorm = Math.min(1, safeLean / 0.7);
+    const driftNorm = Math.min(1, safeDrift);
+
+    // 1. Subtle Concrete Roll Hum
+    if (this.surfRollFilter && this.surfRollGain) {
+      const rollFreq = 95 + speedNorm * 230 + leanNorm * 45;
+      const rollTarget = 0.016 + speedNorm * 0.055;
+      this.surfRollFilter.frequency.setTargetAtTime(rollFreq, now, 0.055);
+      this.surfRollGain.gain.setTargetAtTime(rollTarget, now, 0.05);
+    }
+
+    // 2. Urethane Rail-Grip Carve Sound
+    if (this.surfCarveFilter && this.surfCarveGain) {
+      const carveLoad = Math.min(1, leanNorm * 0.78 + driftNorm * 0.42);
+      const carveFreq = 450 + carveLoad * 520 + speedNorm * 130;
+      const carveQ = 1.8 + driftNorm * 1.1;
+      const carveTarget = speedNorm * Math.pow(carveLoad, 1.35) * 0.11;
+      this.surfCarveFilter.frequency.setTargetAtTime(carveFreq, now, 0.05);
+      this.surfCarveFilter.Q.setTargetAtTime(carveQ, now, 0.05);
+      this.surfCarveGain.gain.setTargetAtTime(carveTarget, now, 0.045);
+    }
+
+    // 3. Urethane Slide Screech (Bert Slide / Layback / Snap)
+    if (this.surfSlideFilter && this.surfSlideGain && this.surfSlideGritOsc && this.surfSlideGritFilter) {
+      if (isSliding) {
+        const slideEnergy = Math.min(1, 0.45 + speedNorm * 0.4 + driftNorm * 0.35);
+        const slideFreq = Math.min(2400, 1250 + speedNorm * 750 + driftNorm * 380);
+        const gritOscFreq = 210 + speedNorm * 130 + leanNorm * 40;
+        this.surfSlideFilter.frequency.setTargetAtTime(slideFreq, now, 0.03);
+        this.surfSlideGritFilter.frequency.setTargetAtTime(Math.min(2400, slideFreq * 1.05), now, 0.03);
+        this.surfSlideGritOsc.frequency.setTargetAtTime(gritOscFreq, now, 0.04);
+        this.surfSlideGain.gain.setTargetAtTime(slideEnergy * 0.16, now, 0.015);
+      } else {
+        // ~80ms smooth fade-out when slide ends
+        this.surfSlideGain.gain.setTargetAtTime(0, now, 0.025);
+      }
+    }
+  }
+
+  /**
+   * Immediately ramps all continuous roll/carve/slide gains smoothly to 0
+   * (used for pause, landing page, or summary modal transitions).
+   */
+  public stopSurfskateAudio(): void {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    this.rampSurfskateLayersToZero(now, 0.015);
+    if (this.rollGain) {
+      this.rollGain.gain.setTargetAtTime(0, now, 0.015);
+    }
+    if (this.slideGain) {
+      this.slideGain.gain.setTargetAtTime(0, now, 0.015);
+    }
+  }
+
+  /**
+   * Tactile rail-switch / wall-pump whoosh-snap (~160-220ms):
+   * sweeping bandpass noise + warm subtle low-mid board-compression thump.
+   */
+  public playPumpWhoosh(intensity = 0.8, isWallPump = false): void {
+    if (!this.ctx || this.isMuted || this.isPaused || !this.masterGain) return;
+    const ctx = this.ctx;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+
+    if (!this.whiteNoise) {
+      this.whiteNoise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+      const wn = this.whiteNoise.getChannelData(0);
+      for (let i = 0; i < wn.length; i++) wn[i] = Math.random() * 2 - 1;
+    }
+
+    const now = ctx.currentTime;
+    const master = this.masterGain;
+    const amp = Number.isFinite(intensity) ? Math.min(1.25, Math.max(0.2, intensity)) : 0.8;
+    const dur = isWallPump ? 0.215 : 0.165;
+
+    // 1. Sweeping bandpass noise whoosh-snap
+    const src = ctx.createBufferSource();
+    src.buffer = this.whiteNoise;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = isWallPump ? 1.9 : 1.6;
+    bp.frequency.setValueAtTime(isWallPump ? 420 : 380, now);
+    bp.frequency.exponentialRampToValueAtTime(isWallPump ? 2200 : 1550, now + dur * 0.35);
+    bp.frequency.exponentialRampToValueAtTime(isWallPump ? 780 : 680, now + dur);
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.0001, now);
+    noiseGain.gain.exponentialRampToValueAtTime((isWallPump ? 0.22 : 0.17) * amp, now + 0.022);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+    src.connect(bp);
+    bp.connect(noiseGain);
+    noiseGain.connect(master);
+    src.start(now, Math.random() * 1.0);
+    src.stop(now + dur + 0.02);
+
+    // 2. Warm subtle low-mid thump
+    const thump = ctx.createOscillator();
+    thump.type = 'sine';
+    thump.frequency.setValueAtTime(isWallPump ? 135 : 155, now);
+    thump.frequency.exponentialRampToValueAtTime(isWallPump ? 54 : 78, now + dur * 0.72);
+
+    const thumpGain = ctx.createGain();
+    thumpGain.gain.setValueAtTime(0.0001, now);
+    thumpGain.gain.exponentialRampToValueAtTime((isWallPump ? 0.24 : 0.16) * amp, now + 0.012);
+    thumpGain.gain.exponentialRampToValueAtTime(0.0001, now + dur * 0.8);
+
+    thump.connect(thumpGain);
+    thumpGain.connect(master);
+    thump.start(now);
+    thump.stop(now + dur * 0.85);
   }
 
   public playManeuverChime(): void {

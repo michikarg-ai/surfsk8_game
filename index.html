@@ -347,6 +347,53 @@
         flex-direction: column;
         align-items: flex-start;
         line-height: 1;
+        position: relative;
+      }
+      .pump-surge-tag {
+        position: absolute;
+        left: calc(100% + 12px);
+        top: 2px;
+        white-space: nowrap;
+        font-family: var(--font-hud);
+        font-style: italic;
+        font-weight: 900;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 2px 9px;
+        border-radius: 4px;
+        transform: skewX(-12deg) translateY(4px) scale(0.85);
+        opacity: 0;
+        pointer-events: none;
+        background: rgba(14, 18, 24, 0.86);
+        border: 1px solid rgba(34, 211, 238, 0.7);
+        color: #22d3ee;
+        box-shadow: 0 0 14px rgba(34, 211, 238, 0.45);
+        transition: opacity 0.16s ease, transform 0.16s ease;
+        z-index: 30;
+      }
+      .speedo.pump-rail #hud-speed {
+        color: #67e8f9;
+        text-shadow: 0 0 22px rgba(34, 211, 238, 0.85), 0 6px 20px rgba(0, 0, 0, 0.55);
+      }
+      .speedo.pump-wall #hud-speed {
+        color: #fde047;
+        text-shadow: 0 0 26px rgba(242, 204, 38, 0.9), 0 6px 20px rgba(0, 0, 0, 0.55);
+      }
+      .speedo.pump-rail .pump-surge-tag {
+        opacity: 1;
+        transform: skewX(-12deg) translateY(0) scale(1);
+        color: #67e8f9;
+        border-color: rgba(34, 211, 238, 0.85);
+        box-shadow: 0 0 16px rgba(34, 211, 238, 0.55);
+      }
+      .speedo.pump-wall .pump-surge-tag {
+        opacity: 1;
+        transform: skewX(-12deg) translateY(0) scale(1.06);
+        color: #fde047;
+        border-color: rgba(242, 204, 38, 0.95);
+        background: rgba(28, 22, 10, 0.9);
+        box-shadow: 0 0 20px rgba(242, 204, 38, 0.68);
       }
       #hud-speed {
         font-family: var(--font-hud);
@@ -519,6 +566,57 @@
         height: 4px;
         background: rgba(255, 255, 255, 0.15);
         overflow: hidden;
+      }
+
+      /* ---------- Wall Compress -> Extend Cue & Live Context Trick Prompt ---------- */
+      .hud-action-pill {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%) skewX(-11deg);
+        font-family: var(--font-hud);
+        font-size: 14px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        white-space: nowrap;
+        padding: 4px 14px;
+        border-radius: 4px;
+        pointer-events: none;
+        z-index: 54;
+        opacity: 0;
+        transition: opacity 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
+      }
+      .hud-action-pill.visible {
+        opacity: 1;
+      }
+      #hud-wall-cue {
+        bottom: 108px;
+        background: rgba(14, 18, 24, 0.86);
+        color: #67e8f9;
+        border-left: 3px solid #22d3ee;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+      }
+      #hud-wall-cue.extend {
+        color: #fde047;
+        background: rgba(28, 22, 10, 0.92);
+        border: 1px solid rgba(242, 204, 38, 0.78);
+        border-left: 3px solid #f2cc26;
+        box-shadow: 0 0 18px rgba(242, 204, 38, 0.52), 0 4px 14px rgba(0, 0, 0, 0.55);
+      }
+      #hud-context-trick {
+        bottom: 142px;
+        background: rgba(16, 14, 12, 0.86);
+        color: #f8fafc;
+        border: 1px solid rgba(242, 116, 31, 0.55);
+        border-left: 3px solid var(--orange);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+      }
+      #hud-context-trick.is-snap,
+      #hud-context-trick.is-reverse360 {
+        color: #fde047;
+        border-color: rgba(242, 204, 38, 0.75);
+        border-left-color: #f2cc26;
+        box-shadow: 0 0 16px rgba(242, 204, 38, 0.42), 0 4px 14px rgba(0, 0, 0, 0.5);
       }
       #hud-combo-bar {
         width: 100%;
@@ -3361,6 +3459,19 @@
           padding: 5px 18px 5px 14px;
           top: 24%;
         }
+        .hud-action-pill {
+          font-size: 11.5px;
+          padding: 3px 10px;
+          max-width: min(44vw, 250px);
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        #hud-wall-cue {
+          bottom: calc(126px + env(safe-area-inset-bottom, 0px));
+        }
+        #hud-context-trick {
+          bottom: calc(156px + env(safe-area-inset-bottom, 0px));
+        }
       }
       @media (max-width: 900px) and (orientation: portrait) {
         #hud-combo-box {
@@ -3369,6 +3480,16 @@
         body.has-touch-controls #hud-combo-box,
         body.reel-mode.has-touch-controls #hud-combo-box {
           bottom: calc(246px + env(safe-area-inset-bottom, 0px));
+        }
+        body.has-touch-controls #hud-wall-cue,
+        body.reel-mode.has-touch-controls #hud-wall-cue {
+          bottom: calc(326px + env(safe-area-inset-bottom, 0px));
+          max-width: min(86vw, 300px);
+        }
+        body.has-touch-controls #hud-context-trick,
+        body.reel-mode.has-touch-controls #hud-context-trick {
+          bottom: calc(356px + env(safe-area-inset-bottom, 0px));
+          max-width: min(86vw, 300px);
         }
       }
 
@@ -3845,6 +3966,72 @@
       .tut-hud-card.is-celebrating .tut-hud-bar-fill {
         width: 100% !important;
         background: linear-gradient(90deg, #10b981, #34d399);
+      }
+
+      /* Step 3 Pump Rhythm Metronome Bar (~0.75s half-cycle) */
+      .tut-metronome {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 4px 0 2px;
+        padding: 4px 8px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(34, 211, 238, 0.28);
+      }
+      .tut-metronome.hidden {
+        display: none;
+      }
+      .tut-metro-arrow {
+        font-family: var(--font-hud);
+        font-size: 12px;
+        font-weight: 900;
+        color: #67e8f9;
+        line-height: 1;
+        user-select: none;
+      }
+      .tut-metro-track {
+        position: relative;
+        flex: 1;
+        height: 14px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.72);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        overflow: hidden;
+      }
+      .tut-metro-center {
+        position: absolute;
+        left: 50%;
+        top: 2px;
+        bottom: 2px;
+        width: 2px;
+        transform: translateX(-50%);
+        background: rgba(255, 255, 255, 0.28);
+        border-radius: 1px;
+      }
+      .tut-metro-runner {
+        position: absolute;
+        inset: 0 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        will-change: transform;
+        animation: tut-metro-oscillate 1.5s ease-in-out infinite;
+      }
+      .tut-metro-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #22d3ee, #facc15);
+        box-shadow: 0 0 10px rgba(34, 211, 238, 0.85), 0 0 4px rgba(250, 204, 21, 0.8);
+      }
+      @keyframes tut-metro-oscillate {
+        0%, 100% {
+          transform: translate3d(-50%, 0, 0);
+        }
+        50% {
+          transform: translate3d(50%, 0, 0);
+        }
       }
 
       @media (max-width: 1359px) and (min-width: 961px) and (min-height: 541px) {
@@ -6165,9 +6352,9 @@
                   </div>
                 </div>
                 <div class="help-item">
-                  <span class="help-key-tag">Q / W / A / S</span>
+                  <span class="help-key-tag" data-i18n="help.kbTricksKey">C (or Q/W/A/S)</span>
                   <div class="help-item-desc" data-i18n-html="help.kbTricks">
-                    <strong>Surf Tricks:</strong> Q = Snap, W = Layback, A = Bertslide, S = FS Reverse 360
+                    <strong>Smart Surf Trick [C]:</strong> Auto-triggers Snap, Bert Slide, Layback or FS 360 from your carve! (Direct: Q/W/A/S or O/P/K/L)
                   </div>
                 </div>
                 <div class="help-item">
@@ -6213,6 +6400,16 @@
           </div>
           <div class="tut-hud-prompt" id="tutorial-prompt"></div>
           <div class="tut-hud-hint" id="tutorial-hint"></div>
+          <div class="tut-metronome hidden" id="tutorial-metronome" aria-hidden="true">
+            <span class="tut-metro-arrow left">◀</span>
+            <div class="tut-metro-track">
+              <div class="tut-metro-center"></div>
+              <div class="tut-metro-runner">
+                <div class="tut-metro-dot"></div>
+              </div>
+            </div>
+            <span class="tut-metro-arrow right">▶</span>
+          </div>
           <div class="tut-hud-bar-track" aria-hidden="true">
             <div class="tut-hud-bar-fill" id="tutorial-bar-fill"></div>
           </div>
@@ -6482,10 +6679,15 @@
         <!-- Right-edge status / pump ribbon -->
         <div id="hud-pump-badge" class="pump-badge neutral">PERFECT PUMP</div>
 
+        <!-- Lower-center live Wall Pump Cue & Context Trick Prompt -->
+        <div id="hud-wall-cue" class="hud-action-pill" aria-live="polite"></div>
+        <div id="hud-context-trick" class="hud-action-pill" aria-live="polite"></div>
+
         <!-- Bottom Row: speedo + flow + lean | combo | tricks & options dock -->
         <div class="hud-bottom">
           <div class="bottom-left-cluster" id="hud-bottom-left">
             <div class="speedo" id="hud-speedo">
+              <span id="hud-pump-surge-tag" class="pump-surge-tag" aria-hidden="true">⚡ PUMP!</span>
               <span id="hud-speed">0</span>
               <span class="speedo-unit">KM/H</span>
             </div>
@@ -6543,6 +6745,7 @@
                 <div class="dock-section-title" data-i18n="dock.tricksTitle">Tricks</div>
                 <div id="dock-tricks-list">
                   <div id="dock-tricks-keyboard">
+                    <div class="trick-row"><span class="key">C</span><span class="trick-name">Smart Surf Trick</span><span class="trick-how">auto-picks Snap, Bert, Layback or 360</span></div>
                     <div class="trick-row"><span class="key">Q</span><span class="trick-name">Snap</span><span class="trick-how">top of a wall, right speed</span></div>
                     <div class="trick-row"><span class="key">W</span><span class="trick-name">Layback</span><span class="trick-how">hold in a fast, deep turn</span></div>
                     <div class="trick-row"><span class="key">A</span><span class="trick-name">Bertslide</span><span class="trick-how">hold while leaning into a turn</span></div>

@@ -60,6 +60,7 @@ class SurfskateMunichGame {
   public keys = new Set<string>();
   private autoFlowEnabled = false;
   private lastTime = performance.now();
+  private lastPumpEventSeq = 0;
 
   private graphicsPreset: GraphicsPreset =
     (localStorage.getItem('surfsk8.graphicsPreset') as GraphicsPreset) || 'auto';
@@ -650,8 +651,6 @@ class SurfskateMunichGame {
           this.setCameraStyle('mural');
         } else if (code === 'Digit4' || code === 'Numpad4' || code === 'KeyO') {
           this.setCameraStyle(this.surfCamera.cameraStyle === 'orbit' ? 'follow' : 'orbit');
-        } else if (code === 'KeyC') {
-          this.cycleCameraStyle();
         } else if (code === 'KeyR') {
           this.toggleAspectMode();
         } else if (code === 'KeyT') {
@@ -997,6 +996,7 @@ class SurfskateMunichGame {
     this.touchControls.setVisible(false);
     this.hud.updateCrewInteract(false, 'sepp', false);
     this.hud.hideCrewDialogue();
+    this.audio.stopSurfskateAudio();
     this.audio.pause();
     this.audio.playGarageMusic();
     this.slowMoTimer = 0;
@@ -1054,6 +1054,7 @@ class SurfskateMunichGame {
     this.progression.recordSessionScore(this.hud.totalScore);
     this.progression.resetSessionCounters();
     this.controller.resetToSpawn();
+    this.lastPumpEventSeq = this.controller.pumpEventSeq;
     this.surfCamera.reset(this.controller);
     this.hud.resetSession();
     this.controller.sessionTimerPaused = this.tutorial.isOpen();
@@ -1273,6 +1274,14 @@ class SurfskateMunichGame {
       : this.keys.has('KeyL') || this.keys.has('KeyB');
     const kbIndy =
       this.keys.has('KeyI') || (!this.controller.isGrounded && this.keys.has('Space'));
+    const kbContextTrick = this.keys.has('KeyC');
+    const touchContextTrick = Boolean(
+      touch.contextTrick ||
+        touch.snapTrick ||
+        touch.snapSlide ||
+        touch.laybackTrick ||
+        touch.reverseTrick
+    );
 
     const analogSteer =
       touch.analogSteer !== undefined && Math.abs(touch.analogSteer) > 0.05
@@ -1286,10 +1295,11 @@ class SurfskateMunichGame {
       compressCrouch: kbCrouch || touch.compressCrouch,
       jumpOllie: kbOllie || touch.jumpOllie,
       grindSlash: false,
-      snapTrick: kbSnap || touch.snapTrick,
-      laybackTrick: kbLayback || touch.laybackTrick,
-      snapSlide: kbSlide || touch.snapSlide,
-      reverseTrick: kbReverse || touch.reverseTrick,
+      snapTrick: kbSnap,
+      laybackTrick: kbLayback,
+      snapSlide: kbSlide,
+      reverseTrick: kbReverse,
+      contextTrick: kbContextTrick || touchContextTrick,
       indyGrabTrick:
         kbIndy ||
         touch.indyGrabTrick ||
@@ -1331,6 +1341,7 @@ class SurfskateMunichGame {
       snapTrick: this.controller.snapWindow === 'READY',
       laybackTrick: false,
       reverseTrick: false,
+      contextTrick: false,
       indyGrabTrick: !this.controller.isGrounded && this.controller.indyGrabReady,
     };
   }
@@ -1382,6 +1393,7 @@ class SurfskateMunichGame {
     const timeSec = now * 0.001;
 
     if (this.landingPage.isVisible) {
+      this.audio.stopSurfskateAudio();
       this.landingPage.update(timeSec, realDt);
       requestAnimationFrame((t) => this.animate(t));
       return;
@@ -1475,6 +1487,14 @@ class SurfskateMunichGame {
         this.triggerJetwashStunt();
       }
     });
+    if (this.controller.pumpEventSeq !== this.lastPumpEventSeq) {
+      this.lastPumpEventSeq = this.controller.pumpEventSeq;
+      this.audio.playPumpWhoosh(
+        Math.max(0.65, this.controller.lastPumpSurge),
+        this.controller.lastPumpType === 'wall'
+      );
+      this.hud.triggerPumpPulse(this.controller.lastPumpType);
+    }
     this.worldScene.update(timeSec);
     this.skaterVisuals.update(dt, this.controller);
     this.pretzels.update(dt, this.controller.position);
@@ -1601,7 +1621,26 @@ class SurfskateMunichGame {
       this.hud.getCurrentOrBestComboScore(),
       this.pretzels.collectedCount
     );
-    this.audio.update(this.controller);
+    const shouldStopSurfAudio =
+      document.hidden ||
+      this.landingPage.isVisible ||
+      this.hud.isSummaryModalOpen() ||
+      this.isScrollableModalOpen() ||
+      this.flowLine.isExportModalOpen() ||
+      this.landingPage.isLeaderboardModalOpen();
+
+    if (shouldStopSurfAudio) {
+      this.audio.stopSurfskateAudio();
+    } else {
+      this.audio.update(this.controller);
+      this.audio.updateSurfskateAudio(
+        this.controller.speed,
+        Math.abs(this.controller.leanAngle),
+        this.controller.isGrounded,
+        this.controller.isSlidingNow,
+        this.controller.railDriftIntensity
+      );
+    }
 
     const ctrlAny = this.controller as unknown as {
       sessionTimer?: number;
