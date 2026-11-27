@@ -560,7 +560,7 @@ export class SurfskateController {
     }
     this.prevSurfZoneActive = this.isSurfZoneActive;
 
-    for (const key of Object.keys(this.maneuverCooldowns)) {
+    for (const key in this.maneuverCooldowns) {
       this.maneuverCooldowns[key] = Math.max(0, this.maneuverCooldowns[key] - clampedDt);
     }
     if (this.pumpQualityTimer > 0) {

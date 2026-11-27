@@ -42,6 +42,10 @@ export class AirportFlyover {
   public static readonly FLYOVER_INTERVAL_SEC = 300; // 5 minutes
   private static readonly SHADOW_RADIUS = 12;
   private static readonly JETWASH_PULSE_DURATION = 0.85;
+  private static readonly AXIS_Z = new THREE.Vector3(0, 0, 1);
+
+  private readonly tmpPos = new THREE.Vector3();
+  private readonly tmpDir = new THREE.Vector3();
 
   private rootGroup = new THREE.Group();
   private airplaneGroup = new THREE.Group();
@@ -145,12 +149,17 @@ export class AirportFlyover {
       const progress = Math.min(1.0, this.flyoverElapsed / this.flyoverDuration);
 
       // Interpolate position along flight corridor
-      const currentPos = this.activeCorridor.start.clone().lerp(this.activeCorridor.end, progress);
+      const currentPos = this.tmpPos
+        .copy(this.activeCorridor.start)
+        .lerp(this.activeCorridor.end, progress);
       this.airplaneGroup.position.copy(currentPos);
 
       // Orientation: nose (+Z) faces flight direction with bank & pitch
-      const flightDir = this.activeCorridor.end.clone().sub(this.activeCorridor.start).normalize();
-      this.airplaneGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), flightDir);
+      const flightDir = this.tmpDir
+        .copy(this.activeCorridor.end)
+        .sub(this.activeCorridor.start)
+        .normalize();
+      this.airplaneGroup.quaternion.setFromUnitVectors(AirportFlyover.AXIS_Z, flightDir);
       this.airplaneGroup.rotateZ(this.activeCorridor.bankAngle);
       this.airplaneGroup.rotateX(this.activeCorridor.pitchAngle);
 

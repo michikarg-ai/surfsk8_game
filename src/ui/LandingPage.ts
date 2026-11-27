@@ -183,6 +183,11 @@ export class LandingPage {
   private langToggleBtnEl: HTMLElement | null = null;
   private settingsBtnEl: HTMLElement | null = null;
   private settingsPopoverEl: HTMLElement | null = null;
+  private lastBoardDisplaySig = '';
+  private lastProgressionSig = '';
+  private progressionDisplayDirty = false;
+  private boardDisplayDirty = false;
+  private readonly dummyUpNormal = new THREE.Vector3(0, 1, 0);
   private lastIsFs = false;
   private lastSoundActive = true;
   private lastQualityPreset = 'auto';
@@ -335,6 +340,8 @@ export class LandingPage {
   }
 
   private refreshLocalizedUI(): void {
+    this.lastBoardDisplaySig = '';
+    this.lastProgressionSig = '';
     this.updateLangToggleDisplay();
     this.updateBoardDisplay();
     if (this.modeDescEl) {
@@ -413,18 +420,16 @@ export class LandingPage {
   }
 
   public refreshBoardUnlocks(progress: BoardUnlockProgress): SurfBoardId[] {
-    const prevUnlocked = new Set(
-      SURF_BOARDS.filter((b) => isBoardUnlocked(b, this.boardUnlockProgress)).map((b) => b.id)
-    );
-    this.boardUnlockProgress = { ...progress };
-
     const newlyUnlocked: SurfBoardId[] = [];
-    for (const board of SURF_BOARDS) {
-      const unlockedNow = isBoardUnlocked(board, this.boardUnlockProgress);
-      if (this.hasInitializedBoardUnlocks && unlockedNow && !prevUnlocked.has(board.id)) {
+    for (let i = 0; i < SURF_BOARDS.length; i++) {
+      const board = SURF_BOARDS[i];
+      const wasUnlocked = this.hasInitializedBoardUnlocks && isBoardUnlocked(board, this.boardUnlockProgress);
+      const unlockedNow = isBoardUnlocked(board, progress);
+      if (this.hasInitializedBoardUnlocks && unlockedNow && !wasUnlocked) {
         newlyUnlocked.push(board.id);
       }
     }
+    this.boardUnlockProgress = { ...progress };
 
     if (!this.hasInitializedBoardUnlocks) {
       this.hasInitializedBoardUnlocks = true;
@@ -440,7 +445,11 @@ export class LandingPage {
       this.lastUnlockedBoardId = SURF_BOARDS[0].id;
     }
 
-    this.updateBoardDisplay();
+    if (this.isVisible) {
+      this.updateBoardDisplay();
+    } else {
+      this.boardDisplayDirty = true;
+    }
     return newlyUnlocked;
   }
 
@@ -448,20 +457,34 @@ export class LandingPage {
     const board = this.getPreviewedBoard();
     const unlocked = isBoardUnlocked(board, this.boardUnlockProgress);
     const isGold = board.id === 'golden_pretzel';
+    const statCarve = t('board.statCarve');
+    const statSpeed = t('board.statSpeed');
+    const statPop = t('board.statPop');
+    const taglineText = t(board.taglineKey);
+    const lockText = !unlocked && board.unlockKey ? t(board.unlockKey) : '';
+    const sig = `${board.id}|${unlocked ? 1 : 0}|${statCarve}|${statSpeed}|${statPop}|${taglineText}|${lockText}`;
+
+    if (sig === this.lastBoardDisplaySig) {
+      this.boardDisplayDirty = false;
+      this.skaterVisuals.setBoardSpec(board);
+      return;
+    }
+    this.lastBoardDisplaySig = sig;
+    this.boardDisplayDirty = false;
 
     if (this.boardNameEl) {
       this.boardNameEl.textContent = board.name;
       this.boardNameEl.classList.toggle('is-gold', isGold);
     }
     if (this.boardTaglineEl) {
-      this.boardTaglineEl.textContent = t(board.taglineKey);
+      this.boardTaglineEl.textContent = taglineText;
       this.boardTaglineEl.classList.toggle('is-gold', isGold);
     }
     if (this.boardStatsEl) {
       const labels = [
-        `${t('board.statCarve')} ${board.stats.carve}`,
-        `${t('board.statSpeed')} ${board.stats.speed}`,
-        `${t('board.statPop')} ${board.stats.pop}`,
+        `${statCarve} ${board.stats.carve}`,
+        `${statSpeed} ${board.stats.speed}`,
+        `${statPop} ${board.stats.pop}`,
       ];
       const spans = this.boardStatsEl.querySelectorAll('span');
       if (spans.length === labels.length) {
@@ -485,7 +508,7 @@ export class LandingPage {
       this.boardLockBadgeEl.classList.toggle('hidden', unlocked);
     }
     if (this.boardLockTextEl) {
-      this.boardLockTextEl.textContent = !unlocked && board.unlockKey ? t(board.unlockKey) : '';
+      this.boardLockTextEl.textContent = lockText;
     }
 
     // Live-update 3D board showcase on Landing Page
@@ -698,15 +721,32 @@ export class LandingPage {
   public updateProgressionDisplay(rank: SkaterRankInfo, missions: SurfMission[]): void {
     this.lastRank = rank;
     this.lastMissions = missions;
+    const doneText = t('common.done');
+    let sig = `${rank.level}|${rank.fullLabel}|${doneText}`;
+    let done = 0;
+    for (let i = 0; i < missions.length; i++) {
+      const m = missions[i];
+      if (m.completed) done++;
+      sig += `|${m.id}:${m.progress}:${m.completed ? 1 : 0}:${m.shortTitle}`;
+    }
+    if (sig === this.lastProgressionSig) {
+      this.progressionDisplayDirty = false;
+      return;
+    }
+    if (!this.isVisible) {
+      this.progressionDisplayDirty = true;
+      return;
+    }
+    this.lastProgressionSig = sig;
+    this.progressionDisplayDirty = false;
+
     if (this.rankBadgeEl) {
       this.rankBadgeEl.textContent = rank.fullLabel;
     }
     if (this.missionsCountEl) {
-      const done = missions.filter((m) => m.completed).length;
       this.missionsCountEl.textContent = t('landing.missionsCount', { done, total: missions.length });
     }
     if (this.missionsListEl) {
-      const doneText = t('common.done');
       this.missionsListEl.innerHTML = missions
         .map((m) => {
           const check = m.completed ? '☑️' : '⬜';
@@ -1587,7 +1627,12 @@ export class LandingPage {
     this.closeSettingsPopover();
     this.overlayEl.classList.remove('hidden');
     this.updateSkaterDisplay();
-    this.updateBoardDisplay();
+    if (this.boardDisplayDirty || !this.lastBoardDisplaySig) {
+      this.updateBoardDisplay();
+    }
+    if (this.progressionDisplayDirty && this.lastRank) {
+      this.updateProgressionDisplay(this.lastRank, this.lastMissions);
+    }
     this.syncRiderNameInput();
     this.updateActiveSectionVisuals();
     this.handleResize();
@@ -1688,7 +1733,7 @@ export class LandingPage {
       height: 0.0,
       slopeX: 0.0,
       slopeZ: 0.0,
-      normal: new THREE.Vector3(0, 1, 0),
+      normal: this.dummyUpNormal,
       curvature: 0.0,
       isNearCoping: false,
       copingHeight: 0.0,

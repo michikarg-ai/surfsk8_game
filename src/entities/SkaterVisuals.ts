@@ -130,6 +130,26 @@ export class SkaterVisuals {
   private nextParticleIdx = 0;
   private readonly maxParticles = 700;
   private prevSpray = 0;
+  private hasActiveParticles = false;
+  private trailElapsedSec = 0;
+
+  // Pre-allocated scratch math objects (zero per-frame heap allocations)
+  private readonly tmpForward = new THREE.Vector3();
+  private readonly tmpUp = new THREE.Vector3();
+  private readonly tmpWorldUp = new THREE.Vector3(0, 1, 0);
+  private readonly tmpRight = new THREE.Vector3();
+  private readonly tmpOrthoForward = new THREE.Vector3();
+  private readonly tmpNegOrthoForward = new THREE.Vector3();
+  private readonly tmpRotMatrix = new THREE.Matrix4();
+  private readonly tmpWorldVel = new THREE.Vector3();
+  private readonly tmpTargetWind = new THREE.Vector3();
+  private readonly tmpTargetInertia = new THREE.Vector3();
+  private readonly tmpFwd = new THREE.Vector3();
+  private readonly tmpParticlePos = new THREE.Vector3();
+  private readonly tmpParticleVel = new THREE.Vector3();
+  private readonly tmpTrailLift = new THREE.Vector3();
+  private readonly tmpTrailL = new THREE.Vector3();
+  private readonly tmpTrailR = new THREE.Vector3();
 
   // Dual urethane wheel carve ribbon trail on the concrete
   public trailMesh: THREE.Mesh;
@@ -232,6 +252,7 @@ export class SkaterVisuals {
     });
     this.particleMesh = new THREE.Points(pGeo, pMat);
     this.particleMesh.frustumCulled = false;
+    this.particleMesh.visible = false;
     scene.add(this.particleMesh);
 
     // Initialize urethane carve line ribbon with vertex colors for thanelines & overdrive shimmer
@@ -426,6 +447,7 @@ export class SkaterVisuals {
   }
 
   public setBoardSpec(board: SurfBoardSpec): void {
+    if (this.activeBoardSpec.id === board.id) return;
     this.activeBoardSpec = board;
     this.applyBoardVisuals();
   }
@@ -567,7 +589,6 @@ export class SkaterVisuals {
         this.activeWheelMat.emissive.setRGB(0, 0, 0);
         this.activeWheelMat.emissiveIntensity = 0;
       }
-      this.activeWheelMat.needsUpdate = true;
     }
   }
 
@@ -1579,15 +1600,19 @@ export class SkaterVisuals {
 
     // Board yaw relative to travel: tail slid out (Bert slide) or the full FS Reverse 360 spin
     const visHeading = ctrl.heading + ctrl.boardYawOffset;
-    const forward = new THREE.Vector3(-Math.sin(visHeading), 0, -Math.cos(visHeading)).normalize();
-    const up = ctrl.isGrounded
-      ? ctrl.currentSurface.normal.clone().lerp(new THREE.Vector3(0, 1, 0), 0.32).normalize()
-      : new THREE.Vector3(0, 1, 0);
-    const right = new THREE.Vector3().crossVectors(forward, up).normalize();
-    const orthoForward = new THREE.Vector3().crossVectors(up, right).normalize();
+    const forward = this.tmpForward.set(-Math.sin(visHeading), 0, -Math.cos(visHeading)).normalize();
+    const up = this.tmpUp;
+    if (ctrl.isGrounded) {
+      up.copy(ctrl.currentSurface.normal).lerp(this.tmpWorldUp, 0.32).normalize();
+    } else {
+      up.set(0, 1, 0);
+    }
+    const right = this.tmpRight.crossVectors(forward, up).normalize();
+    const orthoForward = this.tmpOrthoForward.crossVectors(up, right).normalize();
+    const negOrthoForward = this.tmpNegOrthoForward.copy(orthoForward).negate();
 
-    const rotMatrix = new THREE.Matrix4().makeBasis(right, up, orthoForward.clone().negate());
-    this.root.quaternion.setFromRotationMatrix(rotMatrix);
+    this.tmpRotMatrix.makeBasis(right, up, negOrthoForward);
+    this.root.quaternion.setFromRotationMatrix(this.tmpRotMatrix);
 
     // 2. Deck Lean (`DeckMesh`) and board separation during bail
     if (this.boardGroup) {
@@ -1668,21 +1693,17 @@ export class SkaterVisuals {
       this.hairElapsed += dt;
 
       // Compute world travel velocity of the skater
-      let worldVel: THREE.Vector3;
+      const worldVel = this.tmpWorldVel;
       if (ctrl.isGrounded) {
         const pitch = ctrl.pitchAngle || 0;
         const vy = Math.sin(pitch) * ctrl.speed;
-        worldVel = new THREE.Vector3(
-          -Math.sin(ctrl.heading) * ctrl.speed,
-          vy,
-          -Math.cos(ctrl.heading) * ctrl.speed
-        );
+        worldVel.set(-Math.sin(ctrl.heading) * ctrl.speed, vy, -Math.cos(ctrl.heading) * ctrl.speed);
       } else {
-        worldVel = ctrl.velocity.clone();
+        worldVel.copy(ctrl.velocity);
       }
 
       // Apparent wind blows opposite to movement direction
-      const targetWind = worldVel.clone().negate();
+      const targetWind = this.tmpTargetWind.copy(worldVel).negate();
       if (ctrl.speed < 0.2) {
         // At standstill / calm, let hair rest naturally
         targetWind.set(0, 0, 0);
@@ -1693,7 +1714,7 @@ export class SkaterVisuals {
 
       // Centrifugal inertia: slight outward lag during sharp carves
       const turnRate = ctrl.smoothedYawRate || 0;
-      const targetInertia = right.clone().multiplyScalar(-turnRate * ctrl.speed * 0.08);
+      const targetInertia = this.tmpTargetInertia.copy(right).multiplyScalar(-turnRate * ctrl.speed * 0.08);
       this.smoothedHairInertia.lerp(targetInertia, Math.min(1.0, dt * 10.0));
 
       const flutterIntensity =
@@ -1735,8 +1756,8 @@ export class SkaterVisuals {
       ? (r() < 0.5 ? 0.24 : -0.24) + (r() - 0.5) * 0.08
       : -0.32 + r() * 0.42;
     const wheelTrack = isRearDrift ? 0.105 : isPumpFlash ? 0.10 : 0.12;
-    const p = ctrl.position
-      .clone()
+    const p = this.tmpParticlePos
+      .copy(ctrl.position)
       .addScaledVector(fwd, along)
       .addScaledVector(right, side * (wheelTrack + r() * (isRearDrift ? 0.03 : 0.05)))
       .addScaledVector(up, (isRearDrift ? 0.028 : isPumpFlash ? 0.035 : 0.05) + r() * (isRearDrift ? 0.02 : 0.04));
@@ -1761,14 +1782,16 @@ export class SkaterVisuals {
     } else {
       out = 2.2 + r() * 4.0; lift = 1.8 + r() * 3.6; back = 0.2 + r() * 1.4 + speedCarry; jitter = 0.9;
     }
-    const v = new THREE.Vector3()
+    const v = this.tmpParticleVel
+      .set(0, 0, 0)
       .addScaledVector(right, side * out)
       .addScaledVector(up, lift)
-      .addScaledVector(fwd, -back)
-      .add(new THREE.Vector3((r() - 0.5) * jitter, (r() - 0.5) * jitter * 0.5, (r() - 0.5) * jitter));
-    this.particleVelocities[i3] = v.x;
-    this.particleVelocities[i3 + 1] = v.y;
-    this.particleVelocities[i3 + 2] = v.z;
+      .addScaledVector(fwd, -back);
+    this.particleVelocities[i3] = v.x + (r() - 0.5) * jitter;
+    this.particleVelocities[i3 + 1] = v.y + (r() - 0.5) * jitter * 0.5;
+    this.particleVelocities[i3 + 2] = v.z + (r() - 0.5) * jitter;
+    this.hasActiveParticles = true;
+    this.particleMesh.visible = true;
 
     let cr: number, cg: number, cb: number, size: number, life: number, alpha: number;
     if (kind === 4) {
@@ -1833,9 +1856,10 @@ export class SkaterVisuals {
     right: THREE.Vector3,
     up: THREE.Vector3
   ): void {
+    this.trailElapsedSec += dt;
     // Emit spray during snaps / slides / reverses, sparks during coping grinds.
     const spray = ctrl.sprayIntensity;
-    const fwd = new THREE.Vector3(-Math.sin(ctrl.heading), 0, -Math.cos(ctrl.heading));
+    const fwd = this.tmpFwd.set(-Math.sin(ctrl.heading), 0, -Math.cos(ctrl.heading));
     // Spray flies off the OUTSIDE rail of the turn, like water off a surfboard
     const side = -Math.sign(ctrl.leanAngle || 1);
     if (ctrl.isGrinding) {
@@ -1881,56 +1905,68 @@ export class SkaterVisuals {
       }
     }
 
-    for (let i = 0; i < this.maxParticles; i++) {
-      if (this.particleLife[i] <= 0) {
-        this.particleAlpha[i] = 0;
-        continue;
-      }
-      this.particleLife[i] -= dt;
-      const kind = this.particleKind[i];
-      const t = Math.max(0, this.particleLife[i] / this.particleMaxLife[i]); // 1 -> 0
-      const i3 = i * 3;
-      const gravity = kind === 1 ? 0.6 : kind === 3 ? 0.4 : kind === 4 ? 5.5 : kind === 2 ? 6.0 : 7.5;
-      const drag = kind === 1 ? 2.6 : kind === 3 ? 3.2 : kind === 4 ? 1.2 : kind === 2 ? 0.6 : 1.1;
-      const dk = Math.exp(-drag * dt);
-      this.particleVelocities[i3] *= dk;
-      this.particleVelocities[i3 + 2] *= dk;
-      this.particleVelocities[i3 + 1] = this.particleVelocities[i3 + 1] * dk - gravity * dt;
-      this.particlePositions[i3] += this.particleVelocities[i3] * dt;
-      this.particlePositions[i3 + 1] += this.particleVelocities[i3 + 1] * dt;
-      this.particlePositions[i3 + 2] += this.particleVelocities[i3 + 2] * dt;
+    if (this.hasActiveParticles) {
+      let anyAlive = false;
+      for (let i = 0; i < this.maxParticles; i++) {
+        if (this.particleLife[i] <= 0) {
+          this.particleAlpha[i] = 0;
+          continue;
+        }
+        this.particleLife[i] -= dt;
+        const kind = this.particleKind[i];
+        const t = Math.max(0, this.particleLife[i] / this.particleMaxLife[i]); // 1 -> 0
+        const i3 = i * 3;
+        const gravity = kind === 1 ? 0.6 : kind === 3 ? 0.4 : kind === 4 ? 5.5 : kind === 2 ? 6.0 : 7.5;
+        const drag = kind === 1 ? 2.6 : kind === 3 ? 3.2 : kind === 4 ? 1.2 : kind === 2 ? 0.6 : 1.1;
+        const dk = Math.exp(-drag * dt);
+        this.particleVelocities[i3] *= dk;
+        this.particleVelocities[i3 + 2] *= dk;
+        this.particleVelocities[i3 + 1] = this.particleVelocities[i3 + 1] * dk - gravity * dt;
+        this.particlePositions[i3] += this.particleVelocities[i3] * dt;
+        this.particlePositions[i3 + 1] += this.particleVelocities[i3 + 1] * dt;
+        this.particlePositions[i3 + 2] += this.particleVelocities[i3 + 2] * dt;
 
-      if (kind === 1) {
-        // Mist puffs swell and fade softly
-        this.particleSize[i] = this.particleBaseSize[i] * (1 + (1 - t) * 2.2);
-        this.particleAlpha[i] = this.particleBaseAlpha[i] * Math.sin(Math.PI * Math.min(1, (1 - t) * 1.4 + 0.15)) * t;
-      } else if (kind === 3) {
-        // Rear urethane drift wisps expand gently and dissipate
-        this.particleSize[i] = this.particleBaseSize[i] * (1 + (1 - t) * 1.35);
-        this.particleAlpha[i] = this.particleBaseAlpha[i] * Math.sin(Math.PI * Math.min(1, (1 - t) * 1.3 + 0.15)) * t;
-      } else if (kind === 2 || kind === 4) {
-        // Sparks & micro-sparks flicker and shrink
-        this.particleSize[i] = this.particleBaseSize[i] * (0.4 + 0.6 * t);
-        this.particleAlpha[i] = this.particleBaseAlpha[i] * t * (0.7 + 0.3 * Math.random());
-      } else {
-        // Droplets shrink a little and fade out
-        this.particleSize[i] = this.particleBaseSize[i] * (0.55 + 0.45 * t);
-        this.particleAlpha[i] = this.particleBaseAlpha[i] * Math.pow(t, 0.8);
+        if (kind === 1) {
+          // Mist puffs swell and fade softly
+          this.particleSize[i] = this.particleBaseSize[i] * (1 + (1 - t) * 2.2);
+          this.particleAlpha[i] = this.particleBaseAlpha[i] * Math.sin(Math.PI * Math.min(1, (1 - t) * 1.4 + 0.15)) * t;
+        } else if (kind === 3) {
+          // Rear urethane drift wisps expand gently and dissipate
+          this.particleSize[i] = this.particleBaseSize[i] * (1 + (1 - t) * 1.35);
+          this.particleAlpha[i] = this.particleBaseAlpha[i] * Math.sin(Math.PI * Math.min(1, (1 - t) * 1.3 + 0.15)) * t;
+        } else if (kind === 2 || kind === 4) {
+          // Sparks & micro-sparks flicker and shrink
+          this.particleSize[i] = this.particleBaseSize[i] * (0.4 + 0.6 * t);
+          this.particleAlpha[i] = this.particleBaseAlpha[i] * t * (0.7 + 0.3 * Math.random());
+        } else {
+          // Droplets shrink a little and fade out
+          this.particleSize[i] = this.particleBaseSize[i] * (0.55 + 0.45 * t);
+          this.particleAlpha[i] = this.particleBaseAlpha[i] * Math.pow(t, 0.8);
+        }
+        if (this.particleLife[i] <= 0) {
+          this.particleAlpha[i] = 0;
+        } else {
+          anyAlive = true;
+        }
       }
-      if (this.particleLife[i] <= 0) this.particleAlpha[i] = 0;
+      const attrs = this.particleMesh.geometry.attributes;
+      attrs.position.needsUpdate = true;
+      attrs.color.needsUpdate = true;
+      attrs.aSize.needsUpdate = true;
+      attrs.aAlpha.needsUpdate = true;
+
+      if (!anyAlive) {
+        this.hasActiveParticles = false;
+        this.particleMesh.visible = false;
+      }
     }
-    const attrs = this.particleMesh.geometry.attributes;
-    attrs.position.needsUpdate = true;
-    attrs.color.needsUpdate = true;
-    attrs.aSize.needsUpdate = true;
-    attrs.aAlpha.needsUpdate = true;
 
     // Update carve ribbon trail when grounded and moving
     if (ctrl.isGrounded && ctrl.speed > 1.2) {
       const halfW = 0.095 + Math.abs(ctrl.leanAngle) * 0.08;
-      const lift = up.clone().multiplyScalar(0.025);
-      const pL = ctrl.position.clone().addScaledVector(right, -halfW).add(lift);
-      const pR = ctrl.position.clone().addScaledVector(right, halfW).add(lift);
+      const lift = this.tmpTrailLift.copy(up).multiplyScalar(0.025);
+      const pL = this.tmpTrailL.copy(ctrl.position).addScaledVector(right, -halfW).add(lift);
+      const pR = this.tmpTrailR.copy(ctrl.position).addScaledVector(right, halfW).add(lift);
 
       // Determine Thaneline / Overdrive color for new vertices
       const isBertOrLayback = ctrl.bertSlideActive || ctrl.laybackActive;
@@ -1949,7 +1985,7 @@ export class SkaterVisuals {
       let rR = 0.11, rG = 0.12, rB = 0.14;
 
       if (hasGoldTrail) {
-        const goldPulse = Math.sin(performance.now() * 0.011) * 0.5 + 0.5;
+        const goldPulse = Math.sin(this.trailElapsedSec * 11.0) * 0.5 + 0.5;
         lR = 1.0;
         lG = THREE.MathUtils.lerp(0.68, 0.88, goldPulse);
         lB = THREE.MathUtils.lerp(0.12, 0.34, goldPulse);
@@ -1987,7 +2023,7 @@ export class SkaterVisuals {
 
       if (isSurfZone) {
         // Cyan-Gold Overdrive Shimmer under the board (pure champagne-gold shimmer on Golden Pretzel Pro)
-        const shimmer = Math.sin(performance.now() * 0.009) * 0.5 + 0.5;
+        const shimmer = Math.sin(this.trailElapsedSec * 9.0) * 0.5 + 0.5;
         const cyanR = hasGoldTrail ? 1.0 : 0.0;
         const cyanG = hasGoldTrail ? 0.94 : 0.9;
         const cyanB = hasGoldTrail ? 0.52 : 1.0;

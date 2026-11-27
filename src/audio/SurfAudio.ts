@@ -27,6 +27,24 @@ export class SurfAudio {
   private surfSlideGain: GainNode | null = null;
   private surfNodesReady = false;
 
+  // Throttle resume attempts and gate redundant AudioParam automation events
+  private lastResumeAttemptMs = 0;
+  private surfLayersSilenced = true;
+  private surfSlideSilenced = true;
+  private legacyAudioSilenced = true;
+  private lastLegacyRollFreq = -1;
+  private lastLegacyRollGain = -1;
+  private lastLegacySlideGain = -1;
+  private lastSurfRollFreq = -1;
+  private lastSurfRollGain = -1;
+  private lastSurfCarveFreq = -1;
+  private lastSurfCarveQ = -1;
+  private lastSurfCarveGain = -1;
+  private lastSurfSlideFreq = -1;
+  private lastSurfGritFreq = -1;
+  private lastSurfGritOscFreq = -1;
+  private lastSurfSlideGain = -1;
+
   private isMuted = false;
   private isPaused = true;
 
@@ -185,6 +203,9 @@ export class SurfAudio {
       this.slideGain.gain.setValueAtTime(0, now);
       this.slideGain.gain.value = 0;
     }
+    this.legacyAudioSilenced = true;
+    this.lastLegacyRollGain = 0;
+    this.lastLegacySlideGain = 0;
     if (this.masterGain) {
       this.masterGain.gain.cancelScheduledValues(now);
       this.masterGain.gain.setValueAtTime(0, now);
@@ -246,11 +267,35 @@ export class SurfAudio {
     }
   }
 
+  private tryAutoResume(): void {
+    if (!this.ctx || this.ctx.state !== 'suspended' || this.isPaused || this.isMuted) return;
+    const nowMs = performance.now();
+    if (nowMs - this.lastResumeAttemptMs < 1000) return;
+    this.lastResumeAttemptMs = nowMs;
+    this.ctx.resume().catch(() => {});
+  }
+
+  private setParamTarget(
+    param: AudioParam,
+    target: number,
+    now: number,
+    timeConstant: number,
+    lastValue: number,
+    eps: number
+  ): number {
+    if (Math.abs(target - lastValue) <= eps) {
+      return lastValue;
+    }
+    param.setTargetAtTime(target, now, timeConstant);
+    return target;
+  }
+
   public update(ctrl: SurfskateController): void {
     if (!this.ctx || !this.rollGain || !this.rollFilter || !this.slideGain || this.isMuted || this.isPaused) return;
 
-    if (this.ctx.state === 'suspended') {
-      this.ctx.resume().catch(() => {});
+    if (this.ctx.state !== 'running') {
+      this.tryAutoResume();
+      return;
     }
     if (this.masterGain && this.masterGain.gain.value < 0.5) {
       this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
@@ -262,11 +307,35 @@ export class SurfAudio {
     const speedNorm = Math.min(1.0, ctrl.speed / 12.0);
     const carveBoost = 1.0 + Math.abs(ctrl.leanAngle) * 0.9;
 
-    this.rollFilter.frequency.setTargetAtTime(110 + speedNorm * 290 * carveBoost, now, 0.05);
-    this.rollGain.gain.setTargetAtTime(groundedFactor * speedNorm * 0.14, now, 0.05);
+    const targetRollFreq = 110 + speedNorm * 290 * carveBoost;
+    const targetRollGain = groundedFactor * speedNorm * 0.14;
+    const targetSlideGain = ctrl.isGrinding ? 0.22 : ctrl.sprayIntensity * 0.18;
 
-    const slideIntensity = ctrl.isGrinding ? 0.22 : ctrl.sprayIntensity * 0.18;
-    this.slideGain.gain.setTargetAtTime(slideIntensity, now, 0.04);
+    this.lastLegacyRollFreq = this.setParamTarget(
+      this.rollFilter.frequency,
+      targetRollFreq,
+      now,
+      0.05,
+      this.lastLegacyRollFreq,
+      1.0
+    );
+    this.lastLegacyRollGain = this.setParamTarget(
+      this.rollGain.gain,
+      targetRollGain,
+      now,
+      0.05,
+      this.lastLegacyRollGain,
+      0.002
+    );
+    this.lastLegacySlideGain = this.setParamTarget(
+      this.slideGain.gain,
+      targetSlideGain,
+      now,
+      0.04,
+      this.lastLegacySlideGain,
+      0.002
+    );
+    this.legacyAudioSilenced = targetRollGain <= 0.001 && targetSlideGain <= 0.001;
   }
 
   private ensureSurfskateNodes(): boolean {
@@ -368,15 +437,21 @@ export class SurfAudio {
   }
 
   private rampSurfskateLayersToZero(now: number, timeConstant: number): void {
+    if (this.surfLayersSilenced || !this.ctx || this.ctx.state !== 'running') return;
     if (this.surfRollGain) {
       this.surfRollGain.gain.setTargetAtTime(0, now, timeConstant);
     }
     if (this.surfCarveGain) {
       this.surfCarveGain.gain.setTargetAtTime(0, now, timeConstant);
     }
-    if (this.surfSlideGain) {
+    if (this.surfSlideGain && !this.surfSlideSilenced) {
       this.surfSlideGain.gain.setTargetAtTime(0, now, timeConstant);
     }
+    this.surfLayersSilenced = true;
+    this.surfSlideSilenced = true;
+    this.lastSurfRollGain = 0;
+    this.lastSurfCarveGain = 0;
+    this.lastSurfSlideGain = 0;
   }
 
   /**
@@ -395,6 +470,11 @@ export class SurfAudio {
     if (!this.ctx || !this.masterGain) return;
     if (!this.ensureSurfskateNodes()) return;
 
+    if (this.ctx.state !== 'running') {
+      this.tryAutoResume();
+      return;
+    }
+
     const now = this.ctx.currentTime;
 
     if (this.isMuted || this.isPaused) {
@@ -402,9 +482,6 @@ export class SurfAudio {
       return;
     }
 
-    if (this.ctx.state === 'suspended') {
-      this.ctx.resume().catch(() => {});
-    }
     if (this.masterGain.gain.value < 0.5) {
       this.masterGain.gain.setTargetAtTime(1.0, now, 0.02);
     }
@@ -418,6 +495,8 @@ export class SurfAudio {
       return;
     }
 
+    this.surfLayersSilenced = false;
+
     const speedNorm = Math.min(1, Math.max(0, (safeSpeed - 0.3) / 9.2));
     const leanNorm = Math.min(1, safeLean / 0.7);
     const driftNorm = Math.min(1, safeDrift);
@@ -426,8 +505,22 @@ export class SurfAudio {
     if (this.surfRollFilter && this.surfRollGain) {
       const rollFreq = 95 + speedNorm * 230 + leanNorm * 45;
       const rollTarget = 0.016 + speedNorm * 0.055;
-      this.surfRollFilter.frequency.setTargetAtTime(rollFreq, now, 0.055);
-      this.surfRollGain.gain.setTargetAtTime(rollTarget, now, 0.05);
+      this.lastSurfRollFreq = this.setParamTarget(
+        this.surfRollFilter.frequency,
+        rollFreq,
+        now,
+        0.055,
+        this.lastSurfRollFreq,
+        1.0
+      );
+      this.lastSurfRollGain = this.setParamTarget(
+        this.surfRollGain.gain,
+        rollTarget,
+        now,
+        0.05,
+        this.lastSurfRollGain,
+        0.001
+      );
     }
 
     // 2. Urethane Rail-Grip Carve Sound
@@ -436,23 +529,75 @@ export class SurfAudio {
       const carveFreq = 450 + carveLoad * 520 + speedNorm * 130;
       const carveQ = 1.8 + driftNorm * 1.1;
       const carveTarget = speedNorm * Math.pow(carveLoad, 1.35) * 0.11;
-      this.surfCarveFilter.frequency.setTargetAtTime(carveFreq, now, 0.05);
-      this.surfCarveFilter.Q.setTargetAtTime(carveQ, now, 0.05);
-      this.surfCarveGain.gain.setTargetAtTime(carveTarget, now, 0.045);
+      this.lastSurfCarveFreq = this.setParamTarget(
+        this.surfCarveFilter.frequency,
+        carveFreq,
+        now,
+        0.05,
+        this.lastSurfCarveFreq,
+        1.5
+      );
+      this.lastSurfCarveQ = this.setParamTarget(
+        this.surfCarveFilter.Q,
+        carveQ,
+        now,
+        0.05,
+        this.lastSurfCarveQ,
+        0.02
+      );
+      this.lastSurfCarveGain = this.setParamTarget(
+        this.surfCarveGain.gain,
+        carveTarget,
+        now,
+        0.045,
+        this.lastSurfCarveGain,
+        0.001
+      );
     }
 
     // 3. Urethane Slide Screech (Bert Slide / Layback / Snap)
     if (this.surfSlideFilter && this.surfSlideGain && this.surfSlideGritOsc && this.surfSlideGritFilter) {
       if (isSliding) {
+        this.surfSlideSilenced = false;
         const slideEnergy = Math.min(1, 0.45 + speedNorm * 0.4 + driftNorm * 0.35);
         const slideFreq = Math.min(2400, 1250 + speedNorm * 750 + driftNorm * 380);
         const gritOscFreq = 210 + speedNorm * 130 + leanNorm * 40;
-        this.surfSlideFilter.frequency.setTargetAtTime(slideFreq, now, 0.03);
-        this.surfSlideGritFilter.frequency.setTargetAtTime(Math.min(2400, slideFreq * 1.05), now, 0.03);
-        this.surfSlideGritOsc.frequency.setTargetAtTime(gritOscFreq, now, 0.04);
-        this.surfSlideGain.gain.setTargetAtTime(slideEnergy * 0.16, now, 0.015);
-      } else {
+        this.lastSurfSlideFreq = this.setParamTarget(
+          this.surfSlideFilter.frequency,
+          slideFreq,
+          now,
+          0.03,
+          this.lastSurfSlideFreq,
+          2.0
+        );
+        this.lastSurfGritFreq = this.setParamTarget(
+          this.surfSlideGritFilter.frequency,
+          Math.min(2400, slideFreq * 1.05),
+          now,
+          0.03,
+          this.lastSurfGritFreq,
+          2.0
+        );
+        this.lastSurfGritOscFreq = this.setParamTarget(
+          this.surfSlideGritOsc.frequency,
+          gritOscFreq,
+          now,
+          0.04,
+          this.lastSurfGritOscFreq,
+          1.0
+        );
+        this.lastSurfSlideGain = this.setParamTarget(
+          this.surfSlideGain.gain,
+          slideEnergy * 0.16,
+          now,
+          0.015,
+          this.lastSurfSlideGain,
+          0.001
+        );
+      } else if (!this.surfSlideSilenced) {
         // ~80ms smooth fade-out when slide ends
+        this.surfSlideSilenced = true;
+        this.lastSurfSlideGain = 0;
         this.surfSlideGain.gain.setTargetAtTime(0, now, 0.025);
       }
     }
@@ -463,14 +608,20 @@ export class SurfAudio {
    * (used for pause, landing page, or summary modal transitions).
    */
   public stopSurfskateAudio(): void {
-    if (!this.ctx) return;
+    if (!this.ctx || this.ctx.state !== 'running') return;
+    if (this.surfLayersSilenced && this.legacyAudioSilenced) return;
     const now = this.ctx.currentTime;
     this.rampSurfskateLayersToZero(now, 0.015);
-    if (this.rollGain) {
-      this.rollGain.gain.setTargetAtTime(0, now, 0.015);
-    }
-    if (this.slideGain) {
-      this.slideGain.gain.setTargetAtTime(0, now, 0.015);
+    if (!this.legacyAudioSilenced) {
+      if (this.rollGain) {
+        this.rollGain.gain.setTargetAtTime(0, now, 0.015);
+      }
+      if (this.slideGain) {
+        this.slideGain.gain.setTargetAtTime(0, now, 0.015);
+      }
+      this.legacyAudioSilenced = true;
+      this.lastLegacyRollGain = 0;
+      this.lastLegacySlideGain = 0;
     }
   }
 

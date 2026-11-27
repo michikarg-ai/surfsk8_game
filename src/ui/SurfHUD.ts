@@ -101,6 +101,45 @@ export class SurfHUD {
   private wantedBustedFillEl: HTMLElement | null = null;
   private lastCrewInteract?: { canInteract: boolean; npcId: 'sepp' | 'michi'; isTouch: boolean };
   private lastWantedOutlawVisible = false;
+  private landingOverlayEl: HTMLElement | null = null;
+  private wantedOutlawSpanEl: HTMLElement | null = null;
+
+  // Per-frame dirty-check caches to eliminate redundant DOM writes / layout reflows
+  private lastComboBarScale = -1;
+  private lastTimerText = '';
+  private lastTimerUrgent = false;
+  private lastTimerOvertime = false;
+  private lastSessionBlockOvertime = false;
+  private lastSessionBlockZen = false;
+  private lastSessionLabelText = '';
+  private lastSpeedRounded = -1;
+  private lastSpeedRedline = false;
+  private lastFlowPct = -1;
+  private lastFlowSpecialReady = false;
+  private lastFlowSurfZone = false;
+  private lastFlowTitleText = '';
+  private lastFlowActiveSegs = -1;
+  private lastPumpBadgeClass = 'pump-badge neutral';
+  private lastPumpBadgeText = '';
+  private lastTruckYawDeg = Number.NaN;
+  private lastLeanDegAbs = -1;
+  private lastSnapHintClass = '';
+  private lastSnapHintText = '';
+  private lastWallCueClass = 'hud-action-pill';
+  private lastWallCueText = '';
+  private lastContextTrickClass = 'hud-action-pill';
+  private lastContextTrickText = '';
+  private lastCoachHintClass = '';
+  private lastCoachHintText = '';
+  private lastCoachRawKey = '';
+  private lastCoachFormattedHint = '';
+  private lastHotSpotKey = '';
+  private lastCrewInteractKey = '';
+  private lastCrewQuestKey = '';
+  private lastWantedKey = '';
+  private lastWantedBustedWidth = '';
+  private lastMissionsSignature = '';
+  private lastFpsShown = -1;
   private summaryModalEl: HTMLElement | null = null;
   private summaryRetryCallback: (() => void) | null = null;
   private summaryGarageCallback: (() => void) | null = null;
@@ -199,6 +238,8 @@ export class SurfHUD {
     this.wantedBarEl = document.getElementById('hud-wanted-bar');
     this.wantedStarsEl = document.getElementById('hud-wanted-stars');
     this.wantedOutlawEl = document.getElementById('hud-wanted-outlaw');
+    this.wantedOutlawSpanEl = this.wantedOutlawEl?.querySelector('span') ?? null;
+    this.landingOverlayEl = document.getElementById('landing-overlay');
     this.wantedBustedWrapEl = document.getElementById('hud-wanted-busted-wrap');
     this.wantedBustedFillEl = document.getElementById('hud-wanted-busted-fill');
     this.summaryModalEl = document.getElementById('session-summary-modal');
@@ -280,6 +321,7 @@ export class SurfHUD {
     this.comboPointsEl = document.getElementById('hud-combo-points')!;
     this.comboStringEl = document.getElementById('hud-combo-string')!;
     this.comboTimerBarEl = document.getElementById('hud-combo-bar')!;
+    this.comboTimerBarEl.style.transformOrigin = 'left center';
     this.truckDialFrontEl = document.getElementById('hud-truck-front')!;
     this.leanReadoutEl = document.getElementById('hud-lean-deg')!;
 
@@ -326,6 +368,19 @@ export class SurfHUD {
   }
 
   private refreshLocalizedUI(): void {
+    this.lastTimerText = '';
+    this.lastSessionLabelText = '';
+    this.lastFlowTitleText = '';
+    this.lastPumpBadgeText = '';
+    this.lastSnapHintText = '';
+    this.lastWallCueText = '';
+    this.lastContextTrickText = '';
+    this.lastCoachRawKey = '';
+    this.lastCoachHintText = '';
+    this.lastHotSpotKey = '';
+    this.lastCrewInteractKey = '';
+    this.lastWantedKey = '';
+    this.lastMissionsSignature = '';
     this.setControlMode(this.controlMode);
     if (this.lastBtnState) {
       const s = this.lastBtnState;
@@ -374,6 +429,10 @@ export class SurfHUD {
       this.comboManeuvers.shift();
     }
     this.comboTimeout = this.comboMaxHold;
+    if (this.lastComboBarScale !== 1) {
+      this.lastComboBarScale = 1;
+      this.comboTimerBarEl.style.transform = 'scaleX(1)';
+    }
 
     this.comboContainerEl.classList.add('active');
     if (ev.isSpecial || ev.isSnap) {
@@ -397,8 +456,11 @@ export class SurfHUD {
       // Keep combo alive slightly longer while actively carving or grinding
       const decayRate = ctrl.isGrinding || Math.abs(ctrl.leanAngle) > 0.25 ? 0.55 : 1.0;
       this.comboTimeout = Math.max(0, this.comboTimeout - dt * decayRate);
-      const pct = (this.comboTimeout / this.comboMaxHold) * 100;
-      this.comboTimerBarEl.style.width = `${pct}%`;
+      const barScale = Math.round((this.comboTimeout / this.comboMaxHold) * 200) / 200;
+      if (barScale !== this.lastComboBarScale) {
+        this.lastComboBarScale = barScale;
+        this.comboTimerBarEl.style.transform = `scaleX(${barScale})`;
+      }
 
       if (this.comboTimeout === 0 && ctrl.isGrounded && !ctrl.isGrinding) {
         this.bankCombo();
@@ -407,13 +469,39 @@ export class SurfHUD {
 
     // 2. Session Timer (2:00 countdown, Overtime-Combo, or Endless Zen)
     if (isZen) {
-      this.timerEl.textContent = t('hud.zenTimer');
-      this.timerEl.classList.remove('urgent', 'overtime');
-      this.sessionBlockEl?.classList.remove('overtime');
-      this.sessionBlockEl?.classList.add('zen-mode');
-      if (this.sessionLabelEl) this.sessionLabelEl.textContent = t('hud.freeSurf');
+      const zenText = t('hud.zenTimer');
+      if (zenText !== this.lastTimerText) {
+        this.lastTimerText = zenText;
+        this.timerEl.textContent = zenText;
+      }
+      if (this.lastTimerUrgent) {
+        this.lastTimerUrgent = false;
+        this.timerEl.classList.remove('urgent');
+      }
+      if (this.lastTimerOvertime) {
+        this.lastTimerOvertime = false;
+        this.timerEl.classList.remove('overtime');
+      }
+      if (this.lastSessionBlockOvertime) {
+        this.lastSessionBlockOvertime = false;
+        this.sessionBlockEl?.classList.remove('overtime');
+      }
+      if (!this.lastSessionBlockZen) {
+        this.lastSessionBlockZen = true;
+        this.sessionBlockEl?.classList.add('zen-mode');
+      }
+      if (this.sessionLabelEl) {
+        const lbl = t('hud.freeSurf');
+        if (lbl !== this.lastSessionLabelText) {
+          this.lastSessionLabelText = lbl;
+          this.sessionLabelEl.textContent = lbl;
+        }
+      }
     } else {
-      this.sessionBlockEl?.classList.remove('zen-mode');
+      if (this.lastSessionBlockZen) {
+        this.lastSessionBlockZen = false;
+        this.sessionBlockEl?.classList.remove('zen-mode');
+      }
       if (!this.sessionEnded && !this.sessionTimerPaused) {
         this.sessionTimeRemaining = Math.max(0, this.sessionTimeRemaining - dt);
         if (this.sessionTimeRemaining === 0) {
@@ -439,23 +527,58 @@ export class SurfHUD {
       }
 
       if (this.isOvertime && !this.sessionEnded) {
-        this.timerEl.textContent = t('hud.overtime');
-        this.timerEl.classList.remove('urgent');
-        this.timerEl.classList.add('overtime');
-        this.sessionBlockEl?.classList.add('overtime');
-        if (this.sessionLabelEl) this.sessionLabelEl.textContent = t('hud.keepCombo');
+        const otText = t('hud.overtime');
+        if (otText !== this.lastTimerText) {
+          this.lastTimerText = otText;
+          this.timerEl.textContent = otText;
+        }
+        if (this.lastTimerUrgent) {
+          this.lastTimerUrgent = false;
+          this.timerEl.classList.remove('urgent');
+        }
+        if (!this.lastTimerOvertime) {
+          this.lastTimerOvertime = true;
+          this.timerEl.classList.add('overtime');
+        }
+        if (!this.lastSessionBlockOvertime) {
+          this.lastSessionBlockOvertime = true;
+          this.sessionBlockEl?.classList.add('overtime');
+        }
+        if (this.sessionLabelEl) {
+          const lbl = t('hud.keepCombo');
+          if (lbl !== this.lastSessionLabelText) {
+            this.lastSessionLabelText = lbl;
+            this.sessionLabelEl.textContent = lbl;
+          }
+        }
       } else {
-        this.timerEl.classList.remove('overtime');
-        this.sessionBlockEl?.classList.remove('overtime');
-        if (this.sessionLabelEl) this.sessionLabelEl.textContent = t('hud.session');
+        if (this.lastTimerOvertime) {
+          this.lastTimerOvertime = false;
+          this.timerEl.classList.remove('overtime');
+        }
+        if (this.lastSessionBlockOvertime) {
+          this.lastSessionBlockOvertime = false;
+          this.sessionBlockEl?.classList.remove('overtime');
+        }
+        if (this.sessionLabelEl) {
+          const lbl = t('hud.session');
+          if (lbl !== this.lastSessionLabelText) {
+            this.lastSessionLabelText = lbl;
+            this.sessionLabelEl.textContent = lbl;
+          }
+        }
         const mins = Math.floor(this.sessionTimeRemaining / 60);
         const secs = Math.floor(this.sessionTimeRemaining % 60);
         const tenths = Math.floor((this.sessionTimeRemaining % 1) * 10);
-        this.timerEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}.${tenths}`;
-        if (this.sessionTimeRemaining < 15 && this.sessionTimeRemaining > 0) {
-          this.timerEl.classList.add('urgent');
-        } else {
-          this.timerEl.classList.remove('urgent');
+        const timerStr = `${mins}:${secs.toString().padStart(2, '0')}.${tenths}`;
+        if (timerStr !== this.lastTimerText) {
+          this.lastTimerText = timerStr;
+          this.timerEl.textContent = timerStr;
+        }
+        const isUrgent = this.sessionTimeRemaining < 15 && this.sessionTimeRemaining > 0;
+        if (isUrgent !== this.lastTimerUrgent) {
+          this.lastTimerUrgent = isUrgent;
+          this.timerEl.classList.toggle('urgent', isUrgent);
         }
       }
     }
@@ -464,67 +587,108 @@ export class SurfHUD {
     this.updateSpeedo(ctrl.speed * 3.6);
 
     const flowPct = Math.round(ctrl.flowMeter);
+    const isSpecialReady = flowPct >= 99;
     const inSurfZone = Boolean(ctrlAny.isSurfZoneActive) || flowPct >= 80;
-    this.flowFillEl.style.width = `${flowPct}%`;
-    this.flowPctEl.textContent = `${flowPct}%`;
-    this.flowFillEl.classList.toggle('special-ready', flowPct >= 99);
-    this.flowTrackEl.classList.toggle('special-ready', flowPct >= 99);
-    this.flowTrackEl.classList.toggle('surf-zone', inSurfZone);
-    this.flowCardEl?.classList.toggle('surf-zone', inSurfZone);
-    if (this.flowTitleEl) {
-      this.flowTitleEl.textContent = inSurfZone ? t('hud.surfZone') : t('hud.flow');
+    if (flowPct !== this.lastFlowPct) {
+      this.lastFlowPct = flowPct;
+      this.flowFillEl.style.width = `${flowPct}%`;
+      this.flowPctEl.textContent = `${flowPct}%`;
+      const activeSegs = Math.round((flowPct / 100) * this.flowSegEls.length);
+      if (activeSegs !== this.lastFlowActiveSegs) {
+        this.lastFlowActiveSegs = activeSegs;
+        for (let i = 0; i < this.flowSegEls.length; i++) {
+          this.flowSegEls[i].classList.toggle('filled', i < activeSegs);
+        }
+      }
     }
-    const activeSegs = Math.round((flowPct / 100) * this.flowSegEls.length);
-    for (let i = 0; i < this.flowSegEls.length; i++) {
-      this.flowSegEls[i].classList.toggle('filled', i < activeSegs);
+    if (isSpecialReady !== this.lastFlowSpecialReady) {
+      this.lastFlowSpecialReady = isSpecialReady;
+      this.flowFillEl.classList.toggle('special-ready', isSpecialReady);
+      this.flowTrackEl.classList.toggle('special-ready', isSpecialReady);
+    }
+    if (inSurfZone !== this.lastFlowSurfZone) {
+      this.lastFlowSurfZone = inSurfZone;
+      this.flowTrackEl.classList.toggle('surf-zone', inSurfZone);
+      this.flowCardEl?.classList.toggle('surf-zone', inSurfZone);
+    }
+    if (this.flowTitleEl) {
+      const flowTitle = inSurfZone ? t('hud.surfZone') : t('hud.flow');
+      if (flowTitle !== this.lastFlowTitleText) {
+        this.lastFlowTitleText = flowTitle;
+        this.flowTitleEl.textContent = flowTitle;
+      }
     }
 
     // Pump rhythm feedback ribbon (right edge): only show on PERFECT PUMP, otherwise hidden
     if (ctrl.pumpSyncQuality === 'PERFECT PUMP!') {
-      this.pumpBadgeEl.textContent = t('hud.perfectPump');
-      this.pumpBadgeEl.className = 'pump-badge perfect';
-    } else {
+      const pumpText = t('hud.perfectPump');
+      if (pumpText !== this.lastPumpBadgeText) {
+        this.lastPumpBadgeText = pumpText;
+        this.pumpBadgeEl.textContent = pumpText;
+      }
+      if (this.lastPumpBadgeClass !== 'pump-badge perfect') {
+        this.lastPumpBadgeClass = 'pump-badge perfect';
+        this.pumpBadgeEl.className = 'pump-badge perfect';
+      }
+    } else if (this.lastPumpBadgeClass !== 'pump-badge neutral') {
+      this.lastPumpBadgeClass = 'pump-badge neutral';
       this.pumpBadgeEl.className = 'pump-badge neutral';
     }
 
     // Dual-axis front surf-adapter visual indicator
     const yawDeg = Math.round((ctrl.frontTruckYaw * 180) / Math.PI);
-    const leanDeg = Math.round((ctrl.leanAngle * 180) / Math.PI);
-    this.truckDialFrontEl.style.transform = `rotate(${yawDeg}deg)`;
-    this.leanReadoutEl.textContent = `${Math.abs(leanDeg)}°`;
+    const leanDegAbs = Math.abs(Math.round((ctrl.leanAngle * 180) / Math.PI));
+    if (yawDeg !== this.lastTruckYawDeg) {
+      this.lastTruckYawDeg = yawDeg;
+      this.truckDialFrontEl.style.transform = `rotate(${yawDeg}deg)`;
+    }
+    if (leanDegAbs !== this.lastLeanDegAbs) {
+      this.lastLeanDegAbs = leanDegAbs;
+      this.leanReadoutEl.textContent = `${leanDegAbs}°`;
+    }
 
     // 4. SNAP / INDY GRAB hint / failure feedback
+    let nextSnapText = '';
+    let nextSnapClass = '';
     if (ctrl.snapFeedback) {
-      this.snapHintEl.textContent = ctrl.snapFeedback;
-      this.snapHintEl.className = 'visible fail';
+      nextSnapText = ctrl.snapFeedback;
+      nextSnapClass = 'visible fail';
     } else if (ctrl.indyGrabReady && !ctrl.indyGrabActive) {
-      this.snapHintEl.textContent = t('hud.indyHold');
-      this.snapHintEl.className = 'visible ready';
+      nextSnapText = t('hud.indyHold');
+      nextSnapClass = 'visible ready';
     } else if (ctrl.indyGrabActive) {
-      this.snapHintEl.textContent = t('hud.indyTweak');
-      this.snapHintEl.className = 'visible ready';
+      nextSnapText = t('hud.indyTweak');
+      nextSnapClass = 'visible ready';
     } else if (ctrl.snapWindow === 'READY' && !ctrl.snapActive) {
       const snapKey = this.controlMode === 'arrows' ? 'Q' : 'O';
-      this.snapHintEl.textContent = t('hud.snapReady', { key: snapKey });
-      this.snapHintEl.className = 'visible ready';
+      nextSnapText = t('hud.snapReady', { key: snapKey });
+      nextSnapClass = 'visible ready';
     } else if (ctrl.snapWindow === 'TOO_SLOW') {
-      this.snapHintEl.textContent = t('hud.snapTooSlow');
-      this.snapHintEl.className = 'visible dim';
+      nextSnapText = t('hud.snapTooSlow');
+      nextSnapClass = 'visible dim';
     } else if (ctrl.snapWindow === 'TOO_FAST') {
-      this.snapHintEl.textContent = t('hud.snapTooFast');
-      this.snapHintEl.className = 'visible dim';
-    } else {
-      this.snapHintEl.className = '';
+      nextSnapText = t('hud.snapTooFast');
+      nextSnapClass = 'visible dim';
+    }
+    if (nextSnapClass && nextSnapText !== this.lastSnapHintText) {
+      this.lastSnapHintText = nextSnapText;
+      this.snapHintEl.textContent = nextSnapText;
+    }
+    if (nextSnapClass !== this.lastSnapHintClass) {
+      this.lastSnapHintClass = nextSnapClass;
+      this.snapHintEl.className = nextSnapClass;
     }
 
     // 5. Coaching hints, Wall Compress->Extend Cue & Live Context Trick Prompt
     // Never show coaching/action cues while landing overlay is open
-    const landingOverlay = document.getElementById('landing-overlay');
+    const landingOverlay = this.landingOverlayEl ?? (this.landingOverlayEl = document.getElementById('landing-overlay'));
     const isLandingOpen = Boolean(landingOverlay && !landingOverlay.classList.contains('hidden'));
     const isTouch =
       Boolean(this.lastTouchEnabled) || document.body.classList.contains('has-touch-controls');
 
     if (this.wallCueEl) {
+      let nextWallText = '';
+      let nextWallClass = 'hud-action-pill';
       if (
         !isLandingOpen &&
         !this.tutorialActive &&
@@ -533,22 +697,28 @@ export class SurfHUD {
         ctrl.wallPumpCue !== 'none'
       ) {
         if (ctrl.wallPumpCue === 'extend') {
-          this.wallCueEl.textContent = isTouch
-            ? t('hud.wallCueExtendTouch')
-            : t('hud.wallCueExtendDesktop');
-          this.wallCueEl.className = 'hud-action-pill visible extend';
+          nextWallText = isTouch ? t('hud.wallCueExtendTouch') : t('hud.wallCueExtendDesktop');
+          nextWallClass = 'hud-action-pill visible extend';
         } else {
-          this.wallCueEl.textContent = isTouch
+          nextWallText = isTouch
             ? t('hud.wallCueCompressTouch')
             : t('hud.wallCueCompressDesktop', { key: 'SHIFT' });
-          this.wallCueEl.className = 'hud-action-pill visible compress';
+          nextWallClass = 'hud-action-pill visible compress';
         }
-      } else {
-        this.wallCueEl.className = 'hud-action-pill';
+      }
+      if (nextWallText && nextWallText !== this.lastWallCueText) {
+        this.lastWallCueText = nextWallText;
+        this.wallCueEl.textContent = nextWallText;
+      }
+      if (nextWallClass !== this.lastWallCueClass) {
+        this.lastWallCueClass = nextWallClass;
+        this.wallCueEl.className = nextWallClass;
       }
     }
 
     if (this.contextTrickEl) {
+      let nextCtxText = '';
+      let nextCtxClass = 'hud-action-pill';
       const inTrickOrBail =
         ctrl.isBailing ||
         ctrl.snapActive ||
@@ -571,55 +741,74 @@ export class SurfHUD {
           snap: isTouch ? 'hud.ctxTrickSnapTouch' : 'hud.ctxTrickSnapDesktop',
           reverse360: isTouch ? 'hud.ctxTrickReverseTouch' : 'hud.ctxTrickReverseDesktop',
         };
-        this.contextTrickEl.textContent = t(keyMap[ctrl.availableContextTrick]);
-        this.contextTrickEl.className = `hud-action-pill visible is-${ctrl.availableContextTrick}`;
-      } else {
-        this.contextTrickEl.className = 'hud-action-pill';
+        nextCtxText = t(keyMap[ctrl.availableContextTrick]);
+        nextCtxClass = `hud-action-pill visible is-${ctrl.availableContextTrick}`;
+      }
+      if (nextCtxText && nextCtxText !== this.lastContextTrickText) {
+        this.lastContextTrickText = nextCtxText;
+        this.contextTrickEl.textContent = nextCtxText;
+      }
+      if (nextCtxClass !== this.lastContextTrickClass) {
+        this.lastContextTrickClass = nextCtxClass;
+        this.contextTrickEl.className = nextCtxClass;
       }
     }
 
     if (isLandingOpen) {
-      this.coachHintEl.className = '';
+      if (this.lastCoachHintClass !== '') {
+        this.lastCoachHintClass = '';
+        this.coachHintEl.className = '';
+      }
       return;
     }
 
+    let nextCoachText = '';
+    let nextCoachClass = '';
     if (ctrl.isBailing) {
-      this.coachHintEl.textContent = t('hud.wipeoutPrefix', {
+      nextCoachText = t('hud.wipeoutPrefix', {
         reason: ctrl.bailReason || t('hud.wipeoutFallback'),
       });
-      this.coachHintEl.className = 'visible bail';
+      nextCoachClass = 'visible bail';
     } else if (this.tutorialActive) {
-      this.coachHintEl.className = '';
+      nextCoachClass = '';
     } else if (this.flowLineHint) {
-      this.coachHintEl.textContent = this.flowLineHint;
-      this.coachHintEl.className = 'visible ready';
+      nextCoachText = this.flowLineHint;
+      nextCoachClass = 'visible ready';
     } else if (ctrl.coachHint) {
-      let hint = ctrl.coachHint;
-      const isTouch =
-        document.body.classList.contains('has-touch-controls') ||
-        (typeof window !== 'undefined' && window.innerWidth <= 960);
-      if (isTouch) {
-        hint = hint
-          .replace(/press [↑W] once to push off/i, 'tap ▲ PUMP to push off')
-          .replace(/press [↑W]/i, 'tap ▲ PUMP')
-          .replace(/drücke [↑W] einmal zum Pushen/i, 'tippe ▲ PUMP zum Losfahren')
-          .replace(/← →/g, '◀ ▶');
+      const coachTouch = isTouch || (typeof window !== 'undefined' && window.innerWidth <= 960);
+      const rawKey = `${ctrl.coachHint}|${coachTouch ? 1 : 0}`;
+      if (rawKey !== this.lastCoachRawKey) {
+        this.lastCoachRawKey = rawKey;
+        let hint = ctrl.coachHint;
+        if (coachTouch) {
+          hint = hint
+            .replace(/press [↑W] once to push off/i, 'tap ▲ PUMP to push off')
+            .replace(/press [↑W]/i, 'tap ▲ PUMP')
+            .replace(/drücke [↑W] einmal zum Pushen/i, 'tippe ▲ PUMP zum Losfahren')
+            .replace(/← →/g, '◀ ▶');
+        }
+        this.lastCoachFormattedHint = hint;
       }
-      this.coachHintEl.textContent = hint;
-      this.coachHintEl.className = 'visible';
+      nextCoachText = this.lastCoachFormattedHint;
+      nextCoachClass = 'visible';
     } else if (ctrl.isGrounded && ctrl.speed < 0.4) {
-      const isTouch =
-        document.body.classList.contains('has-touch-controls') ||
-        (typeof window !== 'undefined' && window.innerWidth <= 960);
-      if (isTouch) {
-        this.coachHintEl.textContent = t('hud.pushTouch');
+      const coachTouch = isTouch || (typeof window !== 'undefined' && window.innerWidth <= 960);
+      if (coachTouch) {
+        nextCoachText = t('hud.pushTouch');
       } else {
         const pushKey = this.controlMode === 'arrows' ? '↑' : 'W';
-        this.coachHintEl.textContent = t('hud.pushKey', { key: pushKey });
+        nextCoachText = t('hud.pushKey', { key: pushKey });
       }
-      this.coachHintEl.className = 'visible idle';
-    } else {
-      this.coachHintEl.className = '';
+      nextCoachClass = 'visible idle';
+    }
+
+    if (nextCoachClass && nextCoachText !== this.lastCoachHintText) {
+      this.lastCoachHintText = nextCoachText;
+      this.coachHintEl.textContent = nextCoachText;
+    }
+    if (nextCoachClass !== this.lastCoachHintClass) {
+      this.lastCoachHintClass = nextCoachClass;
+      this.coachHintEl.className = nextCoachClass;
     }
   }
 
@@ -792,9 +981,16 @@ export class SurfHUD {
   }
 
   private updateSpeedo(kmh: number): void {
-    const frac = Math.min(1, Math.max(0, kmh / SurfHUD.SPEEDO_MAX_KMH));
-    this.speedEl.textContent = String(Math.round(kmh));
-    this.speedoEl.classList.toggle('redline', frac > 0.75);
+    const rounded = Math.round(kmh);
+    if (rounded !== this.lastSpeedRounded) {
+      this.lastSpeedRounded = rounded;
+      this.speedEl.textContent = String(rounded);
+    }
+    const redline = kmh / SurfHUD.SPEEDO_MAX_KMH > 0.75;
+    if (redline !== this.lastSpeedRedline) {
+      this.lastSpeedRedline = redline;
+      this.speedoEl.classList.toggle('redline', redline);
+    }
   }
 
   /** Briefly flashes a cyan/gold glow & micro-tag next to the speedometer on pump hit. */
@@ -886,6 +1082,11 @@ export class SurfHUD {
     this.bestComboEl.textContent = '0';
     this.timerEl.classList.remove('urgent', 'overtime');
     this.sessionBlockEl?.classList.remove('overtime');
+    this.lastTimerUrgent = false;
+    this.lastTimerOvertime = false;
+    this.lastSessionBlockOvertime = false;
+    this.lastTimerText = '';
+    this.lastComboBarScale = -1;
     this.comboContainerEl.classList.remove('active');
     this.speedoEl.classList.remove('pump-rail', 'pump-wall');
     if (this.pumpPulseTimeout !== null) {
@@ -894,6 +1095,16 @@ export class SurfHUD {
     }
     if (this.wallCueEl) this.wallCueEl.className = 'hud-action-pill';
     if (this.contextTrickEl) this.contextTrickEl.className = 'hud-action-pill';
+    this.lastWallCueClass = 'hud-action-pill';
+    this.lastContextTrickClass = 'hud-action-pill';
+    this.lastWallCueText = '';
+    this.lastContextTrickText = '';
+    this.lastCoachHintClass = '';
+    this.lastSnapHintClass = '';
+    this.lastHotSpotKey = '';
+    this.lastCrewInteractKey = '';
+    this.lastCrewQuestKey = '';
+    this.lastWantedKey = '';
     this.updatePretzelCount(0, 5);
     this.updateHotSpotStatus(null, 0, false);
     this.updateCrewInteract(false, 'sepp', false);
@@ -910,6 +1121,10 @@ export class SurfHUD {
   ): void {
     this.lastCrewInteract = { canInteract, npcId, isTouch };
     if (!this.crewInteractBtnEl || !this.crewInteractTextEl) return;
+    const stateKey = canInteract ? `1:${npcId}:${isTouch ? 1 : 0}` : `0:${npcId}`;
+    if (stateKey === this.lastCrewInteractKey) return;
+    this.lastCrewInteractKey = stateKey;
+
     this.crewInteractBtnEl.classList.toggle('hidden', !canInteract);
     this.crewInteractBtnEl.classList.toggle('michi', npcId === 'michi');
     if (canInteract) {
@@ -960,6 +1175,10 @@ export class SurfHUD {
   ): void {
     if (!this.crewQuestPillEl || !this.crewQuestPillTextEl) return;
     const isActive = questState === 'active';
+    const stateKey = isActive ? `1:${npcId}:${collected}:${total}` : `0:${npcId}`;
+    if (stateKey === this.lastCrewQuestKey) return;
+    this.lastCrewQuestKey = stateKey;
+
     this.crewQuestPillEl.classList.toggle('hidden', !isActive);
     this.crewQuestPillEl.classList.toggle('michi', npcId === 'michi');
     if (isActive) {
@@ -976,31 +1195,43 @@ export class SurfHUD {
   }): void {
     if (!this.wantedBarEl || !this.wantedStarsEl) return;
     const show = state.active && state.stars > 0;
-    this.wantedBarEl.classList.toggle('hidden', !show);
     if (!show) {
+      if (this.lastWantedKey === 'hidden') return;
+      this.lastWantedKey = 'hidden';
+      this.wantedBarEl.classList.add('hidden');
       this.lastWantedOutlawVisible = false;
       this.wantedOutlawEl?.classList.add('hidden');
       this.wantedBustedWrapEl?.classList.add('hidden');
+      this.lastWantedBustedWidth = '';
       return;
     }
 
     const clampedStars = Math.max(0, Math.min(5, Math.round(state.stars)));
+    const showBusted = state.bustedProgress > 0.05;
+    const bustedPct = showBusted ? Math.min(100, Math.round(state.bustedProgress * 100)) : 0;
+    const key = `1:${clampedStars}:${state.inOutlawSpotlight ? 1 : 0}:${bustedPct}`;
+    if (key === this.lastWantedKey) return;
+    this.lastWantedKey = key;
+
+    this.wantedBarEl.classList.remove('hidden');
     this.wantedStarsEl.textContent = '★'.repeat(clampedStars) + '☆'.repeat(5 - clampedStars);
 
     this.lastWantedOutlawVisible = state.inOutlawSpotlight;
     if (this.wantedOutlawEl) {
       this.wantedOutlawEl.classList.toggle('hidden', !state.inOutlawSpotlight);
-      if (state.inOutlawSpotlight) {
-        const span = this.wantedOutlawEl.querySelector('span');
-        if (span) span.textContent = t('wanted.outlawBadge');
+      if (state.inOutlawSpotlight && this.wantedOutlawSpanEl) {
+        this.wantedOutlawSpanEl.textContent = t('wanted.outlawBadge');
       }
     }
 
     if (this.wantedBustedWrapEl && this.wantedBustedFillEl) {
-      const showBusted = state.bustedProgress > 0.05;
       this.wantedBustedWrapEl.classList.toggle('hidden', !showBusted);
       if (showBusted) {
-        this.wantedBustedFillEl.style.width = `${Math.min(100, Math.round(state.bustedProgress * 100))}%`;
+        const w = `${bustedPct}%`;
+        if (w !== this.lastWantedBustedWidth) {
+          this.lastWantedBustedWidth = w;
+          this.wantedBustedFillEl.style.width = w;
+        }
       }
     }
   }
@@ -1017,13 +1248,19 @@ export class SurfHUD {
   ): void {
     if (!this.hotSpotPillEl || !this.hotSpotPillTextEl) return;
     if (!spotName || remainingSec <= 0) {
+      if (this.lastHotSpotKey === 'hidden') return;
+      this.lastHotSpotKey = 'hidden';
       this.hotSpotPillEl.classList.add('hidden');
       this.hotSpotPillEl.classList.remove('inside');
       return;
     }
+    const sec = Math.ceil(remainingSec);
+    const key = `${spotName}|${sec}|${isInside ? 1 : 0}`;
+    if (key === this.lastHotSpotKey) return;
+    this.lastHotSpotKey = key;
+
     this.hotSpotPillEl.classList.remove('hidden');
     this.hotSpotPillEl.classList.toggle('inside', isInside);
-    const sec = Math.ceil(remainingSec);
     this.hotSpotPillTextEl.textContent = isInside
       ? t('hud.hotSpotInside', { spot: spotName, sec })
       : t('hud.hotSpotOutside', { spot: spotName, sec });
@@ -1031,6 +1268,15 @@ export class SurfHUD {
 
   public updateMissionsWidget(rank: SkaterRankInfo, missions: SurfMission[]): void {
     this.lastMissionsState = { rank, missions };
+    const doneText = t('common.done');
+    let sig = `${rank.level}|${rank.fullLabel}|${doneText}`;
+    for (let i = 0; i < missions.length; i++) {
+      const m = missions[i];
+      sig += `|${m.id}:${m.progress}:${m.completed ? 1 : 0}:${m.shortTitle}`;
+    }
+    if (sig === this.lastMissionsSignature) return;
+    this.lastMissionsSignature = sig;
+
     if (this.hudRankLabelEl) {
       this.hudRankLabelEl.textContent = rank.fullLabel;
     }
@@ -1038,7 +1284,6 @@ export class SurfHUD {
       this.dockRankTitleEl.textContent = t('hud.surfChallengesRank', { rank: rank.fullLabel });
     }
 
-    const doneText = t('common.done');
     const html = missions
       .map((m) => {
         const check = m.completed ? '☑️' : '⬜';
@@ -1477,7 +1722,8 @@ export class SurfHUD {
   }
 
   public updateFPS(fps: number): void {
-    if (!this.btnFpsEl) return;
+    if (!this.btnFpsEl || fps === this.lastFpsShown) return;
+    this.lastFpsShown = fps;
     this.btnFpsEl.textContent = `📊 ${fps} FPS`;
     if (fps < 45) {
       this.btnFpsEl.style.color = '#ff4d4d';

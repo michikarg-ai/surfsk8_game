@@ -435,12 +435,16 @@ export class SurfProgression {
   }
 
   public getBoardUnlockProgress(): BoardUnlockProgress {
-    const parkMax = Math.max(
-      0,
-      ...Object.values(this.state.parkHighScores || {}).filter(
-        (v): v is number => typeof v === 'number' && Number.isFinite(v)
-      )
-    );
+    let parkMax = 0;
+    const highScores = this.state.parkHighScores;
+    if (highScores) {
+      for (const k in highScores) {
+        const v = highScores[k];
+        if (typeof v === 'number' && Number.isFinite(v) && v > parkMax) {
+          parkMax = v;
+        }
+      }
+    }
     return {
       rankLevel: this.state.rankLevel,
       totalCompletedMissions: this.state.totalCompletedMissions,
