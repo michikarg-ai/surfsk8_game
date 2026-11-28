@@ -455,11 +455,11 @@ export class ImGefildeScene {
       if (isGolden) {
         mat.color.setHex(0xf4ebe2);
         mat.roughness = 0.84;
-        mat.envMapIntensity = 0.58;
+        mat.envMapIntensity = 0.72;
       } else {
         mat.color.setHex(0xffffff);
         mat.roughness = 0.72;
-        mat.envMapIntensity = 0.72;
+        mat.envMapIntensity = 0.84;
       }
     }
     if (this.activeOuterGroundMat) {
@@ -478,11 +478,11 @@ export class ImGefildeScene {
         this.sunLight.shadow.map?.dispose();
         this.sunLight.shadow.map = null;
       }
-      this.hemiLight.intensity = isGolden ? 0.58 : 0.62;
-      this.sunLight.intensity = isGolden ? 2.55 : 1.75;
-      this.fillLight.intensity = isGolden ? 0.38 : 0.46;
+      this.hemiLight.intensity = isGolden ? 0.72 : 0.78;
+      this.sunLight.intensity = isGolden ? 2.75 : 1.95;
+      this.fillLight.intensity = isGolden ? 0.48 : 0.56;
       this.floodLights.forEach((spot) => {
-        spot.intensity = isGolden ? 0.0 : 16.5;
+        spot.intensity = isGolden ? 0.0 : 18.5;
         spot.visible = !isGolden;
       });
     } else if (q === 'medium') {
@@ -492,21 +492,21 @@ export class ImGefildeScene {
         this.sunLight.shadow.map?.dispose();
         this.sunLight.shadow.map = null;
       }
-      this.hemiLight.intensity = isGolden ? 0.62 : 0.72;
-      this.sunLight.intensity = isGolden ? 2.6 : 1.85;
-      this.fillLight.intensity = isGolden ? 0.4 : 0.5;
+      this.hemiLight.intensity = isGolden ? 0.76 : 0.88;
+      this.sunLight.intensity = isGolden ? 2.8 : 2.05;
+      this.fillLight.intensity = isGolden ? 0.5 : 0.6;
       this.floodLights.forEach((spot, idx) => {
         spot.visible = !isGolden && (idx === 0 || idx === 2);
-        spot.intensity = isGolden ? 0.0 : 19.5;
+        spot.intensity = isGolden ? 0.0 : 21.5;
       });
     } else {
       // 'low' (Performance mode: dynamic shadows & heavy spotlights off, boost ambient fill)
       this.sunLight.castShadow = false;
       this.sunLight.shadow.map?.dispose();
       this.sunLight.shadow.map = null;
-      this.hemiLight.intensity = isGolden ? 0.78 : 0.95;
-      this.sunLight.intensity = isGolden ? 2.55 : 2.0;
-      this.fillLight.intensity = isGolden ? 0.48 : 0.62;
+      this.hemiLight.intensity = isGolden ? 0.9 : 1.1;
+      this.sunLight.intensity = isGolden ? 2.75 : 2.2;
+      this.fillLight.intensity = isGolden ? 0.58 : 0.72;
       this.floodLights.forEach((spot) => {
         spot.visible = false;
       });
@@ -521,10 +521,10 @@ export class ImGefildeScene {
       // Warm, well-readable Golden Hour exposure tailored per park while preserving contrast
       this.renderer.toneMappingExposure =
         this.currentParkId === 'airport_skatepark'
-          ? 0.96
+          ? 1.06
           : this.currentParkId === 'im_gefilde'
-            ? 0.92
-            : 0.94;
+            ? 1.02
+            : 1.04;
       this.skyUniforms.uMode.value = 0.0;
       this.scene.environment = this.goldenEnvMap;
       // Warm sunset horizon haze blending with Golden Hour sky & lens flare
@@ -545,7 +545,7 @@ export class ImGefildeScene {
     }
 
     // Night mode: cinematic warm-floodlight vs cool-moonlight contrast with clean ACESFilmic depth
-    this.renderer.toneMappingExposure = 0.98;
+    this.renderer.toneMappingExposure = 1.08;
     this.skyUniforms.uMode.value = 1.0;
     this.scene.environment = this.nightEnvMap;
     this.scene.fog = new THREE.FogExp2(0x0b1428, 0.0026);
