@@ -8,8 +8,6 @@ export interface InputState {
   steerRight: boolean;
   forwardPush: boolean;
   brake?: boolean;
-  /** Desktop ArrowDown / S: brakes on flat ground (slopeMag < 0.14), compresses/pumps on walls (slopeMag >= 0.14). */
-  downSmartBrake?: boolean;
   compressCrouch: boolean;
   jumpOllie: boolean;
   grindSlash: boolean;
@@ -660,8 +658,8 @@ export class SurfskateController {
     const slopeMag = Math.hypot(slopeX, slopeZ);
     const h0 = this.currentSurface.height;
     const isOnWall = h0 >= 0.18 || slopeMag >= 0.12;
-    const isBraking = Boolean(input.brake) || (Boolean(input.downSmartBrake) && slopeMag < 0.14);
-    const isCrouching = input.compressCrouch || (Boolean(input.downSmartBrake) && slopeMag >= 0.14);
+    const isBraking = Boolean(input.brake);
+    const isCrouching = input.compressCrouch;
 
     // Automatic surf-pump body motion on walls (like pumping a wave):
     //  - climbing the face: STRETCH the body tall to fight gravity (no speed gain)

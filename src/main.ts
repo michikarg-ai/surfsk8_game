@@ -267,7 +267,7 @@ class SurfskateMunichGame {
         this.controller.sessionTimerPaused = true;
         this.hud.sessionTimerPaused = true;
         this.hud.tutorialActive = true;
-        document.body.classList.add('tutorial-active');
+        document.body.classList.add('tutorial-active', 'tutorial-focus-mode');
         if (!this.landingPage.isVisible) {
           this.touchControls.setVisible(true);
         }
@@ -282,7 +282,7 @@ class SurfskateMunichGame {
         this.controller.sessionTimerPaused = false;
         this.hud.sessionTimerPaused = false;
         this.hud.tutorialActive = false;
-        document.body.classList.remove('tutorial-active');
+        document.body.classList.remove('tutorial-active', 'tutorial-focus-mode');
       },
     });
     this.controller.setSkaterStats(this.landingPage.getSelectedSkater().stats);
@@ -538,8 +538,10 @@ class SurfskateMunichGame {
           e.key === ' ';
         const isInGameScrollKey =
           !this.landingPage.isVisible && (code === 'PageUp' || code === 'PageDown');
+        const isAltBrakeKey =
+          !this.landingPage.isVisible && (code === 'AltLeft' || code === 'AltRight');
 
-        if (!isScrollableModalOpen && (isNavOrActionKey || isInGameScrollKey)) {
+        if (!isScrollableModalOpen && (isNavOrActionKey || isInGameScrollKey || isAltBrakeKey)) {
           e.preventDefault();
         }
 
@@ -711,9 +713,16 @@ class SurfskateMunichGame {
     window.addEventListener(
       'keyup',
       (e) => {
+        if (
+          !this.landingPage.isVisible &&
+          !this.isScrollableModalOpen() &&
+          (e.code === 'AltLeft' || e.code === 'AltRight')
+        ) {
+          e.preventDefault();
+        }
         this.keys.delete(e.code);
       },
-      { capture: true }
+      { capture: true, passive: false }
     );
   }
 
@@ -991,6 +1000,7 @@ class SurfskateMunichGame {
     if (this.tutorial.isOpen()) {
       this.tutorial.abort();
     }
+    document.body.classList.remove('tutorial-active', 'tutorial-focus-mode');
     this.hud.closeSessionSummary();
     this.keys.clear();
     this.touchControls.setVisible(false);
@@ -1257,8 +1267,9 @@ class SurfskateMunichGame {
     const kbSteerLeft = isArrows ? this.keys.has('ArrowLeft') : this.keys.has('KeyA');
     const kbSteerRight = isArrows ? this.keys.has('ArrowRight') : this.keys.has('KeyD');
     const kbPush = isArrows ? this.keys.has('ArrowUp') : this.keys.has('KeyW');
-    const kbDownBrake = isArrows ? this.keys.has('ArrowDown') : this.keys.has('KeyS');
-    const kbCrouch = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
+    const kbCompressDown = isArrows ? this.keys.has('ArrowDown') : this.keys.has('KeyS');
+    const kbShiftCrouch = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
+    const kbBrake = this.keys.has('AltLeft') || this.keys.has('AltRight');
     const kbOllie = this.keys.has('Space');
     const kbSnap = isArrows
       ? this.keys.has('KeyQ') || this.keys.has('KeyF')
@@ -1292,9 +1303,8 @@ class SurfskateMunichGame {
       steerLeft: kbSteerLeft || touch.steerLeft,
       steerRight: kbSteerRight || touch.steerRight,
       forwardPush: kbPush || touch.forwardPush,
-      brake: Boolean(touch.brake),
-      downSmartBrake: kbDownBrake,
-      compressCrouch: kbCrouch || touch.compressCrouch,
+      brake: kbBrake || Boolean(touch.brake),
+      compressCrouch: kbCompressDown || kbShiftCrouch || touch.compressCrouch,
       jumpOllie: kbOllie || touch.jumpOllie,
       grindSlash: false,
       snapTrick: kbSnap,
@@ -1337,7 +1347,6 @@ class SurfskateMunichGame {
       steerRight: combinedSteer < -0.08,
       forwardPush: this.controller.speed < 0.3,
       brake: false,
-      downSmartBrake: false,
       compressCrouch: compressWave && !inDeepTransition,
       jumpOllie: false,
       grindSlash: false,

@@ -149,6 +149,7 @@ export class FirstRunTutorial {
     this.stepIndex = 0;
     this.resetStepTracking();
     this.render();
+    document.body.classList.add('tutorial-focus-mode');
     this.hudEl.classList.remove('hidden');
     this.options.onStart?.();
   }
@@ -183,6 +184,7 @@ export class FirstRunTutorial {
     this.stepDonePending = false;
     this.celebrateTimer = 0;
     this.stepFlashTimer = 0;
+    document.body.classList.remove('tutorial-focus-mode');
     this.hudEl?.classList.add('hidden');
     this.metronomeEl?.classList.add('hidden');
     this.cardEl?.classList.remove('is-step-done', 'is-celebrating');
@@ -296,12 +298,7 @@ export class FirstRunTutorial {
         Math.abs(analog) > 0.15 ||
         controller.currentSurface.height >= 0.15;
 
-      const slopeMag = Math.hypot(
-        controller.currentSurface.slopeX,
-        controller.currentSurface.slopeZ
-      );
-      const isCompressing =
-        input.compressCrouch || (Boolean(input.downSmartBrake) && slopeMag >= 0.14);
+      const isCompressing = input.compressCrouch;
 
       if (isCompressing && controller.speed >= 0.9 && isCarvingOrWall) {
         this.compressHeldWhileCarving += dt;
@@ -520,7 +517,8 @@ export class FirstRunTutorial {
     } else if (step === 2) {
       const carveKeys =
         ctrlMode === 'wasd' ? `${this.kbd('A')} ${this.kbd('D')}` : `${this.kbd('←')} ${this.kbd('→')}`;
-      const pumpKeys = `${carveKeys} / ${this.kbd('SHIFT')}`;
+      const compressKey = ctrlMode === 'wasd' ? 'S' : '↓';
+      const pumpKeys = `${carveKeys} / ${this.kbd(compressKey)} ${this.kbd('SHIFT')}`;
       this.promptEl.innerHTML = isTouch
         ? t('tutorial.s3.promptTouch', {
             compress: this.pill('COMPRESS'),
@@ -529,7 +527,7 @@ export class FirstRunTutorial {
         : t('tutorial.s3.promptDesktop', { keys: pumpKeys });
       this.hintEl.textContent = isTouch
         ? t('tutorial.s3.hintTouch')
-        : t('tutorial.s3.hintDesktop');
+        : t('tutorial.s3.hintDesktop', { compress: `${compressKey} / SHIFT` });
       this.setProgressBar(0);
     } else if (step === 3) {
       this.promptEl.innerHTML = isTouch

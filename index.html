@@ -4051,6 +4051,148 @@
           font-size: 10.5px;
         }
       }
+
+      /* Focus-Only Tutorial Mode (Issue #49): hide all HUD clutter, enlarge tutorial card safely */
+      body.tutorial-focus-mode .hud-top-left-stack,
+      body.tutorial-focus-mode .score-card,
+      body.tutorial-focus-mode #hud-missions-mini,
+      body.tutorial-focus-mode #hud-missions-card,
+      body.tutorial-focus-mode .hud-missions-mini,
+      body.tutorial-focus-mode #hud-top-center,
+      body.tutorial-focus-mode #hud-pump-badge,
+      body.tutorial-focus-mode .bottom-left-cluster,
+      body.tutorial-focus-mode #hud-bottom-left,
+      body.tutorial-focus-mode #hud-combo-box,
+      body.tutorial-focus-mode #hud-wall-cue,
+      body.tutorial-focus-mode #hud-context-trick,
+      body.tutorial-focus-mode #hud-snap-hint,
+      body.tutorial-focus-mode #hud-snap-banner,
+      body.tutorial-focus-mode #hud-coach-hint,
+      body.tutorial-focus-mode #hud-wanted-bar,
+      body.tutorial-focus-mode #hud-crew-interact,
+      body.tutorial-focus-mode #hud-crew-dialogue,
+      body.tutorial-focus-mode #hud-mission-toast,
+      body.tutorial-focus-mode #hud-dock {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+      }
+      body.tutorial-focus-mode .tutorial-hud {
+        top: 22px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(92vw, 520px);
+      }
+      body.tutorial-focus-mode .tutorial-hud.hidden {
+        transform: translateX(-50%) translateY(-10px);
+      }
+      body.tutorial-focus-mode .tut-hud-card {
+        padding: 14px 20px 15px;
+        gap: 7px;
+        border-top-width: 3.5px;
+        border-radius: 12px;
+        background: rgba(14, 12, 10, 0.88);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
+      }
+      body.tutorial-focus-mode .tut-hud-count {
+        font-size: 14px;
+      }
+      body.tutorial-focus-mode .tut-hud-dot {
+        width: 9px;
+        height: 9px;
+      }
+      body.tutorial-focus-mode .tut-hud-dot.active {
+        width: 24px;
+      }
+      body.tutorial-focus-mode .tut-hud-skip-btn {
+        font-size: 12.5px;
+        padding: 5px 13px;
+        background: rgba(255, 255, 255, 0.14);
+        border-color: rgba(255, 255, 255, 0.38);
+        color: #ffffff;
+      }
+      body.tutorial-focus-mode .tut-hud-prompt {
+        font-size: clamp(20px, 2.7vw, 25px);
+        gap: 7px;
+      }
+      body.tutorial-focus-mode .tut-hud-card.is-celebrating .tut-hud-prompt {
+        font-size: clamp(22px, 3vw, 27px);
+      }
+      body.tutorial-focus-mode .tut-hud-hint {
+        font-size: 14.5px;
+        color: rgba(245, 244, 240, 0.9);
+      }
+      body.tutorial-focus-mode .tut-kbd {
+        min-width: 28px;
+        padding: 3px 9px;
+        font-size: 14px;
+        border-radius: 5px;
+      }
+      body.tutorial-focus-mode .tut-pill {
+        padding: 3px 10px;
+        font-size: 13.5px;
+      }
+      body.tutorial-focus-mode .tut-hud-bar-track {
+        height: 6px;
+        margin-top: 4px;
+      }
+      body.tutorial-focus-mode.reel-mode .tutorial-hud {
+        top: calc(58px + env(safe-area-inset-top, 0px));
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(94%, 440px);
+      }
+      @media (max-width: 960px) and (orientation: portrait) {
+        body.tutorial-focus-mode .tutorial-hud {
+          top: calc(58px + env(safe-area-inset-top, 0px));
+          left: 50%;
+          transform: translateX(-50%);
+          width: min(94vw, 440px);
+        }
+        body.tutorial-focus-mode .tut-hud-card {
+          padding: 12px 15px 13px;
+          gap: 6px;
+        }
+        body.tutorial-focus-mode .tut-hud-prompt {
+          font-size: clamp(18px, 4.6vw, 22px);
+        }
+        body.tutorial-focus-mode .tut-hud-hint {
+          font-size: 13.5px;
+        }
+      }
+      @media (max-height: 540px), (max-width: 960px) and (orientation: landscape) {
+        body.tutorial-focus-mode .tutorial-hud {
+          top: calc(10px + env(safe-area-inset-top, 0px));
+          left: max(12px, env(safe-area-inset-left, 12px));
+          right: auto;
+          transform: none;
+          width: min(62vw, 420px);
+          max-width: calc(100vw - 184px);
+        }
+        body.tutorial-focus-mode .tutorial-hud.hidden {
+          transform: translateY(-10px);
+        }
+        body.tutorial-focus-mode .tut-hud-card {
+          padding: 9px 13px 10px;
+          gap: 4px;
+        }
+        body.tutorial-focus-mode .tut-hud-prompt {
+          font-size: clamp(16px, 2.8vw, 19px);
+        }
+        body.tutorial-focus-mode .tut-hud-hint {
+          font-size: 12.5px;
+        }
+        body.tutorial-focus-mode .tut-kbd,
+        body.tutorial-focus-mode .tut-pill {
+          font-size: 12px;
+          padding: 2px 7px;
+        }
+        body.tutorial-focus-mode .tut-hud-skip-btn {
+          font-size: 11.5px;
+          padding: 3px 10px;
+        }
+      }
       .hud-help-btn {
         pointer-events: auto;
         cursor: pointer;
@@ -6231,13 +6373,13 @@
                   </div>
                 </div>
                 <div class="help-item">
-                  <span class="help-key-tag" data-i18n="help.kbBrakeKey">↓ or S</span>
+                  <span class="help-key-tag" data-i18n="help.kbBrakeKey">ALT</span>
                   <div class="help-item-desc" data-i18n-html="help.kbBrake">
-                    <strong>Brake / Stop:</strong> Slow down &amp; control your speed
+                    <strong>Brake / Stop:</strong> Slow down &amp; stop cleanly
                   </div>
                 </div>
                 <div class="help-item">
-                  <span class="help-key-tag" data-i18n="help.kbCompressKey">SHIFT</span>
+                  <span class="help-key-tag" data-i18n="help.kbCompressKey">↓ / SHIFT or S / SHIFT</span>
                   <div class="help-item-desc" data-i18n-html="help.kbCompress">
                     <strong>Compress / Wall-Pump:</strong> Crouch into transitions &amp; bowl walls for speed
                   </div>
@@ -6664,8 +6806,8 @@
                   <div id="dock-riding-keyboard">
                     <div class="ctrl-row"><span class="key">↑</span> one push-off from a standstill</div>
                     <div class="ctrl-row"><span class="key">←</span><span class="key">→</span> carve — alternate in rhythm to pump</div>
-                    <div class="ctrl-row"><span class="key">↓</span> brake &amp; slow down</div>
-                    <div class="ctrl-row"><span class="key">SHIFT</span> compress on a wall drop = stronger pump</div>
+                    <div class="ctrl-row"><span class="key">↓</span><span class="key">SHIFT</span> compress / crouch in transitions &amp; walls</div>
+                    <div class="ctrl-row"><span class="key">ALT</span> brake &amp; slow down</div>
                     <div class="ctrl-row"><span class="key">␣</span> ollie</div>
                     <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4/O</span> camera positions & 3D orbit</div>
                     <div class="ctrl-row"><span class="key">Tab</span> switch to WASD driving</div>

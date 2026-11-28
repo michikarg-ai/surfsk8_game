@@ -133,6 +133,17 @@ export class SurfHUD {
   private lastCoachHintText = '';
   private lastCoachRawKey = '';
   private lastCoachFormattedHint = '';
+
+  // Single-channel recommendation/hint arbiter state (Issue #49)
+  private activeHintChannel: 'none' | 'wall' | 'context' | 'snap' | 'coach' = 'none';
+  private activeHintPriority = 0;
+  private activeHintDwell = 0;
+  private activeHintAge = 0;
+  private activeHintIsFail = false;
+  private activeHintText = '';
+  private activeHintClass = '';
+  private hintBreathingCooldown = 0;
+  private failHintCooldown = 0;
   private lastHotSpotKey = '';
   private lastCrewInteractKey = '';
   private lastCrewQuestKey = '';
@@ -377,6 +388,14 @@ export class SurfHUD {
     this.lastContextTrickText = '';
     this.lastCoachRawKey = '';
     this.lastCoachHintText = '';
+    this.activeHintChannel = 'none';
+    this.activeHintPriority = 0;
+    this.activeHintDwell = 0;
+    this.activeHintAge = 0;
+    this.activeHintIsFail = false;
+    this.activeHintText = '';
+    this.activeHintClass = '';
+    this.hintBreathingCooldown = 0;
     this.lastHotSpotKey = '';
     this.lastCrewInteractKey = '';
     this.lastWantedKey = '';
@@ -424,9 +443,9 @@ export class SurfHUD {
 
     this.activeComboBase += ev.points;
     this.comboMultiplier += 1;
-    this.comboManeuvers.push(ev.name);
-    if (this.comboManeuvers.length > 6) {
-      this.comboManeuvers.shift();
+    const shortName = this.shortenComboTrickName(ev.name);
+    if (this.comboManeuvers[this.comboManeuvers.length - 1] !== shortName) {
+      this.comboManeuvers.push(shortName);
     }
     this.comboTimeout = this.comboMaxHold;
     if (this.lastComboBarScale !== 1) {
@@ -647,30 +666,346 @@ export class SurfHUD {
       this.leanReadoutEl.textContent = `${leanDegAbs}°`;
     }
 
-    // 4. SNAP / INDY GRAB hint / failure feedback
-    let nextSnapText = '';
-    let nextSnapClass = '';
-    if (ctrl.snapFeedback) {
-      nextSnapText = ctrl.snapFeedback;
-      nextSnapClass = 'visible fail';
-    } else if (ctrl.indyGrabReady && !ctrl.indyGrabActive) {
-      nextSnapText = t('hud.indyHold');
-      nextSnapClass = 'visible ready';
-    } else if (ctrl.indyGrabActive) {
-      nextSnapText = t('hud.indyTweak');
-      nextSnapClass = 'visible ready';
-    } else if (ctrl.snapWindow === 'READY' && !ctrl.snapActive) {
-      const snapKey = this.controlMode === 'arrows' ? 'Q' : 'O';
-      nextSnapText = t('hud.snapReady', { key: snapKey });
-      nextSnapClass = 'visible ready';
-    } else if (ctrl.snapWindow === 'TOO_SLOW') {
-      nextSnapText = t('hud.snapTooSlow');
-      nextSnapClass = 'visible dim';
-    } else if (ctrl.snapWindow === 'TOO_FAST') {
-      nextSnapText = t('hud.snapTooFast');
-      nextSnapClass = 'visible dim';
+    // 4 & 5. Single-channel Hint Arbiter (SNAP / Wall Cue / Context Trick / Coach)
+    this.updateHintArbiter(dt, ctrl);
+  }
+
+  private updateHintArbiter(dt: number, ctrl: SurfskateController): void {
+    const MIN_DWELL_SEC = 1.65;
+    const BREATHING_COOLDOWN_SEC = 0.5;
+    const FAIL_COOLDOWN_SEC = 3.0;
+    const FAIL_MAX_AGE_SEC = 1.8;
+
+    this.activeHintDwell = Math.max(0, this.activeHintDwell - dt);
+    this.hintBreathingCooldown = Math.max(0, this.hintBreathingCooldown - dt);
+    this.failHintCooldown = Math.max(0, this.failHintCooldown - dt);
+    if (this.activeHintChannel !== 'none') {
+      this.activeHintAge += dt;
     }
-    if (nextSnapClass && nextSnapText !== this.lastSnapHintText) {
+
+    const landingOverlay =
+      this.landingOverlayEl ?? (this.landingOverlayEl = document.getElementById('landing-overlay'));
+    const isLandingOpen = Boolean(landingOverlay && !landingOverlay.classList.contains('hidden'));
+
+    if (isLandingOpen || this.sessionEnded) {
+      this.activeHintChannel = 'none';
+      this.activeHintPriority = 0;
+      this.activeHintDwell = 0;
+      this.activeHintAge = 0;
+      this.activeHintIsFail = false;
+      this.activeHintText = '';
+      this.activeHintClass = '';
+      this.applyArbiterDOM();
+      return;
+    }
+
+    const isTouch =
+      Boolean(this.lastTouchEnabled) || document.body.classList.contains('has-touch-controls');
+
+    interface HintCandidate {
+      channel: 'wall' | 'context' | 'snap' | 'coach';
+      priority: number;
+      text: string;
+      cls: string;
+      isFail: boolean;
+    }
+
+    let best: HintCandidate | null = null;
+    const consider = (cand: HintCandidate) => {
+      if (!best || cand.priority > best.priority) {
+        best = cand;
+      }
+    };
+
+    // Priority 4: Critical wipeout / bail (immediate preemption)
+    if (ctrl.isBailing) {
+      consider({
+        channel: 'coach',
+        priority: 4,
+        text: t('hud.wipeoutPrefix', {
+          reason: ctrl.bailReason || t('hud.wipeoutFallback'),
+        }),
+        cls: 'visible bail',
+        isFail: false,
+      });
+    } else if (!this.tutorialActive) {
+      // Priority 3: Active Flow Line, Ready Air/Lip Snap Window, or Context Trick
+      if (this.flowLineHint) {
+        consider({
+          channel: 'coach',
+          priority: 3,
+          text: this.flowLineHint,
+          cls: 'visible ready',
+          isFail: false,
+        });
+      }
+
+      if (ctrl.indyGrabReady && !ctrl.indyGrabActive) {
+        consider({
+          channel: 'snap',
+          priority: 3,
+          text: t('hud.indyHold'),
+          cls: 'visible ready',
+          isFail: false,
+        });
+      } else if (ctrl.indyGrabActive) {
+        consider({
+          channel: 'snap',
+          priority: 3,
+          text: t('hud.indyTweak'),
+          cls: 'visible ready',
+          isFail: false,
+        });
+      } else if (ctrl.snapWindow === 'READY' && !ctrl.snapActive) {
+        const snapKey = this.controlMode === 'arrows' ? 'Q' : 'O';
+        consider({
+          channel: 'snap',
+          priority: 3,
+          text: t('hud.snapReady', { key: snapKey }),
+          cls: 'visible ready',
+          isFail: false,
+        });
+      }
+
+      const inTrickOrBail =
+        ctrl.isBailing ||
+        ctrl.snapActive ||
+        ctrl.bertSlideActive ||
+        ctrl.laybackActive ||
+        ctrl.reverseActive ||
+        ctrl.indyGrabActive;
+      if (this.contextTrickEl && !inTrickOrBail && ctrl.availableContextTrick !== 'none') {
+        const keyMap: Record<
+          Exclude<typeof ctrl.availableContextTrick, 'none'>,
+          | 'hud.ctxTrickBertTouch'
+          | 'hud.ctxTrickBertDesktop'
+          | 'hud.ctxTrickLaybackTouch'
+          | 'hud.ctxTrickLaybackDesktop'
+          | 'hud.ctxTrickSnapTouch'
+          | 'hud.ctxTrickSnapDesktop'
+          | 'hud.ctxTrickReverseTouch'
+          | 'hud.ctxTrickReverseDesktop'
+        > = {
+          bert: isTouch ? 'hud.ctxTrickBertTouch' : 'hud.ctxTrickBertDesktop',
+          layback: isTouch ? 'hud.ctxTrickLaybackTouch' : 'hud.ctxTrickLaybackDesktop',
+          snap: isTouch ? 'hud.ctxTrickSnapTouch' : 'hud.ctxTrickSnapDesktop',
+          reverse360: isTouch ? 'hud.ctxTrickReverseTouch' : 'hud.ctxTrickReverseDesktop',
+        };
+        consider({
+          channel: 'context',
+          priority: 3,
+          text: t(keyMap[ctrl.availableContextTrick]),
+          cls: `hud-action-pill visible is-${ctrl.availableContextTrick}`,
+          isFail: false,
+        });
+      }
+
+      // Priority 2: Wall Compress->Extend Cue & Active Physics Coach Hint
+      if (this.wallCueEl && ctrl.wallPumpCue !== 'none') {
+        if (ctrl.wallPumpCue === 'extend') {
+          consider({
+            channel: 'wall',
+            priority: 2,
+            text: isTouch ? t('hud.wallCueExtendTouch') : t('hud.wallCueExtendDesktop'),
+            cls: 'hud-action-pill visible extend',
+            isFail: false,
+          });
+        } else {
+          const compressKey = this.controlMode === 'wasd' ? 'S / SHIFT' : '↓ / SHIFT';
+          consider({
+            channel: 'wall',
+            priority: 2,
+            text: isTouch
+              ? t('hud.wallCueCompressTouch')
+              : t('hud.wallCueCompressDesktop', { key: compressKey }),
+            cls: 'hud-action-pill visible compress',
+            isFail: false,
+          });
+        }
+      }
+
+      if (ctrl.coachHint) {
+        const coachTouch = isTouch || (typeof window !== 'undefined' && window.innerWidth <= 960);
+        const rawKey = `${ctrl.coachHint}|${coachTouch ? 1 : 0}`;
+        if (rawKey !== this.lastCoachRawKey) {
+          this.lastCoachRawKey = rawKey;
+          let hint = ctrl.coachHint;
+          if (coachTouch) {
+            hint = hint
+              .replace(/press [↑W] once to push off/i, 'tap ▲ PUMP to push off')
+              .replace(/press [↑W]/i, 'tap ▲ PUMP')
+              .replace(/drücke [↑W] einmal zum Pushen/i, 'tippe ▲ PUMP zum Losfahren')
+              .replace(/← →/g, '◀ ▶');
+          }
+          this.lastCoachFormattedHint = hint;
+        }
+        consider({
+          channel: 'coach',
+          priority: 2,
+          text: this.lastCoachFormattedHint,
+          cls: 'visible',
+          isFail: false,
+        });
+      }
+
+      // Priority 1: Low-priority red/dim snap fail feedback (3.0s cooldown) & idle push prompt
+      const isCurrentlyShowingFail = this.activeHintChannel === 'snap' && this.activeHintIsFail;
+      const canShowFail =
+        this.failHintCooldown <= 0 ||
+        (isCurrentlyShowingFail && this.activeHintAge < FAIL_MAX_AGE_SEC);
+
+      if (canShowFail) {
+        if (ctrl.snapFeedback) {
+          consider({
+            channel: 'snap',
+            priority: 1,
+            text: ctrl.snapFeedback,
+            cls: 'visible fail',
+            isFail: true,
+          });
+        } else if (ctrl.snapWindow === 'TOO_SLOW') {
+          consider({
+            channel: 'snap',
+            priority: 1,
+            text: t('hud.snapTooSlow'),
+            cls: 'visible dim',
+            isFail: true,
+          });
+        } else if (ctrl.snapWindow === 'TOO_FAST') {
+          consider({
+            channel: 'snap',
+            priority: 1,
+            text: t('hud.snapTooFast'),
+            cls: 'visible dim',
+            isFail: true,
+          });
+        }
+      }
+
+      if (ctrl.isGrounded && ctrl.speed < 0.4) {
+        const coachTouch = isTouch || (typeof window !== 'undefined' && window.innerWidth <= 960);
+        const pushText = coachTouch
+          ? t('hud.pushTouch')
+          : t('hud.pushKey', { key: this.controlMode === 'arrows' ? '↑' : 'W' });
+        consider({
+          channel: 'coach',
+          priority: 1,
+          text: pushText,
+          cls: 'visible idle',
+          isFail: false,
+        });
+      }
+    }
+
+    // Arbitrate state transitions with minimum dwell (1.65s) & breathing cooldown (0.5s)
+    const cand = best as HintCandidate | null;
+    if (cand && cand.priority >= 4) {
+      // Critical bail notice preempts immediately
+      this.activeHintChannel = cand.channel;
+      this.activeHintPriority = cand.priority;
+      this.activeHintText = cand.text;
+      this.activeHintClass = cand.cls;
+      this.activeHintIsFail = false;
+      this.activeHintDwell = MIN_DWELL_SEC;
+      this.activeHintAge = 0;
+      this.hintBreathingCooldown = 0;
+    } else if (this.activeHintChannel !== 'none') {
+      const failExpired = this.activeHintIsFail && this.activeHintAge >= FAIL_MAX_AGE_SEC;
+      if (failExpired && this.activeHintDwell <= 0) {
+        this.failHintCooldown = FAIL_COOLDOWN_SEC;
+        this.activeHintChannel = 'none';
+        this.activeHintPriority = 0;
+        this.activeHintAge = 0;
+        this.activeHintIsFail = false;
+        this.activeHintText = '';
+        this.activeHintClass = '';
+        this.hintBreathingCooldown = BREATHING_COOLDOWN_SEC;
+      } else if (cand && cand.channel === this.activeHintChannel) {
+        // Same-channel live update (e.g. compress -> extend or indyHold -> indyTweak)
+        if (!cand.isFail || this.activeHintIsFail || this.activeHintDwell <= 0) {
+          const classChanged = cand.cls !== this.activeHintClass;
+          this.activeHintPriority = cand.priority;
+          this.activeHintText = cand.text;
+          this.activeHintClass = cand.cls;
+          this.activeHintIsFail = cand.isFail;
+          if (classChanged) {
+            this.activeHintDwell = MIN_DWELL_SEC;
+          }
+        }
+      } else if (cand && cand.priority > this.activeHintPriority) {
+        // Higher-priority event preempts lower-priority cue
+        if (this.activeHintIsFail) {
+          this.failHintCooldown = FAIL_COOLDOWN_SEC;
+        }
+        this.activeHintChannel = cand.channel;
+        this.activeHintPriority = cand.priority;
+        this.activeHintText = cand.text;
+        this.activeHintClass = cand.cls;
+        this.activeHintIsFail = cand.isFail;
+        this.activeHintDwell = MIN_DWELL_SEC;
+        this.activeHintAge = 0;
+      } else if (this.activeHintDwell <= 0) {
+        // Minimum dwell elapsed: clear current cue and enter 0.5s breathing cooldown
+        if (this.activeHintIsFail) {
+          this.failHintCooldown = FAIL_COOLDOWN_SEC;
+        }
+        this.activeHintChannel = 'none';
+        this.activeHintPriority = 0;
+        this.activeHintAge = 0;
+        this.activeHintIsFail = false;
+        this.activeHintText = '';
+        this.activeHintClass = '';
+        this.hintBreathingCooldown = BREATHING_COOLDOWN_SEC;
+      }
+      // Otherwise: keep showing active cue until MIN_DWELL_SEC expires (prevents flicker)
+    } else if (cand && this.hintBreathingCooldown <= 0) {
+      this.activeHintChannel = cand.channel;
+      this.activeHintPriority = cand.priority;
+      this.activeHintText = cand.text;
+      this.activeHintClass = cand.cls;
+      this.activeHintIsFail = cand.isFail;
+      this.activeHintDwell = MIN_DWELL_SEC;
+      this.activeHintAge = 0;
+    }
+
+    this.applyArbiterDOM();
+  }
+
+  private applyArbiterDOM(): void {
+    // 1. Wall cue
+    if (this.wallCueEl) {
+      const nextText = this.activeHintChannel === 'wall' ? this.activeHintText : '';
+      const nextClass =
+        this.activeHintChannel === 'wall' ? this.activeHintClass : 'hud-action-pill';
+      if (nextText && nextText !== this.lastWallCueText) {
+        this.lastWallCueText = nextText;
+        this.wallCueEl.textContent = nextText;
+      }
+      if (nextClass !== this.lastWallCueClass) {
+        this.lastWallCueClass = nextClass;
+        this.wallCueEl.className = nextClass;
+      }
+    }
+
+    // 2. Context trick cue
+    if (this.contextTrickEl) {
+      const nextText = this.activeHintChannel === 'context' ? this.activeHintText : '';
+      const nextClass =
+        this.activeHintChannel === 'context' ? this.activeHintClass : 'hud-action-pill';
+      if (nextText && nextText !== this.lastContextTrickText) {
+        this.lastContextTrickText = nextText;
+        this.contextTrickEl.textContent = nextText;
+      }
+      if (nextClass !== this.lastContextTrickClass) {
+        this.lastContextTrickClass = nextClass;
+        this.contextTrickEl.className = nextClass;
+      }
+    }
+
+    // 3. Snap / Indy hint
+    const nextSnapText = this.activeHintChannel === 'snap' ? this.activeHintText : '';
+    const nextSnapClass = this.activeHintChannel === 'snap' ? this.activeHintClass : '';
+    if (nextSnapText && nextSnapText !== this.lastSnapHintText) {
       this.lastSnapHintText = nextSnapText;
       this.snapHintEl.textContent = nextSnapText;
     }
@@ -679,130 +1014,10 @@ export class SurfHUD {
       this.snapHintEl.className = nextSnapClass;
     }
 
-    // 5. Coaching hints, Wall Compress->Extend Cue & Live Context Trick Prompt
-    // Never show coaching/action cues while landing overlay is open
-    const landingOverlay = this.landingOverlayEl ?? (this.landingOverlayEl = document.getElementById('landing-overlay'));
-    const isLandingOpen = Boolean(landingOverlay && !landingOverlay.classList.contains('hidden'));
-    const isTouch =
-      Boolean(this.lastTouchEnabled) || document.body.classList.contains('has-touch-controls');
-
-    if (this.wallCueEl) {
-      let nextWallText = '';
-      let nextWallClass = 'hud-action-pill';
-      if (
-        !isLandingOpen &&
-        !this.tutorialActive &&
-        !ctrl.isBailing &&
-        !this.sessionEnded &&
-        ctrl.wallPumpCue !== 'none'
-      ) {
-        if (ctrl.wallPumpCue === 'extend') {
-          nextWallText = isTouch ? t('hud.wallCueExtendTouch') : t('hud.wallCueExtendDesktop');
-          nextWallClass = 'hud-action-pill visible extend';
-        } else {
-          nextWallText = isTouch
-            ? t('hud.wallCueCompressTouch')
-            : t('hud.wallCueCompressDesktop', { key: 'SHIFT' });
-          nextWallClass = 'hud-action-pill visible compress';
-        }
-      }
-      if (nextWallText && nextWallText !== this.lastWallCueText) {
-        this.lastWallCueText = nextWallText;
-        this.wallCueEl.textContent = nextWallText;
-      }
-      if (nextWallClass !== this.lastWallCueClass) {
-        this.lastWallCueClass = nextWallClass;
-        this.wallCueEl.className = nextWallClass;
-      }
-    }
-
-    if (this.contextTrickEl) {
-      let nextCtxText = '';
-      let nextCtxClass = 'hud-action-pill';
-      const inTrickOrBail =
-        ctrl.isBailing ||
-        ctrl.snapActive ||
-        ctrl.bertSlideActive ||
-        ctrl.laybackActive ||
-        ctrl.reverseActive ||
-        ctrl.indyGrabActive;
-      if (
-        !isLandingOpen &&
-        !this.sessionEnded &&
-        !inTrickOrBail &&
-        ctrl.availableContextTrick !== 'none'
-      ) {
-        const keyMap: Record<
-          Exclude<typeof ctrl.availableContextTrick, 'none'>,
-          'hud.ctxTrickBertTouch' | 'hud.ctxTrickBertDesktop' | 'hud.ctxTrickLaybackTouch' | 'hud.ctxTrickLaybackDesktop' | 'hud.ctxTrickSnapTouch' | 'hud.ctxTrickSnapDesktop' | 'hud.ctxTrickReverseTouch' | 'hud.ctxTrickReverseDesktop'
-        > = {
-          bert: isTouch ? 'hud.ctxTrickBertTouch' : 'hud.ctxTrickBertDesktop',
-          layback: isTouch ? 'hud.ctxTrickLaybackTouch' : 'hud.ctxTrickLaybackDesktop',
-          snap: isTouch ? 'hud.ctxTrickSnapTouch' : 'hud.ctxTrickSnapDesktop',
-          reverse360: isTouch ? 'hud.ctxTrickReverseTouch' : 'hud.ctxTrickReverseDesktop',
-        };
-        nextCtxText = t(keyMap[ctrl.availableContextTrick]);
-        nextCtxClass = `hud-action-pill visible is-${ctrl.availableContextTrick}`;
-      }
-      if (nextCtxText && nextCtxText !== this.lastContextTrickText) {
-        this.lastContextTrickText = nextCtxText;
-        this.contextTrickEl.textContent = nextCtxText;
-      }
-      if (nextCtxClass !== this.lastContextTrickClass) {
-        this.lastContextTrickClass = nextCtxClass;
-        this.contextTrickEl.className = nextCtxClass;
-      }
-    }
-
-    if (isLandingOpen) {
-      if (this.lastCoachHintClass !== '') {
-        this.lastCoachHintClass = '';
-        this.coachHintEl.className = '';
-      }
-      return;
-    }
-
-    let nextCoachText = '';
-    let nextCoachClass = '';
-    if (ctrl.isBailing) {
-      nextCoachText = t('hud.wipeoutPrefix', {
-        reason: ctrl.bailReason || t('hud.wipeoutFallback'),
-      });
-      nextCoachClass = 'visible bail';
-    } else if (this.tutorialActive) {
-      nextCoachClass = '';
-    } else if (this.flowLineHint) {
-      nextCoachText = this.flowLineHint;
-      nextCoachClass = 'visible ready';
-    } else if (ctrl.coachHint) {
-      const coachTouch = isTouch || (typeof window !== 'undefined' && window.innerWidth <= 960);
-      const rawKey = `${ctrl.coachHint}|${coachTouch ? 1 : 0}`;
-      if (rawKey !== this.lastCoachRawKey) {
-        this.lastCoachRawKey = rawKey;
-        let hint = ctrl.coachHint;
-        if (coachTouch) {
-          hint = hint
-            .replace(/press [↑W] once to push off/i, 'tap ▲ PUMP to push off')
-            .replace(/press [↑W]/i, 'tap ▲ PUMP')
-            .replace(/drücke [↑W] einmal zum Pushen/i, 'tippe ▲ PUMP zum Losfahren')
-            .replace(/← →/g, '◀ ▶');
-        }
-        this.lastCoachFormattedHint = hint;
-      }
-      nextCoachText = this.lastCoachFormattedHint;
-      nextCoachClass = 'visible';
-    } else if (ctrl.isGrounded && ctrl.speed < 0.4) {
-      const coachTouch = isTouch || (typeof window !== 'undefined' && window.innerWidth <= 960);
-      if (coachTouch) {
-        nextCoachText = t('hud.pushTouch');
-      } else {
-        const pushKey = this.controlMode === 'arrows' ? '↑' : 'W';
-        nextCoachText = t('hud.pushKey', { key: pushKey });
-      }
-      nextCoachClass = 'visible idle';
-    }
-
-    if (nextCoachClass && nextCoachText !== this.lastCoachHintText) {
+    // 4. Coach hint
+    const nextCoachText = this.activeHintChannel === 'coach' ? this.activeHintText : '';
+    const nextCoachClass = this.activeHintChannel === 'coach' ? this.activeHintClass : '';
+    if (nextCoachText && nextCoachText !== this.lastCoachHintText) {
       this.lastCoachHintText = nextCoachText;
       this.coachHintEl.textContent = nextCoachText;
     }
@@ -1101,6 +1316,15 @@ export class SurfHUD {
     this.lastContextTrickText = '';
     this.lastCoachHintClass = '';
     this.lastSnapHintClass = '';
+    this.activeHintChannel = 'none';
+    this.activeHintPriority = 0;
+    this.activeHintDwell = 0;
+    this.activeHintAge = 0;
+    this.activeHintIsFail = false;
+    this.activeHintText = '';
+    this.activeHintClass = '';
+    this.hintBreathingCooldown = 0;
+    this.failHintCooldown = 0;
     this.lastHotSpotKey = '';
     this.lastCrewInteractKey = '';
     this.lastCrewQuestKey = '';
@@ -1588,8 +1812,8 @@ export class SurfHUD {
           ? `
           <div class="ctrl-row"><span class="key">↑</span> ${t('dock.kbPush')}</div>
           <div class="ctrl-row"><span class="key">←</span><span class="key">→</span> ${t('dock.kbCarve')}</div>
-          <div class="ctrl-row"><span class="key">↓</span> ${t('dock.kbBrake')}</div>
-          <div class="ctrl-row"><span class="key">SHIFT</span> ${t('dock.kbCompress')}</div>
+          <div class="ctrl-row"><span class="key">↓</span><span class="key">SHIFT</span> ${t('dock.kbCompress')}</div>
+          <div class="ctrl-row"><span class="key">ALT</span> ${t('dock.kbBrake')}</div>
           <div class="ctrl-row"><span class="key">␣</span> ${t('dock.kbOllie')}</div>
           <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4/O</span> ${t('dock.kbCam')}</div>
           <div class="ctrl-row"><span class="key">Tab</span> ${t('dock.kbSwitchWasd')}</div>
@@ -1598,8 +1822,8 @@ export class SurfHUD {
           : `
           <div class="ctrl-row"><span class="key">W</span> ${t('dock.kbPush')}</div>
           <div class="ctrl-row"><span class="key">A</span><span class="key">D</span> ${t('dock.kbCarve')}</div>
-          <div class="ctrl-row"><span class="key">S</span> ${t('dock.kbBrake')}</div>
-          <div class="ctrl-row"><span class="key">SHIFT</span> ${t('dock.kbCompress')}</div>
+          <div class="ctrl-row"><span class="key">S</span><span class="key">SHIFT</span> ${t('dock.kbCompress')}</div>
+          <div class="ctrl-row"><span class="key">ALT</span> ${t('dock.kbBrake')}</div>
           <div class="ctrl-row"><span class="key">␣</span> ${t('dock.kbOllie')}</div>
           <div class="ctrl-row"><span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4/O</span> ${t('dock.kbCam')}</div>
           <div class="ctrl-row"><span class="key">Tab</span> ${t('dock.kbSwitchArrows')}</div>
@@ -1734,10 +1958,38 @@ export class SurfHUD {
     }
   }
 
+  private shortenComboTrickName(rawName: string): string {
+    const clean = rawName
+      .replace(/[⚡🔥⭐🥨]/gu, '')
+      .replace(/!+$/g, '')
+      .trim()
+      .toUpperCase();
+    if (clean.includes('SURF-ZONE')) return 'SURF-ZONE';
+    if (clean.includes('WALL PUMP')) return 'WALL PUMP';
+    if (clean.includes('PUMP')) return 'PUMP';
+    if (clean.includes('INDY AIR')) return 'INDY AIR';
+    if (clean.includes('INDY GRAB')) return 'INDY GRAB';
+    if (clean.includes('SNAP')) return 'LIP SNAP';
+    if (clean.includes('REVERSE 360')) return 'FS 360';
+    if (clean.includes('BERTSLIDE 180')) return 'BERT 180°';
+    if (clean.includes('BERTSLIDE') || clean.includes('BERT SLIDE')) return 'BERT SLIDE';
+    if (clean.includes('LAYBACK 180')) return 'LAYBACK 180°';
+    if (clean.includes('LAYBACK')) return 'LAYBACK';
+    if (clean.includes('LIP RE-ENTRY')) return 'LIP RE-ENTRY';
+    if (clean.includes('GRIND')) return 'COPING GRIND';
+    return clean.replace(/^PERFECT\s+/, '').slice(0, 16);
+  }
+
   private renderCombo(): void {
     const totalCombo = this.activeComboBase * this.comboMultiplier;
     this.comboPointsEl.textContent = `${formatNum(this.activeComboBase)} × ${this.comboMultiplier} = ${formatNum(totalCombo)}`;
-    this.comboStringEl.textContent = this.comboManeuvers.join('  +  ');
+    const len = this.comboManeuvers.length;
+    if (len <= 2) {
+      this.comboStringEl.textContent = this.comboManeuvers.join(' + ');
+    } else {
+      const recent = this.comboManeuvers.slice(-2).join(' + ');
+      this.comboStringEl.textContent = `+${len - 2} · ${recent}`;
+    }
   }
 
   private bankCombo(): void {
