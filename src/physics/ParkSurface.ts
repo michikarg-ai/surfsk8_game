@@ -52,17 +52,26 @@ export class ParkSurface {
     return { xMin, xMax, zMin, zMax };
   }
 
+  private lidarLoadToken = 0;
+
   public async loadLidarGrid(
     url: string = 'models/im_gefilde_lidar.json',
     parkId?: string
   ): Promise<void> {
-    this.parkId = parkId || (url.includes('airport') ? 'airport_skatepark' : 'im_gefilde');
+    const token = ++this.lidarLoadToken;
+    const targetParkId = parkId || (url.includes('airport') ? 'airport_skatepark' : 'im_gefilde');
+    this.parkId = targetParkId;
     try {
       const resp = await fetch(resolveAssetUrl(url));
+      if (token !== this.lidarLoadToken) return;
       if (resp.ok) {
-        this.lidarData = (await resp.json()) as LidarGridPayload;
+        const data = (await resp.json()) as LidarGridPayload;
+        if (token !== this.lidarLoadToken) return;
+        this.lidarData = data;
+        this.parkId = targetParkId;
       }
     } catch (e) {
+      if (token !== this.lidarLoadToken) return;
       console.warn('Using analytical C2 surface fallback for ' + url, e);
     }
   }

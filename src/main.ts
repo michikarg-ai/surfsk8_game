@@ -85,6 +85,7 @@ class SurfskateMunichGame {
   private readonly jetwashSlowMoDuration = 0.35;
   private readonly jetwashSlowMoScale = 0.28;
   private crowdHypeQuoteIdx: Record<'sepp' | 'michi', number> = { sepp: 0, michi: 0 };
+  private parkSwitchToken = 0;
 
   // Exact LiDAR/DOP20 Waypoints around Skatepark "Im Gefilde" for Auto-Shred / Instagram Reel Filmer
   private readonly flowWaypoints = [
@@ -328,35 +329,57 @@ class SurfskateMunichGame {
     this.initAssets();
   }
 
+  private applyLoadedParkState(parkId: string): void {
+    if (parkId === 'airport_skatepark') {
+      this.controller.setSpawn(2.94, 11.32, -0.175);
+    } else {
+      this.controller.setSpawn(15.2, 4.2, 1.38);
+    }
+    (this.flowLine as unknown as { refreshSurfaceHeights: (parkId?: string) => void }).refreshSurfaceHeights(
+      parkId
+    );
+    this.hotSpotZone.setPark(parkId);
+    const normParkId = this.normalizeSpecialParkId(parkId);
+    this.parkCrew.setPark(normParkId, this.parkSurface);
+    this.afterHoursWanted.setPark(normParkId, this.parkSurface);
+    this.afterHoursWanted.setNightMode(this.worldScene.mode === 'night');
+    this.inOutlawSpotlight = false;
+    this.hud.updateCrewInteract(false, normParkId === 'airport_skatepark' ? 'michi' : 'sepp', false);
+    this.hud.hideCrewDialogue();
+    this.hud.updateCrewQuestPill('idle', normParkId === 'airport_skatepark' ? 'michi' : 'sepp', 0, 4);
+    this.hud.updateWantedStatus({
+      active: this.worldScene.mode === 'night',
+      stars: 0,
+      inOutlawSpotlight: false,
+      bustedProgress: 0,
+    });
+    this.controller.resetToSpawn();
+    this.surfCamera.reset(this.controller);
+    this.syncHUDButtons();
+  }
+
   private async initAssets(): Promise<void> {
     const loadingEl = document.getElementById('loading-overlay');
+    const token = ++this.parkSwitchToken;
     try {
       const initialModel = this.landingPage.getSelectedSkaterModel();
       const initialPark = this.landingPage.getSelectedPark();
-      await Promise.all([
+      const [, worldLoaded] = await Promise.all([
         this.parkSurface.loadLidarGrid(initialPark.lidarUrl || 'models/im_gefilde_lidar.json', initialPark.id),
         this.worldScene.load(initialPark.id),
         this.skaterVisuals.load(initialModel),
         this.landingPage.load(),
       ]);
-      if (initialPark.id === 'airport_skatepark') {
-        this.controller.setSpawn(2.94, 11.32, -0.175);
-      } else {
-        this.controller.setSpawn(15.2, 4.2, 1.38);
+      if (token === this.parkSwitchToken && worldLoaded) {
+        this.applyLoadedParkState(initialPark.id);
       }
-      (this.flowLine as unknown as { refreshSurfaceHeights: (parkId?: string) => void }).refreshSurfaceHeights(
-        initialPark.id
-      );
-      this.hotSpotZone.setPark(initialPark.id);
-      const normParkId = this.normalizeSpecialParkId(initialPark.id);
-      this.parkCrew.setPark(normParkId, this.parkSurface);
-      this.afterHoursWanted.setPark(normParkId, this.parkSurface);
-      this.afterHoursWanted.setNightMode(this.worldScene.mode === 'night');
     } catch (err) {
       console.error('Error loading GLB/LiDAR assets:', err);
+      if (token === this.parkSwitchToken) {
+        this.controller.resetToSpawn();
+        this.surfCamera.reset(this.controller);
+      }
     }
-    this.controller.resetToSpawn();
-    this.surfCamera.reset(this.controller);
     this.assetsInitialized = true;
     this.flowLine.warmup(this.renderer, this.scene, this.surfCamera.camera);
     if (loadingEl) {
@@ -877,40 +900,19 @@ class SurfskateMunichGame {
   }
 
   public async switchPark(park: SkateparkLocation): Promise<void> {
+    const token = ++this.parkSwitchToken;
     try {
-      await Promise.all([
+      const [worldLoaded] = await Promise.all([
         this.worldScene.load(park.id),
         this.parkSurface.loadLidarGrid(park.lidarUrl || 'models/im_gefilde_lidar.json', park.id),
       ]);
-      (this.flowLine as unknown as { refreshSurfaceHeights: (parkId?: string) => void }).refreshSurfaceHeights(
-        park.id
-      );
-      this.hotSpotZone.setPark(park.id);
-      const normParkId = this.normalizeSpecialParkId(park.id);
-      this.parkCrew.setPark(normParkId, this.parkSurface);
-      this.afterHoursWanted.setPark(normParkId, this.parkSurface);
-      this.afterHoursWanted.setNightMode(this.worldScene.mode === 'night');
-      this.inOutlawSpotlight = false;
-      this.hud.updateCrewInteract(false, normParkId === 'airport_skatepark' ? 'michi' : 'sepp', false);
-      this.hud.hideCrewDialogue();
-      this.hud.updateCrewQuestPill('idle', normParkId === 'airport_skatepark' ? 'michi' : 'sepp', 0, 4);
-      this.hud.updateWantedStatus({
-        active: this.worldScene.mode === 'night',
-        stars: 0,
-        inOutlawSpotlight: false,
-        bustedProgress: 0,
-      });
-      if (park.id === 'airport_skatepark') {
-        this.controller.setSpawn(2.94, 11.32, -0.175);
-      } else {
-        this.controller.setSpawn(15.2, 4.2, 1.38);
-      }
-      this.controller.resetToSpawn();
-      this.surfCamera.reset(this.controller);
+      if (token !== this.parkSwitchToken || !worldLoaded) return;
+      this.applyLoadedParkState(park.id);
       this.scooterRider.reset();
       this.jetwashCooldown = 0;
       this.jetwashSlowMoTimer = 0;
     } catch (e) {
+      if (token !== this.parkSwitchToken) return;
       console.error('Error switching skatepark:', e);
     }
   }
