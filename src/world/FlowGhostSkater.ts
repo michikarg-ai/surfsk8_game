@@ -107,7 +107,17 @@ export class FlowGhostSkater {
   private trackedTextures: THREE.Texture[] = [];
   private disposed = false;
 
+  // Readiness tracking for preloading & shader warmup
+  private readyPromise: Promise<void>;
+  private resolveReady!: () => void;
+  public onModelReady?: () => void;
+  public onReady?: () => void;
+
   constructor(private worldParent: THREE.Group, labelSprite: THREE.Sprite) {
+    this.readyPromise = new Promise<void>((resolve) => {
+      this.resolveReady = resolve;
+    });
+
     this.root.name = 'FlowLineGhostSkater';
     this.worldParent.add(this.root);
 
@@ -129,6 +139,107 @@ export class FlowGhostSkater {
     this.root.add(this.fallbackGroup);
 
     void this.loadMakeHumanModel();
+  }
+
+  public whenReady(): Promise<void> {
+    return this.readyPromise;
+  }
+
+  public isTrailVisible(): boolean {
+    return this.trailMesh.visible;
+  }
+
+  /**
+   * Temporarily shows/hides the trail mesh at sub-pixel scale for GPU shader/VBO warmup
+   * without leaving visible artifacts or altering live trail state.
+   */
+  public setTrailWarmup(active: boolean, warmupPos?: THREE.Vector3): void {
+    if (active) {
+      if (!this.trailInitialized) {
+        // Seed non-degenerate micro-triangle vertices so GPU compiles & binds full pipeline
+        this.trailPositions[0] = -0.5;
+        this.trailPositions[1] = 0;
+        this.trailPositions[2] = 0;
+        this.trailPositions[3] = 0.5;
+        this.trailPositions[4] = 0;
+        this.trailPositions[5] = 0;
+        this.trailPositions[6] = -0.5;
+        this.trailPositions[7] = 0;
+        this.trailPositions[8] = 1.0;
+        this.trailPositions[9] = 0.5;
+        this.trailPositions[10] = 0;
+        this.trailPositions[11] = 1.0;
+        for (let i = 0; i < 12; i += 3) {
+          this.trailColors[i] = 0.0;
+          this.trailColors[i + 1] = 0.96;
+          this.trailColors[i + 2] = 0.88;
+        }
+        this.trailMesh.geometry.attributes.position.needsUpdate = true;
+        this.trailMesh.geometry.attributes.color.needsUpdate = true;
+      }
+      if (warmupPos) {
+        this.trailMesh.position.copy(warmupPos);
+      }
+      this.trailMesh.scale.setScalar(0.0001);
+      this.trailMesh.frustumCulled = false;
+      this.trailMesh.visible = true;
+    } else {
+      this.trailMesh.position.set(0, 0, 0);
+      this.trailMesh.scale.set(1, 1, 1);
+      this.trailMesh.frustumCulled = false;
+      this.trailMesh.visible = this.trailInitialized && this.root.visible;
+    }
+  }
+
+  /**
+   * Temporarily makes all ghost meshes (Fresnel SkinnedMesh/fallback, ground aura, label sprite,
+   * and carve trail) visible and compiles their WebGL shader programs, then restores prior state.
+   */
+  public warmup(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): void {
+    const prevRootVis = this.root.visible;
+    const prevRootPos = this.root.position.clone();
+    const prevRootScale = this.root.scale.clone();
+    const warmTrail = !this.trailMesh.visible;
+    const savedFrustumCulled: Array<{ obj: THREE.Object3D; prev: boolean }> = [];
+
+    camera.updateMatrixWorld();
+    const camPos = new THREE.Vector3();
+    const camDir = new THREE.Vector3();
+    camera.getWorldPosition(camPos);
+    camera.getWorldDirection(camDir);
+    const warmupPos = camPos.addScaledVector(camDir, 2.0);
+
+    try {
+      if (!prevRootVis) {
+        this.root.position.copy(warmupPos);
+        this.root.scale.setScalar(0.0001);
+        this.root.visible = true;
+        this.root.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh || (child as THREE.Sprite).isSprite) {
+            savedFrustumCulled.push({ obj: child, prev: child.frustumCulled });
+            child.frustumCulled = false;
+          }
+        });
+      }
+      if (warmTrail) {
+        this.setTrailWarmup(true, warmupPos);
+      }
+      this.root.updateMatrixWorld(true);
+      renderer.compile(scene, camera);
+    } finally {
+      for (const entry of savedFrustumCulled) {
+        entry.obj.frustumCulled = entry.prev;
+      }
+      if (warmTrail) {
+        this.setTrailWarmup(false);
+      }
+      if (!prevRootVis) {
+        this.root.position.copy(prevRootPos);
+        this.root.scale.copy(prevRootScale);
+        this.root.visible = prevRootVis;
+      }
+      this.root.updateMatrixWorld(true);
+    }
   }
 
   private createHologramMaterial(opts: {
@@ -155,13 +266,19 @@ export class FlowGhostSkater {
     const fCol = opts.fresnelColor ?? [0.16, 0.96, 0.88];
     const fBoost = opts.fresnelBoost ?? 0.9;
     const timeUniform = this.holoTimeUniform;
+    const fresnelColorUniform = { value: new THREE.Vector3(fCol[0], fCol[1], fCol[2]) };
+    const fresnelBoostUniform = { value: fBoost };
 
-    mat.customProgramCacheKey = () => `FlowGhostHolo_${fBoost.toFixed(2)}`;
+    // Share one compiled GLSL program key across all ghost materials; per-material
+    // Fresnel color/boost are supplied via uniforms.
+    mat.customProgramCacheKey = () => 'FlowGhostHolo';
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uGhostTime = timeUniform;
+      shader.uniforms.uFresnelColor = fresnelColorUniform;
+      shader.uniforms.uFresnelBoost = fresnelBoostUniform;
       shader.fragmentShader = shader.fragmentShader.replace(
         'void main() {',
-        `uniform float uGhostTime;\nvoid main() {`
+        `uniform float uGhostTime;\nuniform vec3 uFresnelColor;\nuniform float uFresnelBoost;\nvoid main() {`
       );
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <opaque_fragment>',
@@ -169,7 +286,7 @@ export class FlowGhostSkater {
         float holoNdotV = abs(dot(normalize(normal), normalize(vViewPosition)));
         float holoFresnel = pow(max(0.0001, 1.0 - clamp(holoNdotV, 0.0, 1.0)), 2.1);
         float holoPulse = 0.90 + 0.10 * sin(uGhostTime * 3.4);
-        outgoingLight += vec3(${fCol[0].toFixed(3)}, ${fCol[1].toFixed(3)}, ${fCol[2].toFixed(3)}) * holoFresnel * ${fBoost.toFixed(3)} * holoPulse;
+        outgoingLight += uFresnelColor * holoFresnel * uFresnelBoost * holoPulse;
         diffuseColor.a = clamp(diffuseColor.a + holoFresnel * 0.34, 0.0, 0.92);
         #include <opaque_fragment>
         `
@@ -521,6 +638,12 @@ export class FlowGhostSkater {
       console.warn('[FlowGhostSkater] Could not load MakeHuman GLB, keeping lightweight fallback:', err);
       this.hasSkeleton = false;
       this.fallbackGroup.visible = true;
+    } finally {
+      this.resolveReady();
+      if (!this.disposed) {
+        this.onReady?.();
+        this.onModelReady?.();
+      }
     }
   }
 
@@ -899,6 +1022,7 @@ export class FlowGhostSkater {
 
   public dispose(): void {
     this.disposed = true;
+    this.resolveReady();
     this.resetTrail();
 
     this.root.removeFromParent();

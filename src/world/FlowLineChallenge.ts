@@ -7,6 +7,7 @@ import { FlowGhostSkater } from './FlowGhostSkater';
 import { onLangChange, t } from '../i18n/i18n';
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
+const FORWARD_Z = new THREE.Vector3(0, 0, 1);
 
 /**
  * 3-Tier difficulty system for "Follow the Flow" mode:
@@ -646,6 +647,8 @@ export class FlowLineChallenge {
   public static readonly MAX_ALLOWED_DISTANCE = 5.5; // fallback
   public static readonly FINISH_TRIGGER_RADIUS = 3.0;
   public static readonly FINISH_MIN_PROGRESS = 0.95;
+  private static readonly START_LIGHT_INTENSITY = 0.6;
+  private static readonly FINISH_LIGHT_INTENSITY = 0.8;
 
   public isActive = false;
   public isRecording = false;
@@ -657,6 +660,8 @@ export class FlowLineChallenge {
     elapsedSec: number,
     bonusPoints: number
   ) => void;
+  public onWarmupNeeded?: () => void;
+  public onReady?: () => void;
 
   private progressIdx = 0;
   private retriggerCooldown = 0;
@@ -685,6 +690,17 @@ export class FlowLineChallenge {
   private tubeMaterial!: THREE.MeshStandardMaterial;
   private pulseMarkers: THREE.Mesh[] = [];
   private chevronMarkers: THREE.Mesh[] = [];
+  private chevronGeometry: THREE.BufferGeometry | null = null;
+  private chevronMaterial: THREE.MeshBasicMaterial | null = null;
+  private tempPulseTangent = new THREE.Vector3();
+  private tempWarmupCamPos = new THREE.Vector3();
+  private tempWarmupCamDir = new THREE.Vector3();
+  private tempWarmupPos = new THREE.Vector3();
+  private lastGhostLabelKey = '';
+  private ghostRecordCache = new Map<
+    string,
+    { sig: string; record: GhostRecord | null; projectedSamples?: GhostSample[] }
+  >();
 
   private finishArchRing!: THREE.Mesh;
   private finishLabelSprite!: THREE.Sprite;
@@ -745,15 +761,186 @@ export class FlowLineChallenge {
     this.updateStartGateVisuals();
 
     // Default state: only start gate is visible
-    this.startGateGroup.visible = true;
-    this.flowLineGroup.visible = false;
-    this.finishGateGroup.visible = false;
-    this.ghostGroup.visible = false;
+    this.setGateVisibility(true, false, false, false);
+    this.prewarmGhostVisualState();
     this.progressIdx = 0;
 
     onLangChange(() => {
       this.updateStartGateVisuals();
     });
+  }
+
+  public whenReady(): Promise<void> {
+    return this.ghostSkater.whenReady();
+  }
+
+  public warmup(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): void {
+    this.warmUp(renderer, camera, scene, { skipShadowUpdate: true });
+  }
+
+  /**
+   * Pre-compiles scene shaders and executes a micro-scale offscreen/sub-pixel GPU pass
+   * for hidden FlowLine & FlowGhostSkater meshes/textures/VAOs so crossing the Start Gate
+   * triggers zero WebGL shader compilation or GPU resource upload hitches.
+   */
+  public warmUp(
+    renderer: THREE.WebGLRenderer,
+    camera: THREE.Camera,
+    scene: THREE.Scene,
+    options?: { skipShadowUpdate?: boolean }
+  ): void {
+    if (!this.isActive && !this.isRecording) {
+      this.prewarmGhostVisualState();
+    }
+
+    const warmFlow = !this.flowLineGroup.visible;
+    const warmFinish = !this.finishGateGroup.visible;
+    const warmGhost = Boolean(this.ghostGroup && !this.ghostGroup.visible);
+    const warmTrail = Boolean(this.ghostSkater && !this.ghostSkater.isTrailVisible());
+
+    if (!warmFlow && !warmFinish && !warmGhost && !warmTrail) {
+      renderer.compile(scene, camera);
+      return;
+    }
+
+    const prevFlowVis = this.flowLineGroup.visible;
+    const prevFinishVis = this.finishGateGroup.visible;
+    const prevGhostVis = this.ghostGroup.visible;
+
+    const prevFlowPos = this.flowLineGroup.position.clone();
+    const prevFlowScale = this.flowLineGroup.scale.clone();
+    const prevFinishPos = this.finishGateGroup.position.clone();
+    const prevFinishScale = this.finishGateGroup.scale.clone();
+    const prevGhostPos = this.ghostGroup.position.clone();
+    const prevGhostScale = this.ghostGroup.scale.clone();
+
+    const prevDrawStart = this.tubeMesh?.geometry.drawRange.start ?? 0;
+    const prevDrawCount = this.tubeMesh?.geometry.drawRange.count ?? Infinity;
+    const prevChevronVis = this.chevronMarkers.map((m) => m.visible);
+    const prevPulseVis = this.pulseMarkers.map((m) => m.visible);
+    const savedFrustumCulled: Array<{ obj: THREE.Object3D; prev: boolean }> = [];
+
+    const disableFrustumCulling = (root: THREE.Object3D) => {
+      root.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh || (child as THREE.Sprite).isSprite) {
+          savedFrustumCulled.push({ obj: child, prev: child.frustumCulled });
+          child.frustumCulled = false;
+        }
+      });
+    };
+
+    camera.updateMatrixWorld();
+    camera.getWorldPosition(this.tempWarmupCamPos);
+    camera.getWorldDirection(this.tempWarmupCamDir);
+    this.tempWarmupPos
+      .copy(this.tempWarmupCamPos)
+      .addScaledVector(this.tempWarmupCamDir, 2.0);
+
+    const prevShadowAutoUpdate = renderer.shadowMap.autoUpdate;
+
+    try {
+      if (warmFlow) {
+        this.flowLineGroup.position.copy(this.tempWarmupPos);
+        this.flowLineGroup.scale.setScalar(0.0001);
+        this.flowLineGroup.visible = true;
+        this.tubeMesh?.geometry.setDrawRange(0, Infinity);
+        for (const c of this.chevronMarkers) c.visible = true;
+        for (const p of this.pulseMarkers) p.visible = true;
+        disableFrustumCulling(this.flowLineGroup);
+      }
+
+      if (warmFinish) {
+        this.finishGateGroup.position.copy(this.tempWarmupPos);
+        this.finishGateGroup.scale.setScalar(0.0001);
+        this.finishGateGroup.visible = true;
+        disableFrustumCulling(this.finishGateGroup);
+      }
+
+      if (warmGhost) {
+        this.ghostGroup.position.copy(this.tempWarmupPos);
+        this.ghostGroup.scale.setScalar(0.0001);
+        this.ghostGroup.visible = true;
+        disableFrustumCulling(this.ghostGroup);
+      }
+
+      if (warmTrail) {
+        this.ghostSkater.setTrailWarmup(true, this.tempWarmupPos);
+      }
+
+      if (options?.skipShadowUpdate) {
+        renderer.shadowMap.autoUpdate = false;
+      }
+
+      this.group.updateMatrixWorld(true);
+      renderer.compile(scene, camera);
+      renderer.render(scene, camera);
+    } finally {
+      renderer.shadowMap.autoUpdate = prevShadowAutoUpdate;
+
+      for (const entry of savedFrustumCulled) {
+        entry.obj.frustumCulled = entry.prev;
+      }
+
+      if (warmTrail) {
+        this.ghostSkater.setTrailWarmup(false);
+      }
+
+      if (warmGhost) {
+        this.ghostGroup.position.copy(prevGhostPos);
+        this.ghostGroup.scale.copy(prevGhostScale);
+        this.ghostGroup.visible = prevGhostVis;
+      }
+
+      if (warmFinish) {
+        this.finishGateGroup.position.copy(prevFinishPos);
+        this.finishGateGroup.scale.copy(prevFinishScale);
+        this.finishGateGroup.visible = prevFinishVis;
+      }
+
+      if (warmFlow) {
+        this.flowLineGroup.position.copy(prevFlowPos);
+        this.flowLineGroup.scale.copy(prevFlowScale);
+        this.flowLineGroup.visible = prevFlowVis;
+        this.tubeMesh?.geometry.setDrawRange(prevDrawStart, prevDrawCount);
+        for (let i = 0; i < this.chevronMarkers.length; i++) {
+          this.chevronMarkers[i].visible = prevChevronVis[i] ?? true;
+        }
+        for (let i = 0; i < this.pulseMarkers.length; i++) {
+          this.pulseMarkers[i].visible = prevPulseVis[i] ?? true;
+        }
+      }
+
+      this.syncGateLightStates();
+      this.group.updateMatrixWorld(true);
+    }
+  }
+
+  private syncGateLightStates(): void {
+    if (this.startLight) {
+      this.startLight.intensity = this.startGateGroup.visible
+        ? FlowLineChallenge.START_LIGHT_INTENSITY
+        : 0;
+    }
+    if (this.finishLight) {
+      this.finishLight.intensity = this.finishGateGroup.visible
+        ? FlowLineChallenge.FINISH_LIGHT_INTENSITY
+        : 0;
+    }
+  }
+
+  private setGateVisibility(
+    start: boolean,
+    flow: boolean,
+    finish: boolean,
+    ghost: boolean
+  ): void {
+    this.startGateGroup.visible = start;
+    this.flowLineGroup.visible = flow;
+    this.finishGateGroup.visible = finish;
+    if (this.ghostGroup) {
+      this.ghostGroup.visible = ghost;
+    }
+    this.syncGateLightStates();
   }
 
   public getCurrentTierConfig(): FlowLineTierConfig {
@@ -772,27 +959,125 @@ export class FlowLineChallenge {
     return `${parkId}:t${tier}:n${waypoints.length}:${first.x.toFixed(1)},${first.y.toFixed(1)}:${mid.x.toFixed(1)},${mid.y.toFixed(1)}:${last.x.toFixed(1)},${last.y.toFixed(1)}`;
   }
 
-  public getPersonalBest(
+  private getGhostCacheKey(parkId: string, tier: FlowLineTier): string {
+    return `${parkId}_tier_${tier}`;
+  }
+
+  private getCachedGhostRecord(
     parkId: string = this.currentParkId,
     tier: FlowLineTier = this.currentTier
-  ): number | null {
+  ): { sig: string; record: GhostRecord | null; projectedSamples?: GhostSample[] } {
+    const cacheKey = this.getGhostCacheKey(parkId, tier);
+    const expectedSig =
+      parkId === this.currentParkId && tier === this.currentTier && this.currentRouteSignature
+        ? this.currentRouteSignature
+        : this.computeRouteSignature(parkId, tier);
+
+    const existing = this.ghostRecordCache.get(cacheKey);
+    if (existing && existing.sig === expectedSig) {
+      return existing;
+    }
+
+    let validRecord: GhostRecord | null = null;
     try {
-      const raw = localStorage.getItem(`surfsk8.flowGhost.${parkId}_tier_${tier}`);
-      if (!raw) return null;
-      const data = JSON.parse(raw) as GhostRecord;
-      const expectedSig = this.computeRouteSignature(parkId, tier);
-      if (
-        data.routeSignature === expectedSig &&
-        typeof data.bestTimeSec === 'number' &&
-        !isNaN(data.bestTimeSec) &&
-        data.bestTimeSec > 2.0
-      ) {
-        return data.bestTimeSec;
+      const raw = localStorage.getItem(`surfsk8.flowGhost.${cacheKey}`);
+      if (raw) {
+        const parsed = JSON.parse(raw) as GhostRecord;
+        if (
+          parsed &&
+          parsed.routeSignature === expectedSig &&
+          typeof parsed.bestTimeSec === 'number' &&
+          !isNaN(parsed.bestTimeSec) &&
+          parsed.bestTimeSec > 2.0
+        ) {
+          validRecord = parsed;
+        }
       }
     } catch {
       // Ignore localStorage error
     }
-    return null;
+
+    const entry = { sig: expectedSig, record: validRecord };
+    this.ghostRecordCache.set(cacheKey, entry);
+    return entry;
+  }
+
+  private getProjectedGhostSamples(
+    entry: { sig: string; record: GhostRecord | null; projectedSamples?: GhostSample[] }
+  ): GhostSample[] {
+    if (entry.projectedSamples) {
+      return entry.projectedSamples;
+    }
+    const samples = entry.record?.samples;
+    if (!samples || samples.length < 3 || this.curvePoints.length < 2) {
+      entry.projectedSamples = [];
+      return entry.projectedSamples;
+    }
+
+    // Project PB timestamps monotonically onto the active Flow Line curve u ∈ [0..1]
+    // so the PB ghost always rides strictly along the visible ribbon.
+    const nCurve = Math.max(2, this.curvePoints.length);
+    let lastCurveIdx = 0;
+    let maxU = 0;
+    const projected: GhostSample[] = [];
+
+    for (const s of samples) {
+      let u = typeof s.u === 'number' ? s.u : -1;
+      if (u < 0) {
+        let bestIdx = lastCurveIdx;
+        let bestDistSq = Infinity;
+        const searchMax = Math.min(nCurve - 1, lastCurveIdx + 48);
+        for (let ci = lastCurveIdx; ci <= searchMax; ci++) {
+          const pt = this.curvePoints[ci];
+          const dx = pt.x - s.x;
+          const dz = pt.z - s.z;
+          const dSq = dx * dx + dz * dz;
+          if (dSq < bestDistSq) {
+            bestDistSq = dSq;
+            bestIdx = ci;
+          }
+        }
+        lastCurveIdx = bestIdx;
+        u = bestIdx / (nCurve - 1);
+      }
+      maxU = Math.max(maxU, Math.min(1.0, u));
+      projected.push({
+        ...s,
+        u: maxU,
+      });
+    }
+
+    entry.projectedSamples = projected;
+    return projected;
+  }
+
+  private setGhostLabel(title: string, subtitle: string): void {
+    const key = `${title}|${subtitle}`;
+    if (key === this.lastGhostLabelKey) return;
+    this.lastGhostLabelKey = key;
+    updateTextSprite(this.ghostLabelSprite, title, subtitle, '#00f5e0');
+  }
+
+  private prewarmGhostVisualState(): void {
+    if (!this.ghostLabelSprite) return;
+    const entry = this.getCachedGhostRecord(this.currentParkId, this.currentTier);
+    const rec = entry.record;
+    if (rec && Array.isArray(rec.samples) && rec.samples.length >= 3) {
+      this.getProjectedGhostSamples(entry);
+      this.setGhostLabel('👻 PB GHOST', `${rec.bestTimeSec.toFixed(1)}s`);
+    } else {
+      const cfg = this.getCurrentTierConfig();
+      const worldPaceSpeed = cfg.targetPaceSpeed * 0.75;
+      this.setGhostLabel('👻 GHOST PACER', `${worldPaceSpeed.toFixed(1)} m/s`);
+    }
+  }
+
+  public getPersonalBest(
+    parkId: string = this.currentParkId,
+    tier: FlowLineTier = this.currentTier
+  ): number | null {
+    const entry = this.getCachedGhostRecord(parkId, tier);
+    return entry.record ? entry.record.bestTimeSec : null;
   }
 
   public isTierCompleted(
@@ -819,16 +1104,12 @@ export class FlowLineChallenge {
     this.activeGhostSamples = [];
     this.ghostSamplePlaybackIdx = 0;
     this.ghostCurveU = 0;
-    if (this.ghostGroup) {
-      this.ghostGroup.visible = false;
-    }
     this.ghostSkater?.resetTrail();
-    this.flowLineGroup.visible = false;
-    this.finishGateGroup.visible = false;
-    this.startGateGroup.visible = true;
+    this.setGateVisibility(true, false, false, false);
 
     this.currentTier = tier;
     this.rebuildCurrentTierCurve();
+    this.onWarmupNeeded?.();
   }
 
   public cycleTier(): FlowLineTier {
@@ -846,6 +1127,7 @@ export class FlowLineChallenge {
     );
     this.buildCurveFromWaypoints(pts);
     this.updateStartGateVisuals();
+    this.prewarmGhostVisualState();
   }
 
   private getWaypointsForParkAndTier(
@@ -953,6 +1235,13 @@ export class FlowLineChallenge {
       waypoints
     );
 
+    const activeCache = this.ghostRecordCache.get(
+      this.getGhostCacheKey(this.currentParkId, this.currentTier)
+    );
+    if (activeCache) {
+      activeCache.projectedSamples = undefined;
+    }
+
     if (this.tubeMesh) {
       this.tubeMesh.geometry.dispose();
       this.tubeMesh.geometry = new THREE.TubeGeometry(
@@ -975,34 +1264,40 @@ export class FlowLineChallenge {
   private buildChevrons(): void {
     for (const c of this.chevronMarkers) {
       this.flowLineGroup.remove(c);
-      c.geometry.dispose();
     }
     this.chevronMarkers = [];
 
     if (!this.curve || this.curvePoints.length < 2) return;
 
     const cfg = this.getCurrentTierConfig();
-    const chevronGeo = new THREE.ConeGeometry(0.08, 0.2, 3);
-    chevronGeo.rotateX(Math.PI / 2);
-    chevronGeo.scale(1.0, 0.3, 1.0);
-    const chevronMat = new THREE.MeshBasicMaterial({
-      color: cfg.hexColor,
-      transparent: true,
-      opacity: 0.45,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
+    if (!this.chevronGeometry) {
+      const chevronGeo = new THREE.ConeGeometry(0.08, 0.2, 3);
+      chevronGeo.rotateX(Math.PI / 2);
+      chevronGeo.scale(1.0, 0.3, 1.0);
+      this.chevronGeometry = chevronGeo;
+    }
+    if (!this.chevronMaterial) {
+      this.chevronMaterial = new THREE.MeshBasicMaterial({
+        color: cfg.hexColor,
+        transparent: true,
+        opacity: 0.45,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+    } else {
+      this.chevronMaterial.color.setHex(cfg.hexColor);
+    }
 
     const step = FlowLineChallenge.CHEVRON_STEP;
     for (let idx = step; idx < this.curvePoints.length - step; idx += step) {
       const t = idx / (this.curvePoints.length - 1);
       const pos = this.curve.getPointAt(t);
-      const tangent = this.curve.getTangentAt(t);
+      const tangent = this.curve.getTangentAt(t, this.tempPulseTangent);
 
-      const marker = new THREE.Mesh(chevronGeo, chevronMat);
+      const marker = new THREE.Mesh(this.chevronGeometry, this.chevronMaterial);
       marker.position.copy(pos);
       marker.position.y += 0.02;
-      marker.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent);
+      marker.quaternion.setFromUnitVectors(FORWARD_Z, tangent);
       marker.userData.sampleIdx = idx;
       this.flowLineGroup.add(marker);
       this.chevronMarkers.push(marker);
@@ -1069,10 +1364,16 @@ export class FlowLineChallenge {
     this.startBeacon.position.y = 0.32;
     this.startGateGroup.add(this.startBeacon);
 
-    // 5. PointLight casting warm radiance onto concrete
-    this.startLight = new THREE.PointLight(cfg.hexColor, 0.6, 3.2);
+    // 5. PointLight casting warm radiance onto concrete.
+    // Kept permanently visible on `this.group` and dimmed via intensity so
+    // NUM_POINT_LIGHTS never changes at runtime (avoids scene-wide shader recompiles).
+    this.startLight = new THREE.PointLight(
+      cfg.hexColor,
+      FlowLineChallenge.START_LIGHT_INTENSITY,
+      3.2
+    );
     this.startLight.position.set(0, 0.45, 0);
-    this.startGateGroup.add(this.startLight);
+    this.group.add(this.startLight);
 
     // 6. Floating Canvas Label Sprite
     this.startLabelSprite = createTextSprite(
@@ -1165,10 +1466,10 @@ export class FlowLineChallenge {
     finishBar.position.set(0, 0.01, 0);
     this.finishGateGroup.add(finishBar);
 
-    // 3. Warm golden PointLight
-    this.finishLight = new THREE.PointLight(0xffaa00, 0.8, 3.5);
+    // 3. Warm golden PointLight (permanently visible on `this.group`, modulated via intensity)
+    this.finishLight = new THREE.PointLight(0xffaa00, 0, 3.5);
     this.finishLight.position.set(0, 0.65, 0);
-    this.finishGateGroup.add(this.finishLight);
+    this.group.add(this.finishLight);
 
     // 4. Floating Canvas Label Sprite: "FINISH GATE (+BONUS)"
     this.finishLabelSprite = createTextSprite(
@@ -1190,6 +1491,10 @@ export class FlowLineChallenge {
     this.ghostLabelSprite = createTextSprite('👻 TARGET PACE', '', '#00f5e0');
     this.ghostLabelSprite.scale.set(1.05, 0.29, 1.0);
     this.ghostSkater = new FlowGhostSkater(this.group, this.ghostLabelSprite);
+    this.ghostSkater.onModelReady = () => {
+      this.onReady?.();
+      this.onWarmupNeeded?.();
+    };
     this.ghostGroup = this.ghostSkater.root;
   }
 
@@ -1201,6 +1506,9 @@ export class FlowLineChallenge {
     if (!this.curvePoints.length) return;
     const startPt = this.curvePoints[0];
     this.startGateGroup.position.set(startPt.x, startPt.y - 0.05, startPt.z);
+    if (this.startLight) {
+      this.startLight.position.set(startPt.x, startPt.y - 0.05 + 0.45, startPt.z);
+    }
 
     if (this.curve) {
       const tangent = this.curve.getTangentAt(0);
@@ -1213,6 +1521,9 @@ export class FlowLineChallenge {
     if (!this.curvePoints.length) return;
     const finishPt = this.curvePoints[this.curvePoints.length - 1];
     this.finishGateGroup.position.set(finishPt.x, finishPt.y - 0.05, finishPt.z);
+    if (this.finishLight) {
+      this.finishLight.position.set(finishPt.x, finishPt.y - 0.05 + 0.65, finishPt.z);
+    }
 
     const tangent = this.curve.getTangentAt(1.0);
     const angle = Math.atan2(tangent.x, tangent.z);
@@ -1242,8 +1553,8 @@ export class FlowLineChallenge {
       this.tubeMaterial.color.setHex(cfg.hexColor);
       this.tubeMaterial.emissive.setHex(cfg.emissiveColor);
     }
-    for (const c of this.chevronMarkers) {
-      (c.material as THREE.MeshBasicMaterial).color.setHex(cfg.hexColor);
+    if (this.chevronMaterial) {
+      this.chevronMaterial.color.setHex(cfg.hexColor);
     }
     if (this.finishLabelSprite) {
       updateTextSprite(
@@ -1279,20 +1590,17 @@ export class FlowLineChallenge {
     this.activeGhostSamples = [];
     this.ghostSamplePlaybackIdx = 0;
     this.ghostCurveU = 0;
-    if (this.ghostGroup) {
-      this.ghostGroup.visible = false;
-    }
     this.ghostSkater?.resetTrail();
 
     this.rebuildCurrentTierCurve();
 
     if (this.isRecording) {
+      this.setGateVisibility(false, true, false, false);
       this.updateFlowLineVisibility(0);
     } else {
-      this.flowLineGroup.visible = false;
-      this.finishGateGroup.visible = false;
-      this.startGateGroup.visible = true;
+      this.setGateVisibility(true, false, false, false);
     }
+    this.onWarmupNeeded?.();
   }
 
   public update(
@@ -1331,9 +1639,9 @@ export class FlowLineChallenge {
         for (let i = 0; i < numMarkers; i++) {
           const t = (timeSec * 0.12 + i / numMarkers) % 1.0;
           this.curve.getPointAt(t, this.pulseMarkers[i].position);
-          const tangent = this.curve.getTangentAt(t);
+          const tangent = this.curve.getTangentAt(t, this.tempPulseTangent);
           this.pulseMarkers[i].quaternion.setFromUnitVectors(
-            new THREE.Vector3(0, 0, 1),
+            FORWARD_Z,
             tangent
           );
         }
@@ -1361,6 +1669,7 @@ export class FlowLineChallenge {
         this.ghostGroup.visible = false;
         this.ghostSkater?.resetTrail();
       }
+      this.syncGateLightStates();
 
       // Check if skater enters starting gate
       if (this.curvePoints.length > 0) {
@@ -1471,7 +1780,11 @@ export class FlowLineChallenge {
     // 9. Finish Gate Visibility:
     // Show finish gate once the track end enters the 15m visibility window
     const finishThreshold = Math.max(0, this.curvePoints.length - 1 - 30);
-    this.finishGateGroup.visible = this.progressIdx >= finishThreshold;
+    const shouldShowFinish = this.progressIdx >= finishThreshold;
+    if (this.finishGateGroup.visible !== shouldShowFinish) {
+      this.finishGateGroup.visible = shouldShowFinish;
+      this.syncGateLightStates();
+    }
 
     if (this.finishGateGroup.visible) {
       this.finishArchRing.rotation.z = timeSec * 1.2;
@@ -1499,10 +1812,7 @@ export class FlowLineChallenge {
       // START RECORDING
       this.isRecording = true;
       this.isActive = false;
-      this.startGateGroup.visible = false;
-      this.finishGateGroup.visible = false;
-      this.ghostGroup.visible = false;
-      this.flowLineGroup.visible = true;
+      this.setGateVisibility(false, true, false, false);
 
       this.recordedPoints = [
         new THREE.Vector2(
@@ -1540,9 +1850,7 @@ export class FlowLineChallenge {
         this.buildCurveFromWaypoints(this.recordedPoints);
         this.updateStartGatePosition();
         this.updateFinishGatePosition();
-        this.startGateGroup.visible = true;
-        this.finishGateGroup.visible = true;
-        this.flowLineGroup.visible = true;
+        this.setGateVisibility(true, true, true, false);
 
         const code =
           `public static readonly WAYPOINTS_2D: readonly THREE.Vector2[] = [\n` +
@@ -1575,9 +1883,7 @@ export class FlowLineChallenge {
         this.hud.showTrickBanner(t('rec.bannerCancelled'), false);
         this.hud.setFlowLineHint(null);
         this.rebuildCurrentTierCurve();
-        this.startGateGroup.visible = true;
-        this.flowLineGroup.visible = false;
-        this.finishGateGroup.visible = false;
+        this.setGateVisibility(true, false, false, false);
         this.onRecordingStateChange?.(false, 0);
       }
     }
@@ -1683,12 +1989,9 @@ export class FlowLineChallenge {
       testBtn?.addEventListener('click', () => {
         this.closeExportModal();
         this.isActive = false;
-        this.ghostGroup.visible = false;
         this.ghostSkater?.resetTrail();
         this.resetFlowLineVisibility();
-        this.startGateGroup.visible = true;
-        this.finishGateGroup.visible = true;
-        this.flowLineGroup.visible = true;
+        this.setGateVisibility(true, true, true, false);
         this.hud.showTrickBanner(t('rec.bannerTestReady'), true);
         this.hud.setFlowLineHint(t('rec.hintTestReady'));
       });
@@ -1768,9 +2071,9 @@ export class FlowLineChallenge {
       const localT = (timeSec * 0.35 + i / numMarkers) % 1.0;
       const t = Math.min(1.0, startFrac + localT * fracSpan);
       this.curve.getPointAt(t, this.pulseMarkers[i].position);
-      const tangent = this.curve.getTangentAt(t);
+      const tangent = this.curve.getTangentAt(t, this.tempPulseTangent);
       this.pulseMarkers[i].quaternion.setFromUnitVectors(
-        new THREE.Vector3(0, 0, 1),
+        FORWARD_Z,
         tangent
       );
       this.pulseMarkers[i].visible = true;
@@ -1833,9 +2136,7 @@ export class FlowLineChallenge {
       });
     }
 
-    this.startGateGroup.visible = false;
-    this.flowLineGroup.visible = true;
-    this.finishGateGroup.visible = false;
+    this.setGateVisibility(false, true, false, true);
 
     this.setupGhostForRun();
     this.updateFlowLineVisibility(0);
@@ -1847,75 +2148,22 @@ export class FlowLineChallenge {
 
   private setupGhostForRun(): void {
     const cfg = this.getCurrentTierConfig();
-    const storageKey = `surfsk8.flowGhost.${this.currentParkId}_tier_${this.currentTier}`;
-    let loadedRecord: GhostRecord | null = null;
-
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw) as GhostRecord;
-        if (
-          parsed &&
-          parsed.routeSignature === this.currentRouteSignature &&
-          Array.isArray(parsed.samples) &&
-          parsed.samples.length >= 3 &&
-          typeof parsed.bestTimeSec === 'number' &&
-          !isNaN(parsed.bestTimeSec) &&
-          parsed.bestTimeSec > 2.0
-        ) {
-          loadedRecord = parsed;
-        }
-      }
-    } catch {
-      // LocalStorage error fallback
-    }
+    const cached = this.getCachedGhostRecord(this.currentParkId, this.currentTier);
+    const loadedRecord =
+      cached.record && Array.isArray(cached.record.samples) && cached.record.samples.length >= 3
+        ? cached.record
+        : null;
 
     this.ghostSkater.resetTrail();
 
     if (loadedRecord) {
-      // Project PB timestamps monotonically onto the active Flow Line curve u ∈ [0..1]
-      // so the PB ghost always rides strictly along the visible ribbon.
-      const nCurve = Math.max(2, this.curvePoints.length);
-      let lastCurveIdx = 0;
-      let maxU = 0;
-      const projected: GhostSample[] = [];
-
-      for (const s of loadedRecord.samples) {
-        let u = typeof s.u === 'number' ? s.u : -1;
-        if (u < 0) {
-          let bestIdx = lastCurveIdx;
-          let bestDistSq = Infinity;
-          const searchMax = Math.min(nCurve - 1, lastCurveIdx + 48);
-          for (let ci = lastCurveIdx; ci <= searchMax; ci++) {
-            const pt = this.curvePoints[ci];
-            const dx = pt.x - s.x;
-            const dz = pt.z - s.z;
-            const dSq = dx * dx + dz * dz;
-            if (dSq < bestDistSq) {
-              bestDistSq = dSq;
-              bestIdx = ci;
-            }
-          }
-          lastCurveIdx = bestIdx;
-          u = bestIdx / (nCurve - 1);
-        }
-        maxU = Math.max(maxU, Math.min(1.0, u));
-        projected.push({
-          ...s,
-          u: maxU,
-        });
-      }
+      const projected = this.getProjectedGhostSamples(cached);
 
       this.activeGhostSamples = projected;
       this.activeGhostTotalTime = loadedRecord.bestTimeSec;
       this.activeGhostType = 'PB';
       this.ghostCurveU = projected[0]?.u ?? 0;
-      updateTextSprite(
-        this.ghostLabelSprite,
-        '👻 PB GHOST',
-        `${loadedRecord.bestTimeSec.toFixed(1)}s`,
-        '#00f5e0'
-      );
+      this.setGhostLabel('👻 PB GHOST', `${loadedRecord.bestTimeSec.toFixed(1)}s`);
     } else {
       // Match SurfskateController TIME_SCALE = 0.75 so target pace is realistic & surfable
       const worldPaceSpeed = cfg.targetPaceSpeed * 0.75;
@@ -1927,12 +2175,7 @@ export class FlowLineChallenge {
       // Start 1.8m ahead on the curve so the Ghost Pacer is immediately visible ahead
       this.ghostCurveU = Math.min(0.05, 1.8 / Math.max(1.0, this.curveTotalLength));
 
-      updateTextSprite(
-        this.ghostLabelSprite,
-        '👻 GHOST PACER',
-        `${worldPaceSpeed.toFixed(1)} m/s`,
-        '#00f5e0'
-      );
+      this.setGhostLabel('👻 GHOST PACER', `${worldPaceSpeed.toFixed(1)} m/s`);
     }
 
     this.buildGhostProgressLookup();
@@ -2080,12 +2323,8 @@ export class FlowLineChallenge {
     this.retriggerCooldown = 1.5;
     this.progressIdx = 0;
     this.ghostCurveU = 0;
-    this.ghostGroup.visible = false;
     this.ghostSkater.resetTrail();
-
-    this.startGateGroup.visible = true;
-    this.flowLineGroup.visible = false;
-    this.finishGateGroup.visible = false;
+    this.setGateVisibility(true, false, false, false);
 
     this.hud.setFlowLineHint(null);
     if (isBail) {
@@ -2101,12 +2340,9 @@ export class FlowLineChallenge {
     this.retriggerCooldown = 2.0;
     this.progressIdx = 0;
     this.ghostCurveU = 0;
-    this.ghostGroup.visible = false;
     this.ghostSkater.resetTrail();
 
-    this.startGateGroup.visible = true;
-    this.flowLineGroup.visible = false;
-    this.finishGateGroup.visible = false;
+    this.setGateVisibility(true, false, false, false);
     this.hud.setFlowLineHint(null);
 
     const cfg = this.getCurrentTierConfig();
@@ -2123,6 +2359,10 @@ export class FlowLineChallenge {
         isVirtualPace: false,
         samples: this.currentRunSamples,
       };
+      this.ghostRecordCache.set(
+        this.getGhostCacheKey(this.currentParkId, this.currentTier),
+        { sig: this.currentRouteSignature, record }
+      );
       try {
         localStorage.setItem(
           `surfsk8.flowGhost.${this.currentParkId}_tier_${this.currentTier}`,
@@ -2173,11 +2413,8 @@ export class FlowLineChallenge {
     this.activeGhostSamples = [];
     this.currentRunSamples = [];
 
-    this.ghostGroup.visible = false;
     this.ghostSkater.resetTrail();
-    this.startGateGroup.visible = true;
-    this.flowLineGroup.visible = false;
-    this.finishGateGroup.visible = false;
+    this.setGateVisibility(true, false, false, false);
 
     this.hud.setFlowLineHint(null);
     this.closeExportModal();
@@ -2191,11 +2428,10 @@ export class FlowLineChallenge {
     }
     this.tubeMaterial?.dispose();
 
-    for (const c of this.chevronMarkers) {
-      c.geometry?.dispose();
-      const mats = Array.isArray(c.material) ? c.material : [c.material];
-      for (const m of mats) m?.dispose();
-    }
+    this.chevronGeometry?.dispose();
+    this.chevronGeometry = null;
+    this.chevronMaterial?.dispose();
+    this.chevronMaterial = null;
     this.chevronMarkers = [];
 
     for (const p of this.pulseMarkers) {
@@ -2204,6 +2440,9 @@ export class FlowLineChallenge {
       for (const m of mats) m?.dispose();
     }
     this.pulseMarkers = [];
+
+    this.startLight?.dispose();
+    this.finishLight?.dispose();
 
     const disposeGroup = (grp: THREE.Group) => {
       grp.traverse((child) => {

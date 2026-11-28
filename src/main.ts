@@ -54,6 +54,7 @@ class SurfskateMunichGame {
   public gameMode: GameModeId = 'jam';
   private summaryShownForSession = false;
   private pendingLockedBoardToast: string | null = null;
+  private assetsInitialized = false;
 
   public controlMode: DriveControlMode =
     (localStorage.getItem('surfsk8.controlMode') as DriveControlMode) || 'arrows';
@@ -172,6 +173,10 @@ class SurfskateMunichGame {
 
     this.pretzels = new PretzelCollectibles(this.scene, this.hud, this.audio);
     this.flowLine = new FlowLineChallenge(this.scene, this.parkSurface, this.hud, this.audio);
+    this.flowLine.onWarmupNeeded = () => {
+      if (!this.assetsInitialized) return;
+      this.flowLine.warmup(this.renderer, this.scene, this.surfCamera.camera);
+    };
     this.flowLine.onRecordingStateChange = () => {
       this.syncFlowRecorderUI();
     };
@@ -350,10 +355,13 @@ class SurfskateMunichGame {
     } catch (err) {
       console.error('Error loading GLB/LiDAR assets:', err);
     }
+    this.controller.resetToSpawn();
+    this.surfCamera.reset(this.controller);
+    this.assetsInitialized = true;
+    this.flowLine.warmup(this.renderer, this.scene, this.surfCamera.camera);
     if (loadingEl) {
       loadingEl.classList.add('hidden');
     }
-    this.controller.resetToSpawn();
     this.lastTime = performance.now();
     requestAnimationFrame((t) => this.animate(t));
 
