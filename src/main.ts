@@ -302,9 +302,12 @@ class SurfskateMunichGame {
     };
     this.gameMode = this.landingPage.getSelectedGameMode();
     const initialSpecialParkId = this.normalizeSpecialParkId(this.landingPage.getSelectedPark().id);
+    const initialAtmosphere: AtmosphereMode =
+      initialSpecialParkId === 'airport_skatepark' ? 'golden_hour' : 'night';
+    this.worldScene.setAtmosphereMode(initialAtmosphere);
     this.parkCrew = new ParkCrewEncounters(this.scene, this.parkSurface, initialSpecialParkId);
     this.afterHoursWanted = new AfterHoursWanted(this.scene, this.parkSurface, initialSpecialParkId);
-    this.afterHoursWanted.setNightMode(this.worldScene.mode === 'night');
+    this.afterHoursWanted.setNightMode(initialAtmosphere === 'night');
     this.syncProgressionUI();
     const initialBoard = this.landingPage.getSelectedUnlockedBoard();
     this.controller.setBoardSpec(initialBoard);
@@ -365,7 +368,10 @@ class SurfskateMunichGame {
       const initialModel = this.landingPage.getSelectedSkaterModel();
       const initialPark = this.landingPage.getSelectedPark();
       const [, worldLoaded] = await Promise.all([
-        this.parkSurface.loadLidarGrid(initialPark.lidarUrl || 'models/im_gefilde_lidar.json', initialPark.id),
+        this.parkSurface.loadLidarGrid(
+          initialPark.lidarUrl || 'models/airport_skatepark_lidar.json',
+          initialPark.id
+        ),
         this.worldScene.load(initialPark.id),
         this.skaterVisuals.load(initialModel),
         this.landingPage.load(),

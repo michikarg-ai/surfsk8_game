@@ -73,20 +73,20 @@ export const SKATER_CHARACTERS: SkaterCharacter[] = [
 
 export const SKATEPARK_LOCATIONS: SkateparkLocation[] = [
   {
-    id: 'im_gefilde',
-    name: 'IM WIESENGRUND',
-    subtitle: 'IM WIESENGRUND',
-    thumbUrl: 'textures/im_gefilde_thumb.png',
-    modelUrl: 'models/skatepark_multi.glb',
-    lidarUrl: 'models/im_gefilde_lidar.json',
-  },
-  {
     id: 'airport_skatepark',
     name: 'AIRPORT SKATEPARK',
     subtitle: 'AIRPORT SKATEPARK',
     thumbUrl: 'textures/airport_thumb.png?v=2',
     modelUrl: 'models/airport_skatepark_game.glb',
     lidarUrl: 'models/airport_skatepark_lidar.json',
+  },
+  {
+    id: 'im_gefilde',
+    name: 'IM WIESENGRUND',
+    subtitle: 'IM WIESENGRUND',
+    thumbUrl: 'textures/im_gefilde_thumb.png',
+    modelUrl: 'models/skatepark_multi.glb',
+    lidarUrl: 'models/im_gefilde_lidar.json',
   },
 ];
 
@@ -117,8 +117,14 @@ export class LandingPage {
     return s === 'female' || s === 'sophie' || s === '1' ? 1 : 0;
   })();
   public currentParkIndex = (() => {
-    const p = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('park') : null;
-    return p === 'airport' || p === 'airport_skatepark' || p === '1' ? 1 : 0;
+    const p =
+      typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('park')?.toLowerCase()
+        : null;
+    if (p === 'im_gefilde' || p === 'wiesengrund' || p === 'im_wiesengrund' || p === '1') {
+      return 1;
+    }
+    return 0;
   })();
   private currentBoardIndex = (() => {
     const savedId = getSelectedBoardId();
@@ -312,6 +318,7 @@ export class LandingPage {
     this.skaterVisuals.trailMesh.visible = false;
 
     this.bindUIEvents();
+    this.updateParkDisplay();
     this.updateBoardDisplay();
     this.updateLangToggleDisplay();
     applyDomTranslations(document);
